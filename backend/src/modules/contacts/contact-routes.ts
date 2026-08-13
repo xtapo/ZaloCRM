@@ -46,7 +46,19 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         dateTo = '',
       } = request.query as QueryParams;
 
+      const { getRequestZaloScope } = await import('../chat/chat-security-hooks.js');
+      const scope = await getRequestZaloScope(request);
+      
       const where: any = { orgId: user.orgId, mergedInto: null };
+      if (scope && !scope.isOrgAdmin) {
+        where.AND = [...(where.AND ?? []), {
+          OR: [
+            { friends: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+            { conversations: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+            { friends: { none: {} } },
+          ]
+        }];
+      }
       // Model B: mỗi Contact tự nó là "KH Cha"; con = Friend rows. KHÔNG filter parentContactId.
       if (source) where.source = source;
       if (status) where.status = status;
@@ -128,6 +140,12 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         prisma.contact.count({ where }),
       ]);
 
+      // Fetch privacy context & check redaction in batch
+      const { buildPrivacyContext, getRedactableContactIds, redactContact } = await import('../privacy/redact.js');
+      const privacyCtx = await buildPrivacyContext(request);
+      const contactIds = contacts.map(c => c.id);
+      const redactableIds = await getRedactableContactIds(contactIds, privacyCtx);
+
       // Aggregate + multiNick post-filter (childrenCount requires friends count after load)
       const multiNickOnly = multiNick === 'true';
       const enriched = contacts
@@ -137,7 +155,17 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
             nicksByKind[f.relationshipKind] = (nicksByKind[f.relationshipKind] || 0) + 1;
           }
           const display = computeAggregateDisplay(c);
-          return { ...c, nicksByKind, ...display };
+          const merged = { ...c, nicksByKind, ...display };
+          if (redactableIds.has(c.id)) {
+            const redacted = redactContact(merged);
+            redacted.nicksByKind = nicksByKind;
+            redacted.assignedUserId = merged.assignedUserId;
+            if (merged.assignedUser) {
+              redacted.assignedUser = merged.assignedUser;
+            }
+            return redacted;
+          }
+          return merged;
         })
         .filter((c) => !multiNickOnly || (c.childrenCount ?? 0) > 1);
 
@@ -154,7 +182,20 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/contacts/stats', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user!;
-      const base = { orgId: user.orgId, mergedInto: null };
+      const { getRequestZaloScope } = await import('../chat/chat-security-hooks.js');
+      const scope = await getRequestZaloScope(request);
+      
+      const base: any = { orgId: user.orgId, mergedInto: null };
+      if (scope && !scope.isOrgAdmin) {
+        base.AND = [{
+          OR: [
+            { friends: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+            { conversations: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+            { friends: { none: {} } },
+          ]
+        }];
+      }
+      
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
@@ -219,9 +260,23 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       const user = request.user!;
       const orgId = user.orgId;
 
+      const { getRequestZaloScope } = await import('../chat/chat-security-hooks.js');
+      const scope = await getRequestZaloScope(request);
+      
+      const baseWhere: any = { orgId, status: { not: null }, mergedInto: null };
+      if (scope && !scope.isOrgAdmin) {
+        baseWhere.AND = [{
+          OR: [
+            { friends: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+            { conversations: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+            { friends: { none: {} } },
+          ]
+        }];
+      }
+
       const pipeline = await prisma.contact.groupBy({
         by: ['status'],
-        where: { orgId, status: { not: null }, mergedInto: null },
+        where: baseWhere,
         _count: true,
       });
 
@@ -231,7 +286,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
 
       await Promise.all(
         statuses.map(async (st) => {
-          const where: any = { orgId, status: st ?? null, mergedInto: null };
+          const where: any = { ...baseWhere, status: st ?? null };
           const contacts = await prisma.contact.findMany({
             where,
             select: {
@@ -250,6 +305,22 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
           contactsByStatus[st ?? 'unknown'] = contacts;
         }),
       );
+
+      const { buildPrivacyContext, getRedactableContactIds, redactContact } = await import('../privacy/redact.js');
+      const privacyCtx = await buildPrivacyContext(request);
+      const allContactIds = Object.values(contactsByStatus).flat().map(c => c.id);
+      const redactableIds = await getRedactableContactIds(allContactIds, privacyCtx);
+      
+      for (const st of Object.keys(contactsByStatus)) {
+        contactsByStatus[st] = contactsByStatus[st].map(c => {
+          if (redactableIds.has(c.id)) {
+            const redacted = redactContact(c);
+            redacted.assignedUser = c.assignedUser;
+            return redacted;
+          }
+          return c;
+        });
+      }
 
       const result = pipeline.map((g) => ({
         status: g.status ?? 'unknown',
@@ -281,12 +352,30 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
         include: {
           assignedUser: { select: { id: true, fullName: true, email: true } },
           appointments: { orderBy: { appointmentDate: 'desc' }, take: 10 },
-          _count: { select: { conversations: true } },
+          _count: { select: { conversations: true, friends: true } },
           ...AGGREGATE_INCLUDE,
         },
       });
 
       if (!contact) return reply.status(404).send({ error: 'Contact not found' });
+
+      const { getRequestZaloScope } = await import('../chat/chat-security-hooks.js');
+      const scope = await getRequestZaloScope(request);
+
+      if (scope && !scope.isOrgAdmin && contact._count.friends > 0) {
+        const inScopeCount = await prisma.contact.count({
+          where: {
+            id,
+            OR: [
+              { friends: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+              { conversations: { some: { zaloAccountId: { in: scope.accessibleIds } } } },
+            ]
+          }
+        });
+        if (inScopeCount === 0) {
+          return reply.status(403).send({ error: 'Bạn không có quyền truy cập khách hàng này', code: 'ZALO_SCOPE_FORBIDDEN' });
+        }
+      }
 
       const display = computeAggregateDisplay(contact);
 
@@ -588,6 +677,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/contacts/duplicates', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const { page = '1', limit = '20', resolved = 'false' } = request.query as QueryParams;
 
       const pageNum = parseInt(page);
@@ -731,8 +823,16 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       });
       if (!contact) return reply.status(404).send({ error: 'Contact not found' });
 
+      const { getRequestZaloScope } = await import('../chat/chat-security-hooks.js');
+      const scope = await getRequestZaloScope(request);
+      
+      const where: any = { contactId: id, orgId: user.orgId };
+      if (scope && !scope.isOrgAdmin) {
+        where.zaloAccountId = { in: scope.accessibleIds };
+      }
+
       const friendships = await prisma.friend.findMany({
-        where: { contactId: id, orgId: user.orgId },
+        where,
         include: {
           zaloAccount: {
             select: {
@@ -1457,6 +1557,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/v1/contacts/parent-candidates', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const candidates = await prisma.parentCandidate.findMany({
         where: { orgId: user.orgId, dismissed: false, resolvedAt: null },
         orderBy: { createdAt: 'desc' },
@@ -1549,7 +1652,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     try {
       const user = request.user!;
       if (!['owner', 'admin'].includes(user.role)) {
-        return reply.status(403).send({ error: 'Chỉ admin/owner được phép trigger detector' });
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
       }
       const startedAt = Date.now();
       logger.info(`[admin] run-detector triggered by user ${user.id}`);
@@ -1577,6 +1680,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   // ── POST /api/v1/admin/migrate-status-table — one-off seed + convert enum ────
   app.post('/api/v1/admin/migrate-status-table', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const result = await migrateStatusTable();
       return reply.send(result);
     } catch (err) {
