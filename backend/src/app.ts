@@ -89,6 +89,9 @@ import { friendRoutes } from './modules/zalo/friend-routes.js';
 import { profileRoutes } from './modules/zalo/profile-routes.js';
 import { credentialRoutes } from './modules/zalo/credential-routes.js';
 import { eventBuffer } from './shared/event-buffer.js';
+// Phase Riêng Tư 2026-08-13 — cách ly tin nhắn theo nick (realtime + REST)
+import { installSocketPrivacyGuard } from './shared/realtime/socket-privacy.js';
+import { installChatSecurityHooks } from './modules/chat/chat-security-hooks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -140,6 +143,10 @@ async function bootstrap() {
   // Attach io to app so route handlers can emit events
   app.decorate('io', io);
 
+  // Phase Riêng Tư 2026-08-13 — PHẢI cài trước mọi emit: bọc io.emit/io.to().emit để
+  // event mang nội dung được lọc theo scope nick + privacyMode và redact ở server.
+  installSocketPrivacyGuard(io);
+
   // Pass io to zalo pool for real-time event emission
   zaloPool.setIO(io);
 
@@ -157,6 +164,10 @@ async function bootstrap() {
   registerChatSocketHandlers(io);
 
   // ── Routes ────────────────────────────────────────────────────────────────
+
+  // Phase Riêng Tư 2026-08-13 — hook bảo mật hội thoại. PHẢI đăng ký trước mọi route
+  // để hook root áp dụng được cho chat-routes.
+  installChatSecurityHooks(app);
 
   await app.register(authRoutes);
   await app.register(brandingRoutes);
