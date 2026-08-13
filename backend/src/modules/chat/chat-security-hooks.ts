@@ -89,10 +89,15 @@ async function scopeFor(request: FastifyRequest) {
   if (!user?.orgId) return null;
   const state = stateOf(request);
   if (!state.scope) {
-    const scope = await getZaloScope(user.userId ?? user.id, user.orgId, user.role);
+    const userId = (user as any).userId ?? user.id;
+    const scope = await getZaloScope(userId, user.orgId, user.role);
     state.scope = { accessibleIds: scope.accessibleIds ?? [], isOrgAdmin: !!scope.isOrgAdmin };
   }
   return state.scope;
+}
+
+export async function getRequestZaloScope(request: FastifyRequest): Promise<{ accessibleIds: string[]; isOrgAdmin: boolean } | null> {
+  return scopeFor(request);
 }
 
 function conversationIdFrom(path: string, method: string): string | null {
@@ -209,7 +214,7 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
       const removed = before - data.conversations.length;
       if (removed === 0) return payload;
       if (typeof data.total === 'number') data.total = Math.max(0, data.total - removed);
-      logger.warn(`[chat-security] lọc ${removed} hội thoại ngoài phạm vi khỏi ${CONV_LIST_PATH}`);
+      logger.error(`[chat-security] REGRESSION: lọc ${removed} hội thoại ngoài phạm vi khỏi ${CONV_LIST_PATH}`);
     } else {
       // Chi tiết hội thoại của nick riêng tư → che PII + preview nội dung.
       if (data?.contact) data.contact = redactContact(data.contact);
