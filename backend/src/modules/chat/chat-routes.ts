@@ -12,6 +12,7 @@ import { logger } from '../../shared/utils/logger.js';
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'socket.io';
 import { applyContactAggregateFromMessage, applyFriendAggregate } from '../contacts/contact-aggregate.js';
+import { getRequestZaloScope } from './chat-security-hooks.js';
 
 type QueryParams = Record<string, string>;
 
@@ -85,18 +86,18 @@ export async function chatRoutes(app: FastifyInstance) {
     if (accountId) baseWhere.zaloAccountId = accountId;
     if (tab) baseWhere.tab = tab;
 
-    // Members can only see conversations from Zalo accounts they have access to
-    if (user.role === 'member') {
-      const accessibleAccounts = await prisma.zaloAccountAccess.findMany({
-        where: { userId: user.id },
-        select: { zaloAccountId: true },
-      });
-      const accessibleIds = accessibleAccounts.map((a) => a.zaloAccountId);
-      // Intersect with user-selected account filter if present
-      if (accountId && accessibleIds.includes(accountId)) {
-        baseWhere.zaloAccountId = accountId;
-      } else {
-        baseWhere.zaloAccountId = { in: accessibleIds };
+    const scope = await getRequestZaloScope(request);
+    if (!scope) return { unread: 0, unreplied: 0, total: 0 };
+
+    if (!scope.isOrgAdmin) {
+      if (accountId && !scope.accessibleIds.includes(accountId)) {
+        return reply.status(403).send({
+          error: 'Bạn không có quyền truy cập nick Zalo này',
+          code: 'ZALO_SCOPE_FORBIDDEN'
+        });
+      }
+      if (!accountId) {
+        baseWhere.zaloAccountId = { in: scope.accessibleIds };
       }
     }
 
@@ -320,19 +321,20 @@ export async function chatRoutes(app: FastifyInstance) {
       if (Object.keys(where.lastMessageAt).length === 0) delete where.lastMessageAt;
     }
 
-    // Members can only see conversations from Zalo accounts they have access to
-    if (user.role === 'member') {
-      const accessibleAccounts = await prisma.zaloAccountAccess.findMany({
-        where: { userId: user.id },
-        select: { zaloAccountId: true },
-      });
-      const accessibleIds = accessibleAccounts.map((a) => a.zaloAccountId);
-      // Intersect requested account list với accessible
+    const scope = await getRequestZaloScope(request);
+    if (!scope) return { conversations: [], total: 0 };
+
+    if (!scope.isOrgAdmin) {
       if (accountIdList.length > 0) {
-        const allowed = accountIdList.filter(id => accessibleIds.includes(id));
-        where.zaloAccountId = allowed.length === 1 ? allowed[0] : { in: allowed };
-      } else {
-        where.zaloAccountId = { in: accessibleIds };
+        const forbidden = accountIdList.find(id => !scope.accessibleIds.includes(id));
+        if (forbidden) {
+          return reply.status(403).send({
+            error: 'Bạn không có quyền truy cập nick Zalo này',
+            code: 'ZALO_SCOPE_FORBIDDEN'
+          });
+        }
+      } else if (where.zaloAccountId !== 'EMPTY_FOLDER_NO_MATCH') {
+        where.zaloAccountId = { in: scope.accessibleIds };
       }
     }
 
