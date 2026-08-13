@@ -14,6 +14,10 @@
  * nhận diện được viewer (xem shared/realtime/socket-privacy.ts). Frontend KHÔNG phải sửa gì:
  * cookie được cấp ở request API đã xác thực đầu tiên sau khi đăng nhập.
  *
+ * LƯU Ý về PIN: `canSeeConversationContent` trả false cả với CHÍNH CHỦ khi chưa unlock PIN.
+ * Vì vậy chỉ dùng nó để quyết định REDACT khi ĐỌC; thao tác GHI chỉ bị chặn khi viewer
+ * KHÔNG phải chính chủ — giữ nguyên hành vi cũ (owner chưa unlock vẫn mark-read được).
+ *
  * Phải gọi ở root instance, TRƯỚC mọi `app.register(...)` route.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -137,12 +141,13 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
     // Không tìm thấy / khác org → để route xử lý 404 như cũ.
     if (!conversation) return;
 
+    const isOwnerOfNick =
+      !!conversation.zaloAccount?.ownerUserId && conversation.zaloAccount.ownerUserId === userId;
+
     const scope = await scopeFor(request);
     const allowed =
       !!scope &&
-      (scope.isOrgAdmin ||
-        scope.accessibleIds.includes(conversation.zaloAccountId) ||
-        conversation.zaloAccount?.ownerUserId === userId);
+      (scope.isOrgAdmin || scope.accessibleIds.includes(conversation.zaloAccountId) || isOwnerOfNick);
 
     if (!allowed) {
       logger.warn(
@@ -156,16 +161,20 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
 
     const privacyContext = await buildPrivacyContext(request as any);
     const canSeeContent = canSeeConversationContent(conversation as any, privacyContext);
-    if (!canSeeContent) {
-      // Đọc chi tiết → trả bản đã redact ở onSend. Ghi (mark-read) → chặn hẳn.
-      if (request.method !== 'GET') {
-        return reply.status(403).send({
-          error: 'Nick này đang bật chế độ riêng tư — chỉ chính chủ mới thao tác được',
-          code: 'PRIVACY_LOCKED',
-        });
-      }
-      stateOf(request).redactContent = true;
+    if (canSeeContent) return;
+
+    // Thao tác GHI (mark-read) trên nick riêng tư của NGƯỜI KHÁC → chặn hẳn.
+    // Chính chủ (dù chưa mở khoá PIN) vẫn thao tác bình thường như trước.
+    if (request.method !== 'GET') {
+      if (isOwnerOfNick) return;
+      return reply.status(403).send({
+        error: 'Nick này đang bật chế độ riêng tư — chỉ chính chủ mới thao tác được',
+        code: 'PRIVACY_LOCKED',
+      });
     }
+
+    // ĐỌC chi tiết → trả bản đã redact ở onSend (giống các endpoint privacy khác).
+    stateOf(request).redactContent = true;
   });
 
   app.addHook('onSend', async (request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
@@ -204,7 +213,7 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
     } else {
       // Chi tiết hội thoại của nick riêng tư → che PII + preview nội dung.
       if (data?.contact) data.contact = redactContact(data.contact);
-      if ('lastMessageContent' in (data ?? {})) data.lastMessageContent = PRIVACY_BLUR_TOKEN;
+      if (data && 'lastMessageContent' in data) data.lastMessageContent = PRIVACY_BLUR_TOKEN;
       if (data?.friendship?.aliasInNick) data.friendship.aliasInNick = PRIVACY_BLUR_TOKEN;
       if (data) data.redacted = true;
     }
