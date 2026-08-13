@@ -749,6 +749,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/v1/contacts/duplicates/:groupId/dismiss', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const { groupId } = request.params as { groupId: string };
       const group = await prisma.duplicateGroup.findFirst({
         where: { id: groupId, orgId: user.orgId, resolved: false },
@@ -773,6 +776,9 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/v1/contacts/duplicates/:groupId/merge', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const { groupId } = request.params as { groupId: string };
       const { primaryContactId } = request.body as { primaryContactId: string };
 
@@ -860,6 +866,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   // thấy result ngay, có thể chạy lại idempotent.
   app.post('/api/v1/contacts/backfill-global-id', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const result = await backfillGlobalId();
       return reply.send(result);
     } catch (err) {
@@ -1695,6 +1705,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   // ── POST /api/v1/contacts/backfill-missing-friends — tạo Friend row thiếu cho conversations ──
   app.post('/api/v1/contacts/backfill-missing-friends', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const result = await backfillMissingFriends();
       return reply.send(result);
     } catch (err) {
@@ -1706,6 +1720,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   // ── POST /api/v1/contacts/backfill-orphan-friends — fix Friend rows trỏ vào contact đã merged ──
   app.post('/api/v1/contacts/backfill-orphan-friends', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const result = await backfillOrphanFriends();
       return reply.send(result);
     } catch (err) {
@@ -1717,6 +1735,10 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   // ── POST /api/v1/contacts/backfill-friend-display-name — resolve per-identity Zalo name+avatar ─
   app.post('/api/v1/contacts/backfill-friend-display-name', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      const user = request.user!;
+      if (!['owner', 'admin'].includes(user.role)) {
+        return reply.status(403).send({ error: 'Chỉ admin/owner được phép', code: 'RBAC_FORBIDDEN' });
+      }
       const result = await backfillFriendDisplayName();
       return reply.send(result);
     } catch (err) {
