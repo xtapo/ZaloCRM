@@ -132,7 +132,7 @@ export async function userRoutes(app: FastifyInstance) {
     const passwordHash = await bcrypt.hash(password, 10);
     await prisma.user.update({
       where: { id, orgId: currentUser.orgId },
-      data: { passwordHash },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
     });
 
     return { success: true };
@@ -152,7 +152,7 @@ export async function userRoutes(app: FastifyInstance) {
 
     await prisma.user.update({
       where: { id, orgId: currentUser.orgId },
-      data: { isActive: false },
+      data: { isActive: false, tokenVersion: { increment: 1 } },
     });
 
     return { success: true };

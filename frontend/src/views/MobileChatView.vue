@@ -43,10 +43,13 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, computed } from 'vue';
+import { useRoute } from 'vue-router';
 import ConversationList from '@/components/chat/ConversationList.vue';
 import MessageThread from '@/components/chat/MessageThread.vue';
 import { useChat } from '@/composables/use-chat';
 import { useOfflineQueue } from '@/composables/use-offline-queue';
+
+const route = useRoute();
 
 const {
   conversations, selectedConvId, selectedConv, messages,
@@ -101,11 +104,29 @@ function onOnline() {
   flush(sendMessageTo);
 }
 
+// Deep-link: /chat/:convId từ mục Khách hàng (💬 Mở chat) hoặc các nơi khác
+// → selected conv ngay, không cần user click list. Trước đây mobile không đọc
+// convId → bấm 💬 ở Khách hàng trên mobile không mở được chat (bug).
 onMounted(() => {
   fetchConversations();
   initSocket();
   window.addEventListener('online', onOnline);
+  const initId = route.params.convId;
+  if (typeof initId === 'string' && initId) {
+    selectConversation(initId);
+  }
 });
+
+// Watch route → chọn conv khi convId thay đổi (deep-link, back/forward, nav mới)
+watch(
+  () => route.params.convId,
+  (id) => {
+    if (typeof id === 'string' && id && id !== selectedConvId.value) {
+      selectConversation(id);
+    }
+  },
+  { immediate: false },
+);
 
 onUnmounted(() => {
   destroySocket();

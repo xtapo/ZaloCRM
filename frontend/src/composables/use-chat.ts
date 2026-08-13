@@ -4,7 +4,6 @@ import { io, Socket } from 'socket.io-client';
 import type { Contact } from '@/composables/use-contacts';
 import { useAuthStore } from '@/stores/auth';
 import { applyPendingTags } from '@/composables/use-pending-mutations';
-import { usePrivacyStore } from '@/stores/privacy';
 
 interface ZaloAccount {
   id: string;
@@ -212,9 +211,6 @@ function mergeConvListPreserveDetail(existing: Conversation[], incoming: Convers
 
 export function useChat() {
   const authStore = useAuthStore();
-  const privacyStore = usePrivacyStore();
-  function currentUserIdForPrivacy(): string | null { return authStore.user?.id ?? null; }
-  function privacyUnlockedRef(): boolean { return !!privacyStore.isUnlocked; }
   const conversations = ref<Conversation[]>([]);
   const selectedConvId = ref<string | null>(null);
   const messages = ref<Message[]>([]);
@@ -337,7 +333,8 @@ export function useChat() {
       if (!msgType && cliType) {
         // Zalo cliMsgType enum (partial): 1=text, 19=link, 22=video, 23=sticker,
         // 24=voice, 30=file, 32=image, 38=card, 46=location
-        msgType = ({ 1: 'text', 19: 'link', 22: 'video', 23: 'sticker',
+        msgType = ({
+          1: 'text', 19: 'link', 22: 'video', 23: 'sticker',
           24: 'voice', 30: 'file', 32: 'image', 38: 'card', 46: 'location',
         } as Record<number, string>)[cliType] || '';
       }
@@ -499,8 +496,25 @@ export function useChat() {
     // Nếu conv không có trong list (filter loại ra HOẶC vừa tạo mới qua
     // ensure-conversation từ dialog) → refresh list để MessageThread render được.
     // selectedConv = computed find trong list — list rỗng = blank UI.
-    if (!conversations.value.find(c => c.id === convId)) {
+    let exists = conversations.value.find(c => c.id === convId);
+    if (!exists) {
       await fetchConversations();
+      exists = conversations.value.find(c => c.id === convId);
+    }
+    // Vẫn không có trong list → conv vừa tạo/ensure bị inbox-filter đang áp
+    // dụng loại ra (vd đang lọc nick A, KH thuộc nick B). Fetch detail trực tiếp
+    // và chèn tạm vào list để MessageThread luôn render được — tránh blank UI
+    // dù convId hoàn toàn hợp lệ (bug "không mở được chat ở mục khách hàng").
+    if (!exists) {
+      try {
+        const res = await api.get(`/conversations/${convId}`);
+        const detail = res.data as Conversation;
+        if (detail?.id) {
+          conversations.value = [detail, ...conversations.value.filter(c => c.id !== detail.id)];
+        }
+      } catch (err) {
+        console.error('Failed to load conversation detail for deep-link:', err);
+      }
     }
     await fetchMessages(convId);
     try {
@@ -581,23 +595,7 @@ export function useChat() {
   function initSocket() {
     socket = io({ transports: ['websocket', 'polling'] });
 
-    socket.on('chat:message', (data: { message: Message; conversationId: string; _privacyMeta?: { privacyMode?: string; ownerUserId?: string | null } }) => {
-      // PRIVACY 2026-05-22 — backend kèm _privacyMeta cho mỗi event, FE đánh dấu
-      // redacted client-side khi non-owner để blur hiệu lực ngay realtime (tránh
-      // bug "tin mới không bị mờ" anh báo). Server không gửi raw content cho
-      // non-owner conv (đã có gate), nên đây chỉ là safety belt cho UI.
-      const meta = data._privacyMeta;
-      if (meta?.privacyMode === 'main') {
-        const myId = currentUserIdForPrivacy();
-        const isOwner = !!myId && meta.ownerUserId === myId;
-        const unlocked = privacyUnlockedRef();
-        if (!isOwner || !unlocked) {
-          (data.message as any).redacted = true;
-          (data.message as any).content = '';
-          (data.message as any).originalContent = null;
-          (data.message as any).attachments = [];
-        }
-      }
+    socket.on('chat:message', (data: { message: Message; conversationId: string }) => {
 
       if (data.conversationId === selectedConvId.value) {
         if (!messages.value.find(m => m.id === data.message.id)) {

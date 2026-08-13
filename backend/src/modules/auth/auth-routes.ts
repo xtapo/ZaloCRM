@@ -4,14 +4,10 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { authMiddleware } from './auth-middleware.js';
-import {
-  checkSetupStatus,
-  setup,
-  login,
-  getProfile,
-} from './auth-service.js';
+import { checkSetupStatus, setup, login, getProfile } from './auth-service.js';
 import { seedScoringDefaults } from '../scoring/seed-defaults.js';
 import { logger } from '../../shared/utils/logger.js';
+import { config } from '../../config/index.js';
 
 /**
  * Fire-and-forget auto-seed Phase 6 scoring config + rules nếu org chưa có.
@@ -33,13 +29,20 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // POST /api/v1/setup — create org + owner user, return JWT
   app.post<{
     Body: { orgName: string; fullName: string; email: string; password: string };
-  }>('/api/v1/setup', async (request, reply) => {
+  }>('/api/v1/setup', { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } }, async (request, reply) => {
     const { orgName, fullName, email, password } = request.body;
     if (!orgName || !fullName || !email || !password) {
       return reply.status(400).send({ error: 'Missing required fields' });
     }
     const payload = await setup(orgName, fullName, email, password);
     const token = app.jwt.sign(payload, { expiresIn: '7d' });
+    reply.setCookie('auth_token', token, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      secure: config.isProduction,
+    });
     // Phase 6 polish — auto-seed scoring defaults cho org mới tạo
     autoSeedScoringIfNeeded(payload.orgId);
     return { token, user: payload };
@@ -48,17 +51,43 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // POST /api/v1/auth/login — verify credentials, return JWT
   app.post<{
     Body: { email: string; password: string };
-  }>('/api/v1/auth/login', async (request, reply) => {
+  }>('/api/v1/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (request, reply) => {
     const { email, password } = request.body;
     if (!email || !password) {
       return reply.status(400).send({ error: 'Missing email or password' });
     }
     const payload = await login(email, password);
     const token = app.jwt.sign(payload, { expiresIn: '7d' });
+    reply.setCookie('auth_token', token, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      secure: config.isProduction,
+    });
     // Phase 6 polish — fire-and-forget seed nếu org cũ chưa có scoring config.
     // Idempotent — skip nếu đã tồn tại. Không await.
     autoSeedScoringIfNeeded(payload.orgId);
     return { token, user: payload };
+  });
+
+  // POST /api/v1/auth/logout — clear auth cookies
+  app.post('/api/v1/auth/logout', async (request, reply) => {
+    reply.setCookie('auth_token', '', {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 0,
+      secure: config.isProduction,
+    });
+    reply.setCookie('crm_session', '', {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: 0,
+      secure: config.isProduction,
+    });
+    return { success: true };
   });
 
   // GET /api/v1/profile — return current user (requires auth)

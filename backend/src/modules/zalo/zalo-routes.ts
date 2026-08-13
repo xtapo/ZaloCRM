@@ -85,6 +85,7 @@ export async function zaloRoutes(app: FastifyInstance): Promise<void> {
   // POST /api/v1/zalo-accounts/:id/login — initiate QR login
   app.post<{ Params: { id: string } }>(
     '/api/v1/zalo-accounts/:id/login',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const { id } = request.params;
       const user = request.user!;

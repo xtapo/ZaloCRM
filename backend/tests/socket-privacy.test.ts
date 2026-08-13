@@ -69,12 +69,48 @@ describe('socket-privacy isActive check', () => {
     installSocketPrivacyGuard(io);
     const useFn = io.use.mock.calls[0][0];
     
-    const token = jwt.sign({ id: 'u3', orgId: 'o1', role: 'member' }, config.jwtSecret);
+    const token = jwt.sign({ id: 'u3', orgId: 'o1', role: 'member', tokenVersion: 0 }, config.jwtSecret);
     const socket: any = { handshake: { auth: { token } }, data: {} };
-    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: true, orgId: 'o1' } as any);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: true, orgId: 'o1', tokenVersion: 0 } as any);
 
     await useFn(socket, () => {});
     expect(socket.data.user).not.toBeNull();
     expect(socket.data.user.id).toBe('u3');
   });
+
+  it('allows socket connection via cookie auth_token in handshake headers', async () => {
+    const io = setupIO();
+    installSocketPrivacyGuard(io);
+    const useFn = io.use.mock.calls[0][0];
+
+    const token = jwt.sign({ id: 'u4', orgId: 'o1', role: 'member', tokenVersion: 0 }, config.jwtSecret);
+    const socket: any = {
+      handshake: {
+        auth: {},
+        headers: { cookie: `auth_token=${token}` }
+      },
+      data: {}
+    };
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: true, orgId: 'o1', tokenVersion: 0 } as any);
+
+    await useFn(socket, () => {});
+    expect(socket.data.user).not.toBeNull();
+    expect(socket.data.user.id).toBe('u4');
+  });
+
+  it('blocks socket connection when tokenVersion mismatches DB tokenVersion', async () => {
+    const io = setupIO();
+    installSocketPrivacyGuard(io);
+    const useFn = io.use.mock.calls[0][0];
+
+    // Payload tokenVersion = 0
+    const token = jwt.sign({ id: 'u5', orgId: 'o1', role: 'member', tokenVersion: 0 }, config.jwtSecret);
+    const socket: any = { handshake: { auth: { token } }, data: {} };
+    // DB tokenVersion = 1
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ isActive: true, orgId: 'o1', tokenVersion: 1 } as any);
+
+    await useFn(socket, () => {});
+    expect(socket.data.user).toBeNull();
+  });
 });
+

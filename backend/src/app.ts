@@ -15,6 +15,7 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import fastifyJwt from '@fastify/jwt';
+import fastifyCookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
@@ -105,6 +106,8 @@ async function bootstrap() {
     credentials: true,
   });
 
+  await app.register(fastifyCookie);
+
   await app.register(fastifyJwt, {
     secret: config.jwtSecret,
   });
@@ -168,6 +171,27 @@ async function bootstrap() {
   // Phase Riêng Tư 2026-08-13 — hook bảo mật hội thoại. PHẢI đăng ký trước mọi route
   // để hook root áp dụng được cho chat-routes.
   installChatSecurityHooks(app);
+
+  // CSRF Protection Hook (Commit B)
+  app.addHook('preHandler', async (request, reply) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
+    const viaCookie = !request.headers.authorization && !!request.cookies?.auth_token;
+    if (!viaCookie) return;
+    
+    // Whitelist public webhook endpoints
+    if (
+      request.url.includes('/webhook') ||
+      request.url.includes('/callback') ||
+      request.url.includes('/zinstant') ||
+      request.url.includes('/api/v1/automation/webhooks')
+    ) {
+      return;
+    }
+
+    if (request.headers['x-requested-with'] !== 'XMLHttpRequest') {
+      return reply.status(403).send({ error: 'CSRF check failed', code: 'CSRF_FAILED' });
+    }
+  });
 
   await app.register(authRoutes);
   await app.register(brandingRoutes);

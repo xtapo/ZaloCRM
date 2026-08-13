@@ -222,11 +222,7 @@ router.beforeEach(async (to, _from, next) => {
 
   // Check auth for protected routes
   if (to.meta.requiresAuth) {
-    if (!authStore.token) {
-      return next('/login');
-    }
-    // Fetch profile if not loaded yet
-    if (!authStore.user) {
+    if (!authStore.isAuthenticated) {
       await authStore.init();
       if (!authStore.isAuthenticated) {
         return next('/login');
