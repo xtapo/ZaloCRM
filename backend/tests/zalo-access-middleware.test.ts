@@ -9,8 +9,9 @@ vi.mock('../src/modules/zalo/zalo-scope.js', () => ({
 }));
 vi.mock('../src/shared/database/prisma-client.js', () => ({
   prisma: {
-    zaloAccount: { findUnique: vi.fn() },
-    zaloAccountAccess: { findFirst: vi.fn() }
+    zaloAccount: { findFirst: vi.fn() },
+    zaloAccountAccess: { findFirst: vi.fn() },
+    conversation: { findFirst: vi.fn() }
   }
 }));
 
@@ -21,12 +22,12 @@ describe('zalo-access-middleware', () => {
     mockScope.accessibleIds = ['acc1'];
     mockScope.ownedIds = new Set(['acc1']);
     mockScope.isOrgAdmin = false;
-    req = { user: { id: 'u1', orgId: 'o1', role: 'member' }, params: { id: 'acc1' }, query: {}, body: {} };
+    req = { user: { id: 'u1', orgId: 'o1', role: 'member' }, params: { zaloAccountId: 'acc1' }, query: {}, body: {} };
     reply = { status: vi.fn(() => reply), send: vi.fn() };
   });
 
   it('Owner without ZaloAccountAccess row passes (read)', async () => {
-    vi.mocked(prisma.zaloAccount.findUnique).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u1', privacyMode: 'normal' } as any);
+    vi.mocked(prisma.zaloAccount.findFirst).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u1', privacyMode: 'normal' } as any);
     const mw = requireZaloAccess('read');
     await mw(req, reply);
     expect(reply.status).not.toHaveBeenCalled();
@@ -35,7 +36,7 @@ describe('zalo-access-middleware', () => {
   it('Leader can read nick of member (in scope, no explicit row)', async () => {
     mockScope.ownedIds = new Set();
     req.user.role = 'leader';
-    vi.mocked(prisma.zaloAccount.findUnique).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u2', privacyMode: 'normal' } as any);
+    vi.mocked(prisma.zaloAccount.findFirst).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u2', privacyMode: 'normal' } as any);
     const mw = requireZaloAccess('read');
     await mw(req, reply);
     expect(reply.status).not.toHaveBeenCalled();
@@ -43,7 +44,7 @@ describe('zalo-access-middleware', () => {
 
   it('Chat/admin permission still explicit', async () => {
     mockScope.ownedIds = new Set();
-    vi.mocked(prisma.zaloAccount.findUnique).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u2', privacyMode: 'normal' } as any);
+    vi.mocked(prisma.zaloAccount.findFirst).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u2', privacyMode: 'normal' } as any);
     vi.mocked(prisma.zaloAccountAccess.findFirst).mockResolvedValue(null);
     const mw = requireZaloAccess('chat');
     await mw(req, reply);
@@ -54,7 +55,7 @@ describe('zalo-access-middleware', () => {
     mockScope.isOrgAdmin = true;
     mockScope.ownedIds = new Set();
     process.env.PRIVACY_ALLOW_ADMIN_BYPASS = 'false';
-    vi.mocked(prisma.zaloAccount.findUnique).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u2', privacyMode: 'main' } as any);
+    vi.mocked(prisma.zaloAccount.findFirst).mockResolvedValue({ id: 'acc1', orgId: 'o1', ownerUserId: 'u2', privacyMode: 'main' } as any);
     const mw = requireZaloAccess('read');
     await mw(req, reply);
     expect(reply.status).toHaveBeenCalledWith(403);
