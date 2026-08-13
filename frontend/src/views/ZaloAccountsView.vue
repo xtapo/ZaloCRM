@@ -436,17 +436,13 @@ function closeAddDialog() {
 }
 
 async function handleAddAccount() {
-  const ok = await addAccount(newAccountName.value, newAccountProxy.value);
-  if (ok) {
+  const created = await addAccount(newAccountName.value, newAccountProxy.value);
+  if (created) {
     showAddDialog.value = false;
     await refreshAll();
-    // Auto-launch QR for the latest account
-    // The created account is the most recent — find it and trigger login
-    setTimeout(async () => {
-      const list = await api.get('/zalo-accounts');
-      const latest = list.data[list.data.length - 1];
-      if (latest) await loginAccount(latest.id);
-    }, 300);
+    if (created.id) {
+      await loginAccount(created.id);
+    }
   }
 }
 

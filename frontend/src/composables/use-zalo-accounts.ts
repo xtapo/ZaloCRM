@@ -67,18 +67,18 @@ export function useZaloAccounts() {
     }
   }
 
-  async function addAccount(displayName: string, proxyUrl?: string) {
+  async function addAccount(displayName: string, proxyUrl?: string): Promise<ZaloAccount | null> {
     adding.value = true;
     try {
-      await api.post('/zalo-accounts', {
+      const res = await api.post<ZaloAccount>('/zalo-accounts', {
         displayName: displayName || undefined,
         proxyUrl: proxyUrl?.trim() || undefined,
       });
       await fetchAccounts();
-      return true;
+      return res.data;
     } catch (err: any) {
       console.error('Failed to add account:', err);
-      return false;
+      return null;
     } finally {
       adding.value = false;
     }
