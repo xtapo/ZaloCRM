@@ -27,10 +27,12 @@ vi.mock('../src/modules/auth/auth-middleware.js', () => ({
 vi.mock('../src/modules/zalo/zalo-route-helpers.js', () => ({
   resolveAccount: vi.fn().mockResolvedValue({ id: 'za-1', orgId: 'org-1' }),
   checkAccess: vi.fn().mockResolvedValue(true),
+  getAccessibleZaloAccountIds: vi.fn(),
   handleError: vi.fn().mockImplementation((reply: any, err: any) => {
     reply.status(500).send({ error: err?.message || 'Error' });
   }),
 }));
+import { getAccessibleZaloAccountIds } from '../src/modules/zalo/zalo-route-helpers.js';
 vi.mock('../src/modules/zalo/friend-event-handler.js', () => ({
   markFriendRequestSent: vi.fn(),
   applyFriendTransition: vi.fn(),
@@ -61,6 +63,7 @@ beforeEach(() => {
 
 describe('GET /api/v1/friends-db/all-nicks', () => {
   it('returns empty when user has 0 accessible nicks', async () => {
+    vi.mocked(getAccessibleZaloAccountIds).mockResolvedValue([]);
     prismaMock.zaloAccountAccess.findMany.mockResolvedValue([]);
     prismaMock.zaloAccount.findMany.mockResolvedValue([]);
     const res = await buildApp().inject({ method: 'GET', url: '/api/v1/friends-db/all-nicks' });
@@ -72,6 +75,7 @@ describe('GET /api/v1/friends-db/all-nicks', () => {
   });
 
   it('queries Friend filtered by accessible accountIds (union of access + owned)', async () => {
+    vi.mocked(getAccessibleZaloAccountIds).mockResolvedValue(['za-A', 'za-B', 'za-C']);
     prismaMock.zaloAccountAccess.findMany.mockResolvedValue([
       { zaloAccountId: 'za-A' },
       { zaloAccountId: 'za-B' },
@@ -100,6 +104,7 @@ describe('GET /api/v1/friends-db/all-nicks', () => {
   });
 
   it('applies kind filter when provided', async () => {
+    vi.mocked(getAccessibleZaloAccountIds).mockResolvedValue(['za-A']);
     prismaMock.zaloAccountAccess.findMany.mockResolvedValue([{ zaloAccountId: 'za-A' }]);
     prismaMock.zaloAccount.findMany.mockResolvedValue([]);
     prismaMock.friend.findMany.mockResolvedValue([]);
@@ -115,6 +120,7 @@ describe('GET /api/v1/friends-db/all-nicks', () => {
   });
 
   it('uses deterministic orderBy chain (lastInboundAt → lastOutboundAt → createdAt → id)', async () => {
+    vi.mocked(getAccessibleZaloAccountIds).mockResolvedValue(['za-A']);
     prismaMock.zaloAccountAccess.findMany.mockResolvedValue([{ zaloAccountId: 'za-A' }]);
     prismaMock.zaloAccount.findMany.mockResolvedValue([]);
     prismaMock.friend.findMany.mockResolvedValue([]);
@@ -132,6 +138,7 @@ describe('GET /api/v1/friends-db/all-nicks', () => {
   });
 
   it('respects pagination params (page=2, limit=10)', async () => {
+    vi.mocked(getAccessibleZaloAccountIds).mockResolvedValue(['za-A']);
     prismaMock.zaloAccountAccess.findMany.mockResolvedValue([{ zaloAccountId: 'za-A' }]);
     prismaMock.zaloAccount.findMany.mockResolvedValue([]);
     prismaMock.friend.findMany.mockResolvedValue([]);
