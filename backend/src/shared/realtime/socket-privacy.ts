@@ -70,6 +70,13 @@ interface CachedAccount {
 const scopeCache = new Map<string, CachedScope>();
 const accountCache = new Map<string, CachedAccount>();
 
+interface CachedUser {
+  at: number;
+  isActive: boolean;
+  orgId: string | null;
+}
+const userCache = new Map<string, CachedUser>();
+
 export function parseCookieHeader(header: string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!header) return out;
@@ -151,6 +158,7 @@ async function loadAccount(accountId: string): Promise<CachedAccount> {
 export function invalidateSocketPrivacyCache(input: { userId?: string; accountId?: string } = {}): void {
   if (input.accountId) accountCache.delete(input.accountId);
   if (input.userId) {
+    userCache.delete(input.userId);
     for (const key of Array.from(scopeCache.keys())) {
       if (key.startsWith(`${input.userId}:`)) scopeCache.delete(key);
     }
@@ -158,6 +166,7 @@ export function invalidateSocketPrivacyCache(input: { userId?: string; accountId
   if (!input.userId && !input.accountId) {
     scopeCache.clear();
     accountCache.clear();
+    userCache.clear();
   }
 }
 
@@ -241,9 +250,32 @@ export function installSocketPrivacyGuard(io: Server): void {
 
   // Nhận diện viewer ở handshake. KHÔNG reject socket ẩn danh để không làm vỡ client cũ —
   // họ chỉ nhận payload đã redact.
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
-      socket.data.user = resolveSocketUser(socket);
+      const user = resolveSocketUser(socket);
+      if (user) {
+        let cached = userCache.get(user.id);
+        if (!cached || Date.now() - cached.at > CACHE_TTL_MS) {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            select: { isActive: true, orgId: true },
+          });
+          cached = {
+            at: Date.now(),
+            isActive: !!dbUser?.isActive,
+            orgId: dbUser?.orgId ?? null,
+          };
+          userCache.set(user.id, cached);
+        }
+        
+        if (!cached.isActive || cached.orgId !== user.orgId) {
+          socket.data.user = null;
+        } else {
+          socket.data.user = user;
+        }
+      } else {
+        socket.data.user = null;
+      }
     } catch {
       socket.data.user = null;
     }

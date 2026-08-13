@@ -126,8 +126,6 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
       return;
     }
 
-    ensureSessionCookie(request, reply);
-
     const user = (request as any).user;
     if (!user?.orgId) return;
     const userId = user.userId ?? user.id;
@@ -183,12 +181,16 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
   });
 
   app.addHook('onSend', async (request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
+    const path = pathOf(request);
+    if (!path.startsWith('/api/v1/conversations')) return payload;
+
+    if (reply.statusCode >= 200 && reply.statusCode < 300) {
+      ensureSessionCookie(request, reply);
+    }
+
     if (typeof payload !== 'string') return payload;
     if (request.method !== 'GET') return payload;
     if (reply.statusCode < 200 || reply.statusCode >= 300) return payload;
-
-    const path = pathOf(request);
-    if (!path.startsWith('/api/v1/conversations')) return payload;
 
     const isList = path === CONV_LIST_PATH;
     const state = stateOf(request);
