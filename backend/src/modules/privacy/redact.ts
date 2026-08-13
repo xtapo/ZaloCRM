@@ -97,17 +97,21 @@ export function redactConversationRow<T extends {
 }
 
 /**
- * Decide: viewer có quyền xem PII của 1 Contact không?
+ * Batch check: trong danh sách contactIds, những contact nào cần redact PII với viewer?
+ * ĐÚNG 1 query cho cả batch — tránh N+1 khi áp cho list view (2026-08-13).
  *
  * Q4 (anh chốt): contact PII blur NẾU có ít nhất 1 friend row thuộc main-nick non-owned.
- * CODEX REVIEW P2 #5: REQUIRE orgId trong context để tenant-safe.
+ * CODEX REVIEW P2 #5: REQUIRE orgId trong context để tenant-safe — thiếu org context
+ * thì FAIL-CLOSED: coi như tất cả đều cần redact (giữ nguyên mặc định phòng thủ cũ).
  */
 export async function getRedactableContactIds(
   contactIds: string[],
   ctx: PrivacyContext,
 ): Promise<Set<string>> {
-  if (!ctx.orgId || contactIds.length === 0) {
-    return new Set();
+  if (contactIds.length === 0) return new Set();
+  if (!ctx.orgId) {
+    // Defensive: no org context = unsafe, redact tất cả (fail-closed)
+    return new Set(contactIds);
   }
   const offending = await prisma.friend.findMany({
     where: {
@@ -121,23 +125,16 @@ export async function getRedactableContactIds(
     },
     select: { contactId: true },
   });
-  return new Set(offending.map(f => f.contactId));
+  return new Set(offending.map(f => f.contactId).filter((id): id is string => !!id));
 }
 
 /**
- * Decide: viewer có quyền xem PII của 1 Contact không?
- *
- * Q4 (anh chốt): contact PII blur NẾU có ít nhất 1 friend row thuộc main-nick non-owned.
- * CODEX REVIEW P2 #5: REQUIRE orgId trong context để tenant-safe.
+ * Decide: viewer có quyền xem PII của 1 Contact không? (bản single — delegate batch)
  */
 export async function shouldRedactContactPii(
   contactId: string,
   ctx: PrivacyContext,
 ): Promise<boolean> {
-  if (!ctx.orgId) {
-    // Defensive: no org context = unsafe, default redact
-    return true;
-  }
   const set = await getRedactableContactIds([contactId], ctx);
   return set.has(contactId);
 }
