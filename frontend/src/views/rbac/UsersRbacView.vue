@@ -52,6 +52,9 @@
       </select>
       <div class="at-toolbar-spacer"></div>
       <span class="at-count">{{ filteredUsers.length }} / {{ stats.total }} nhân viên</span>
+      <button v-if="authStore.isAdmin" class="at-btn at-btn-primary" style="margin-left: 12px; padding: 6px 16px; background: #1b61c9; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;" @click="showCreate = true">
+        + Thêm nhân viên
+      </button>
     </div>
 
     <div v-if="loading" class="loading-state">
@@ -61,7 +64,7 @@
     <div v-else-if="filteredUsers.length === 0 && store.users.length === 0" class="empty-state">
       <div class="empty-icon">👥</div>
       <h3>Chưa có nhân viên nào</h3>
-      <p>Thêm nhân viên qua trang đăng ký hoặc dùng admin endpoint.</p>
+      <p>Bấm nút <b>+ Thêm nhân viên</b> ở góc trên hoặc dùng admin endpoint.</p>
     </div>
 
     <div v-else-if="filteredUsers.length === 0" class="empty-state">
@@ -164,6 +167,25 @@
       @close="closePanel"
       @changed="onChanged"
     />
+
+    <!-- Create dialog -->
+    <v-dialog v-model="showCreate" max-width="440">
+      <v-card>
+        <v-card-title>Thêm nhân viên</v-card-title>
+        <v-card-text>
+          <v-text-field v-model="form.fullName" label="Họ tên *" class="mb-2" />
+          <v-text-field v-model="form.email" label="Email *" type="email" class="mb-2" />
+          <v-text-field v-model="form.password" label="Mật khẩu *" type="password" class="mb-2" />
+          <v-select v-model="form.role" :items="roleOptions" item-title="label" item-value="value" label="Vai trò" />
+          <v-alert v-if="dialogError" type="error" density="compact" class="mt-2">{{ dialogError }}</v-alert>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn @click="showCreate = false">Hủy</v-btn>
+          <v-btn color="primary" :loading="saving" @click="handleCreate">Tạo</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -189,6 +211,24 @@ const filterActive = ref<'all' | 'active' | 'inactive'>('all');
 
 const panelOpen = ref(false);
 const selectedUser = ref<RbacUser | null>(null);
+
+const showCreate = ref(false);
+const saving = ref(false);
+const dialogError = ref('');
+const form = ref({
+  fullName: '',
+  email: '',
+  password: '',
+  role: 'member'
+});
+
+const roleOptions = [
+  { label: 'Nhân viên', value: 'member' },
+  { label: 'Quản trị viên', value: 'admin' },
+];
+if (authStore.isOwner) {
+  roleOptions.push({ label: 'Chủ tổ chức', value: 'owner' });
+}
 
 const currentUserId = computed(() => authStore.user?.id ?? '');
 const currentUserRole = computed(() => authStore.user?.role ?? 'member');
@@ -274,6 +314,26 @@ async function onChanged() {
   if (selectedUser.value) {
     const updated = store.users.find((u) => u.id === selectedUser.value!.id);
     if (updated) selectedUser.value = updated;
+  }
+}
+
+import { api } from '@/api/index';
+async function handleCreate() {
+  if (!form.value.fullName || !form.value.email || !form.value.password) {
+    dialogError.value = 'Vui lòng nhập đủ họ tên, email và mật khẩu';
+    return;
+  }
+  saving.value = true;
+  dialogError.value = '';
+  try {
+    await api.post('/users', form.value);
+    showCreate.value = false;
+    form.value = { fullName: '', email: '', password: '', role: 'member' };
+    await store.loadUsers();
+  } catch (err: any) {
+    dialogError.value = err.response?.data?.message || 'Lỗi khi tạo nhân viên';
+  } finally {
+    saving.value = false;
   }
 }
 

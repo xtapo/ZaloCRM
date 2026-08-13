@@ -36,12 +36,27 @@
               @blur="saveEmail"
               @keyup.enter="saveEmail"
             />
+            <label class="field-label">Vai trò hệ thống</label>
+            <select
+              v-if="canChangeRole"
+              v-model="localRole"
+              class="field-input"
+              :disabled="busy"
+              @change="saveRole"
+            >
+              <option value="member">Thành viên</option>
+              <option value="admin">Quản trị viên (Admin)</option>
+              <option value="owner">Chủ tổ chức (Owner)</option>
+            </select>
+            <div v-else class="info-status-row" style="margin-top: 0">
+              <span class="role-tag" :class="`role-legacy-${user?.role}`">
+                {{ legacyRoleLabel(user?.role) }}
+              </span>
+            </div>
+            
             <div class="info-status-row">
               <span class="role-tag" :class="user?.isActive ? 'role-deputy' : 'role-empty-tag'">
                 {{ user?.isActive ? '🟢 Đang hoạt động' : '⚪ Đã vô hiệu hóa' }}
-              </span>
-              <span class="role-tag" :class="`role-legacy-${user?.role}`">
-                {{ legacyRoleLabel(user?.role) }}
               </span>
             </div>
           </section>
@@ -196,6 +211,7 @@ const error = ref('');
 
 const localFullName = ref('');
 const localEmail = ref('');
+const localRole = ref<'owner' | 'admin' | 'member'>('member');
 const deptIdLocal = ref<string>('');
 const deptRoleLocal = ref<'leader' | 'deputy' | 'member'>('member');
 const pgIdLocal = ref<string>('');
@@ -209,6 +225,9 @@ const canEditInfo = computed(() => {
   // Owner edits self always; owner/admin edits anyone
   if (u.id === props.currentUserId) return true;
   return ['owner', 'admin'].includes(props.currentUserRole);
+});
+const canChangeRole = computed(() => {
+  return props.currentUserRole === 'owner';
 });
 const canDeactivate = computed(() => {
   return props.currentUserRole === 'owner' && props.user?.id !== props.currentUserId;
@@ -258,6 +277,7 @@ watch(
     if (!props.open || !props.user) return;
     localFullName.value = props.user.fullName ?? '';
     localEmail.value = props.user.email ?? '';
+    localRole.value = (props.user.role as any) ?? 'member';
     deptIdLocal.value = props.user.departmentMember?.departmentId ?? '';
     deptRoleLocal.value = props.user.departmentMember?.deptRole ?? 'member';
     pgIdLocal.value = props.user.permissionGroupId ?? '';
@@ -311,6 +331,21 @@ async function saveEmail() {
   } catch (e: any) {
     error.value = e?.response?.data?.error || 'Lỗi đổi email';
     localEmail.value = props.user.email;
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function saveRole() {
+  if (!props.user || !canChangeRole.value) return;
+  if (localRole.value === props.user.role) return;
+  busy.value = true;
+  try {
+    await api.put(`/users/${props.user.id}`, { role: localRole.value });
+    emit('changed');
+  } catch (e: any) {
+    error.value = e?.response?.data?.error || 'Lỗi đổi chức vụ hệ thống';
+    localRole.value = props.user.role as any;
   } finally {
     busy.value = false;
   }
