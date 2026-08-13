@@ -175,7 +175,8 @@ async function bootstrap() {
   // CSRF Protection Hook (Commit B)
   app.addHook('preHandler', async (request, reply) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
-    if (!(request as any).authViaCookie) return;
+    const viaCookie = !request.headers.authorization && !!request.cookies?.auth_token;
+    if (!viaCookie) return;
     
     // Whitelist public webhook endpoints
     if (
