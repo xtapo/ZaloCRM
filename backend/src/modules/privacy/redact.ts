@@ -102,6 +102,34 @@ export function redactConversationRow<T extends {
  * Q4 (anh chốt): contact PII blur NẾU có ít nhất 1 friend row thuộc main-nick non-owned.
  * CODEX REVIEW P2 #5: REQUIRE orgId trong context để tenant-safe.
  */
+export async function getRedactableContactIds(
+  contactIds: string[],
+  ctx: PrivacyContext,
+): Promise<Set<string>> {
+  if (!ctx.orgId || contactIds.length === 0) {
+    return new Set();
+  }
+  const offending = await prisma.friend.findMany({
+    where: {
+      orgId: ctx.orgId,
+      contactId: { in: contactIds },
+      zaloAccount: {
+        orgId: ctx.orgId,
+        privacyMode: 'main',
+        ownerUserId: ctx.viewerUserId ? { not: ctx.viewerUserId } : undefined,
+      },
+    },
+    select: { contactId: true },
+  });
+  return new Set(offending.map(f => f.contactId));
+}
+
+/**
+ * Decide: viewer có quyền xem PII của 1 Contact không?
+ *
+ * Q4 (anh chốt): contact PII blur NẾU có ít nhất 1 friend row thuộc main-nick non-owned.
+ * CODEX REVIEW P2 #5: REQUIRE orgId trong context để tenant-safe.
+ */
 export async function shouldRedactContactPii(
   contactId: string,
   ctx: PrivacyContext,
@@ -110,19 +138,8 @@ export async function shouldRedactContactPii(
     // Defensive: no org context = unsafe, default redact
     return true;
   }
-  const offending = await prisma.friend.findFirst({
-    where: {
-      orgId: ctx.orgId,
-      contactId,
-      zaloAccount: {
-        orgId: ctx.orgId,
-        privacyMode: 'main',
-        ownerUserId: ctx.viewerUserId ? { not: ctx.viewerUserId } : undefined,
-      },
-    },
-    select: { id: true },
-  });
-  return !!offending;
+  const set = await getRedactableContactIds([contactId], ctx);
+  return set.has(contactId);
 }
 
 /**
