@@ -1028,7 +1028,7 @@ async function goChat(c: Contact) {
     || rows.find(r => r.relationshipKind === 'chatting_stranger')
     || rows[0];
   if (!pick) {
-    toast.error('KH này chưa liên kết với nick Zalo nào để mở chat');
+    toast.error('KH này chưa có liên kết với nick Zalo nào. Vui lòng gửi lời mời KB hoặc nhắn tin Zalo từ nick chăm trước.');
     return;
   }
   try {
