@@ -35,9 +35,18 @@ export async function generateWithOpenaiCompat(
       throw new Error(`OpenAI-compat request failed with status ${status}`);
     }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
+    const rawText = await response.text();
+    const cleanedText = rawText.replace(/data:\s*\[DONE\]\s*$/i, '').trim();
+
+    let data;
+    try {
+      data = JSON.parse(cleanedText) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+    } catch (err) {
+      throw new Error(`OpenAI-compat parse error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
     const text = data.choices?.[0]?.message?.content?.trim();
     if (!text) throw new Error('OpenAI-compat returned empty content');
     return text;

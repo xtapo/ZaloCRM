@@ -117,9 +117,15 @@ async function generateText(provider: string, apiKey: string, model: string, sys
   if (provider === 'gemini') return generateWithGemini(baseUrl, apiKey, model, system, prompt, maxTokens);
 
   /* OpenAI, Qwen, Kimi all use OpenAI-compatible chat/completions API */
-  if (provider === 'openai') return generateWithOpenaiCompat(`${baseUrl}/v1/chat/completions`, apiKey, model, system, prompt, maxTokens);
-  if (provider === 'qwen') return generateWithOpenaiCompat(`${baseUrl}/compatible-mode/v1/chat/completions`, apiKey, model, system, prompt, maxTokens);
-  if (provider === 'kimi') return generateWithOpenaiCompat(`${baseUrl}/v1/chat/completions`, apiKey, model, system, prompt, maxTokens);
+  if (provider === 'openai') {
+    const cleanBase = baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
+    return generateWithOpenaiCompat(`${cleanBase}/v1/chat/completions`, apiKey, model, system, prompt, maxTokens);
+  }
+  if (provider === 'qwen') return generateWithOpenaiCompat(`${baseUrl.replace(/\/+$/, '')}/compatible-mode/v1/chat/completions`, apiKey, model, system, prompt, maxTokens);
+  if (provider === 'kimi') {
+    const cleanBase = baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '');
+    return generateWithOpenaiCompat(`${cleanBase}/v1/chat/completions`, apiKey, model, system, prompt, maxTokens);
+  }
 
   throw new Error(`Unsupported AI provider: ${provider}`);
 }

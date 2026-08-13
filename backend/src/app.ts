@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 /**
  * Main application entry point.
  * Bootstraps Fastify server with all plugins, Socket.IO, and route handlers.

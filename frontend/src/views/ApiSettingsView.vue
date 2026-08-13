@@ -58,8 +58,8 @@
         <v-btn color="primary" variant="outlined" @click="showAiConfig = true">Cấu hình AI</v-btn>
       </v-card-title>
       <v-card-text>
-        <div class="text-body-2">Provider: <strong>{{ aiConfig.provider }}</strong></div>
-        <div class="text-body-2">Model: <strong>{{ aiConfig.model }}</strong></div>
+        <div class="text-body-2">Provider: <strong>{{ providerName }}</strong></div>
+        <div class="text-body-2">Model: <strong>{{ modelName }}</strong></div>
         <div class="text-body-2">Quota/ngày: <strong>{{ aiConfig.maxDaily }}</strong></div>
         <div class="text-body-2">Trạng thái: <strong>{{ aiConfig.enabled ? 'Bật' : 'Tắt' }}</strong></div>
       </v-card-text>
@@ -101,7 +101,7 @@ Webhook events:
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { api } from '@/api';
 import AiConfigDialog from '@/components/ai/ai-config-dialog.vue';
 
@@ -114,6 +114,18 @@ const testing = ref(false);
 const showAiConfig = ref(false);
 const aiSaving = ref(false);
 const aiConfig = ref({ provider: 'anthropic', model: 'claude-sonnet-4-6', maxDaily: 500, enabled: true });
+const providers = ref<Array<{ id: string; name: string; models: Array<{ title: string; value: string }> }>>([]);
+
+const providerName = computed(() => {
+  const p = providers.value.find(p => p.id === aiConfig.value.provider);
+  return p ? p.name : aiConfig.value.provider;
+});
+
+const modelName = computed(() => {
+  const p = providers.value.find(p => p.id === aiConfig.value.provider);
+  const m = p?.models.find(m => m.value === aiConfig.value.model);
+  return m ? m.title : aiConfig.value.model;
+});
 
 const snack = ref({ show: false, text: '', color: 'success' });
 
@@ -152,6 +164,15 @@ async function loadAiConfig() {
     };
   } catch {
     aiConfig.value = { provider: 'anthropic', model: 'claude-sonnet-4-6', maxDaily: 500, enabled: true };
+  }
+}
+
+async function loadProviders() {
+  try {
+    const res = await api.get('/ai/providers');
+    providers.value = res.data;
+  } catch {
+    providers.value = [];
   }
 }
 
@@ -221,6 +242,6 @@ async function saveAiConfig(value: { provider: string; model: string; maxDaily: 
 }
 
 onMounted(async () => {
-  await Promise.all([loadApiKey(), loadWebhook(), loadAiConfig()]);
+  await Promise.all([loadApiKey(), loadWebhook(), loadAiConfig(), loadProviders()]);
 });
 </script>

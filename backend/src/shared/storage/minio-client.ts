@@ -37,6 +37,7 @@ export interface UploadResult {
 export async function uploadBuffer(buffer: Buffer, mimeType: string, originalName?: string): Promise<UploadResult> {
   const ext = originalName ? extname(originalName) : mimeToExt(mimeType);
   const key = `${new Date().toISOString().slice(0, 10)}/${randomUUID()}${ext}`;
+  await ensureBucket().catch(() => {});
   await minioClient.putObject(BUCKET, key, buffer, buffer.length, {
     'Content-Type': mimeType,
     'Cache-Control': 'public, max-age=31536000',

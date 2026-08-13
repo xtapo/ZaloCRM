@@ -17,7 +17,7 @@ export type ProviderDef = {
 
 /** Helper: include model only if env var is set */
 function m(title: string, value: string): ProviderModel | null {
-  return value ? { title, value } : null;
+  return value ? { title: `${title} (${value})`, value } : null;
 }
 
 /** Build full provider definitions from config */
