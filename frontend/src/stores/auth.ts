@@ -15,10 +15,9 @@ interface User {
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null);
-  const token = ref(localStorage.getItem('token') || '');
   const needsSetup = ref(false);
 
-  const isAuthenticated = computed(() => !!token.value && !!user.value);
+  const isAuthenticated = computed(() => !!user.value);
   const isOwner = computed(() => user.value?.role === 'owner');
   const isAdmin = computed(() => ['owner', 'admin'].includes(user.value?.role || ''));
 
@@ -30,16 +29,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function setup(data: { orgName: string; fullName: string; email: string; password: string }) {
     const res = await api.post('/setup', data);
-    token.value = res.data.token;
     user.value = res.data.user;
-    localStorage.setItem('token', res.data.token);
   }
 
   async function login(email: string, password: string) {
     const res = await api.post('/auth/login', { email, password });
-    token.value = res.data.token;
     user.value = res.data.user;
-    localStorage.setItem('token', res.data.token);
   }
 
   async function fetchProfile() {
@@ -63,16 +58,13 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
-    token.value = '';
     user.value = null;
-    localStorage.removeItem('token');
+    api.post('/auth/logout').catch(() => {});
   }
 
   async function init() {
-    if (token.value) {
-      await fetchProfile();
-    }
+    await fetchProfile();
   }
 
-  return { user, token, needsSetup, isAuthenticated, isOwner, isAdmin, checkSetup, setup, login, fetchProfile, logout, init };
+  return { user, needsSetup, isAuthenticated, isOwner, isAdmin, checkSetup, setup, login, fetchProfile, logout, init };
 });

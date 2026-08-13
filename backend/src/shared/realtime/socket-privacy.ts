@@ -30,6 +30,7 @@ export interface SocketUser {
   id: string;
   orgId: string;
   role: string;
+  tokenVersion: number;
 }
 
 /** Event mang nội dung tin nhắn — viewer không đủ quyền vẫn nhận nhưng ĐÃ redact. */
@@ -74,6 +75,7 @@ interface CachedUser {
   at: number;
   isActive: boolean;
   orgId: string | null;
+  tokenVersion: number;
 }
 const userCache = new Map<string, CachedUser>();
 
@@ -104,7 +106,7 @@ function extractToken(socket: Socket): string | null {
   }
 
   const cookies = parseCookieHeader(handshake.headers?.cookie);
-  return cookies[SESSION_COOKIE] || null;
+  return cookies['auth_token'] || cookies[SESSION_COOKIE] || null;
 }
 
 function resolveSocketUser(socket: Socket): SocketUser | null {
@@ -114,8 +116,9 @@ function resolveSocketUser(socket: Socket): SocketUser | null {
     const payload = jwt.verify(token, config.jwtSecret) as Record<string, any>;
     const id = String(payload.userId ?? payload.id ?? '');
     const orgId = String(payload.orgId ?? '');
+    const tokenVersion = Number(payload.tokenVersion ?? 0);
     if (!id || !orgId) return null;
-    return { id, orgId, role: String(payload.role ?? 'member') };
+    return { id, orgId, role: String(payload.role ?? 'member'), tokenVersion };
   } catch {
     return null;
   }
@@ -258,17 +261,18 @@ export function installSocketPrivacyGuard(io: Server): void {
         if (!cached || Date.now() - cached.at > CACHE_TTL_MS) {
           const dbUser = await prisma.user.findUnique({
             where: { id: user.id },
-            select: { isActive: true, orgId: true },
+            select: { isActive: true, orgId: true, tokenVersion: true },
           });
           cached = {
             at: Date.now(),
             isActive: !!dbUser?.isActive,
             orgId: dbUser?.orgId ?? null,
+            tokenVersion: dbUser?.tokenVersion ?? 0,
           };
           userCache.set(user.id, cached);
         }
         
-        if (!cached.isActive || cached.orgId !== user.orgId) {
+        if (!cached.isActive || cached.orgId !== user.orgId || cached.tokenVersion !== user.tokenVersion) {
           socket.data.user = null;
         } else {
           socket.data.user = user;

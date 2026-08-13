@@ -276,10 +276,11 @@ async function confirmSendTemplate() {
       overrideContent: content,
     });
     if (res?.data?.ok) {
+      const cId = previewTemplate.value.friend.contactId;
       previewTemplate.value = null;
       showToast('success', '✅ Đã gửi tin nhắn cho KH');
       // Optional: open chat để sale theo dõi rep
-      router.push(`/chat?friendId=${friendId}`);
+      doOpenChat(friendId, cId);
     } else {
       showToast('error', 'Gửi thất bại — kiểm tra connection nick Zalo');
     }
@@ -289,9 +290,10 @@ async function confirmSendTemplate() {
     if (msg === 'no_conversation') {
       // KH chưa từng chat — fallback clipboard + open chat
       if (navigator.clipboard) navigator.clipboard.writeText(content).catch(() => {});
+      const cId = previewTemplate.value?.friend.contactId;
       previewTemplate.value = null;
       showToast('success', 'KH chưa có hội thoại. Đã copy nội dung — mở chat để gửi.');
-      router.push(`/chat?friendId=${friendId}`);
+      doOpenChat(friendId, cId);
     } else if (msg === 'rate_limited') {
       showToast('error', `🚫 ${detail || 'Đã đạt giới hạn nhắn tin hôm nay'}`);
     } else if (msg === 'nick_disconnected') {
@@ -302,8 +304,23 @@ async function confirmSendTemplate() {
   }
 }
 
+async function doOpenChat(friendId: string, contactId?: string) {
+  try {
+    const res = await api.post(`/friends/${friendId}/ensure-conversation`, {});
+    if (res.data?.conversationId) {
+      router.push({ name: 'Chat', params: { convId: res.data.conversationId } });
+      return;
+    }
+  } catch (err) {
+    console.error('[StuckLeads] ensure-conversation failed:', err);
+  }
+  if (contactId) {
+    router.push(`/chat?contactId=${contactId}`);
+  }
+}
+
 function openChat(f: StuckFriend) {
-  router.push(`/chat?friendId=${f.friendId}`);
+  doOpenChat(f.friendId, f.contactId);
 }
 
 function snooze(f: StuckFriend) {

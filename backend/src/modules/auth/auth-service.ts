@@ -11,6 +11,7 @@ export interface JwtPayload {
   email: string;
   role: string;
   orgId: string;
+  tokenVersion?: number;
 }
 
 // Check if any users exist — true means first-run setup is needed
@@ -56,6 +57,7 @@ export async function setup(
     email: result.user.email,
     role: result.user.role,
     orgId: result.org.id,
+    tokenVersion: result.user.tokenVersion,
   };
 }
 
@@ -78,7 +80,7 @@ export async function login(email: string, password: string): Promise<JwtPayload
     throw err;
   }
 
-  return { id: user.id, email: user.email, role: user.role, orgId: user.orgId };
+  return { id: user.id, email: user.email, role: user.role, orgId: user.orgId, tokenVersion: user.tokenVersion };
 }
 
 // Return safe user profile (no password hash)

@@ -1005,8 +1005,43 @@ function openDetail(c: Contact) {
   selectedContact.value = c;
   showDialog.value = true;
 }
-function goChat(c: Contact) {
-  router.push({ path: '/chat', query: { contactId: c.id } });
+/** Mở chat cho KH Cha. Ý định = sale muốn nhắn KH này qua nick chăm.
+ *  Dùng cơ chế ensure-conversation qua nick phù hợp (giống child row) để luôn
+ *  mở được chat KỂ CẢ khi KH chưa từng có conversation hoặc conv bị inbox-filter
+ *  loại ra (bug cũ: chỉ push /chat?contactId → ChatView resolve được chỉ khi conv
+ *  nằm trong list hiện tại → KH mới kết bạn/sync không mở được chat).
+ *
+ *  Nick ưu tiên: đang có conversation → đã KB (friend) → đang nhắn lạ → đầu list. */
+async function goChat(c: Contact) {
+  let rows = friendshipCache.value[c.id];
+  if (!rows) {
+    try {
+      const res = await api.get<Contact & { friends?: ApiFriendship[] }>(`/contacts/${c.id}`);
+      rows = (res.data.friends || []).map(f => mapFriendshipToChildRow(f, c));
+      friendshipCache.value[c.id] = rows;
+    } catch {
+      rows = [];
+    }
+  }
+  const pick = rows.find(r => r.hasConversation)
+    || rows.find(r => r.relationshipKind === 'friend')
+    || rows.find(r => r.relationshipKind === 'chatting_stranger')
+    || rows[0];
+  if (!pick) {
+    toast.error('KH này chưa liên kết với nick Zalo nào để mở chat');
+    return;
+  }
+  try {
+    const res = await api.post<{ conversationId: string }>(
+      `/friends/${pick.id}/ensure-conversation`, {},
+    );
+    if (res.data?.conversationId) {
+      router.push({ name: 'Chat', params: { convId: res.data.conversationId } });
+    }
+  } catch (err) {
+    console.error('[ContactsView] goChat ensure-conversation failed:', err);
+    toast.error(`Không mở được chat qua nick ${pick.nickName}`);
+  }
 }
 function onAutomation(_c: Contact) { toast.warning('Automation dialog: chưa implement'); }
 
