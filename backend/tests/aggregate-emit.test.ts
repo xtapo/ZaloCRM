@@ -75,6 +75,7 @@ describe('applyFriendAggregate — emit friend:updated', () => {
           update: vi.fn(),
         },
         contact: {
+          findUnique: vi.fn().mockResolvedValue({ fullName: 'Contact Name' }),
           update: vi.fn(),
         },
       };
@@ -119,7 +120,10 @@ describe('applyFriendAggregate — emit friend:updated', () => {
           }),
           update: vi.fn().mockResolvedValue({}),
         },
-        contact: { update: vi.fn() },
+        contact: {
+          findUnique: vi.fn().mockResolvedValue({ fullName: 'Contact Name' }),
+          update: vi.fn(),
+        },
       };
       await cb(tx);
     });
@@ -155,7 +159,10 @@ describe('applyFriendAggregate — emit friend:updated', () => {
           }),
           update: vi.fn().mockResolvedValue({}),
         },
-        contact: { update: vi.fn() },
+        contact: {
+          findUnique: vi.fn().mockResolvedValue({ fullName: 'Contact Name' }),
+          update: vi.fn(),
+        },
       };
       await cb(tx);
     });

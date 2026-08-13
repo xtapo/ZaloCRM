@@ -88,9 +88,9 @@ describe('syncFriendsForAccount — SDK fetch errors', () => {
     zaloOpsMock.getSentFriendRequests.mockRejectedValue(new Error('rate_limited'));
     prismaMock.friend.findMany.mockResolvedValue([]);
     const r = await syncFriendsForAccount('za-err', 'org-1', { trigger: 'cron' });
-    // .catch(() => []) absorbs reject → liveCount 0 but no service-level error
+    // B4 fix: reject is caught, liveCount 0 and errors incremented
     expect(r.liveCount).toBe(0);
-    expect(r.errors).toBe(0);
+    expect(r.errors).toBe(1);
   });
 });
 
@@ -191,7 +191,7 @@ describe('syncFriendsForAccount — contact resolution', () => {
         avatarUrl: 'avatar.png',
         hasZalo: true,
       }),
-      select: { id: true },
+      select: { id: true, fullName: true },
     });
   });
 });

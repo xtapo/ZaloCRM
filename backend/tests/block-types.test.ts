@@ -89,7 +89,7 @@ describe('validateBlockContent — send_message', () => {
   it('rejects attachment with bad kind', () => {
     const r = validateBlockContent('send_message', {
       textVariants: ['ok'],
-      attachments: [{ kind: 'video', url: 'https://x' }],
+      attachments: [{ kind: 'invalid', url: 'https://x' }],
     });
     expect(r.ok).toBe(false);
   });
