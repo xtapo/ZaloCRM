@@ -88,6 +88,51 @@ describe('notification-routes', () => {
     expect(secNotifications.some((n: any) => n.title.includes('5 lượt'))).toBe(true);
   });
 
+  it('id sec-* tất định: 2 lần poll liên tiếp cho cùng id và createdAt theo mốc sự kiện', async () => {
+    currentRole = 'admin';
+    const latest = new Date('2026-08-14T03:21:00.000Z');
+    vi.mocked(prisma.activityLog.groupBy).mockResolvedValue([
+      { action: 'security_scope_denied', _count: { action: 5 }, _max: { createdAt: latest } },
+      { action: 'security_scope_regression', _count: { action: 2 }, _max: { createdAt: latest } }
+    ] as any);
+
+    const first = await get();
+    const second = await get();
+
+    const idsOf = (data: any) =>
+      data.notifications.filter((n: any) => n.id.startsWith('sec-')).map((n: any) => n.id).sort();
+
+    expect(idsOf(first)).toEqual([
+      `sec-reg-${latest.getTime()}`,
+      `sec-security_scope_denied-${latest.getTime()}`,
+    ]);
+    expect(idsOf(second)).toEqual(idsOf(first));
+
+    const item = first.notifications.find((n: any) => n.id.startsWith('sec-security_scope_denied-'));
+    expect(item.createdAt).toBe(latest.toISOString());
+  });
+
+  it('có sự kiện bảo mật mới -> id sec-* đổi để hiện lại như thông báo mới', async () => {
+    currentRole = 'admin';
+    const older = new Date('2026-08-14T03:00:00.000Z');
+    const newer = new Date('2026-08-14T03:30:00.000Z');
+
+    vi.mocked(prisma.activityLog.groupBy).mockResolvedValue([
+      { action: 'security_scope_denied', _count: { action: 5 }, _max: { createdAt: older } }
+    ] as any);
+    const before = await get();
+
+    vi.mocked(prisma.activityLog.groupBy).mockResolvedValue([
+      { action: 'security_scope_denied', _count: { action: 6 }, _max: { createdAt: newer } }
+    ] as any);
+    const after = await get();
+
+    const idOf = (data: any) => data.notifications.find((n: any) => n.id.startsWith('sec-')).id;
+    expect(idOf(before)).toBe(`sec-security_scope_denied-${older.getTime()}`);
+    expect(idOf(after)).toBe(`sec-security_scope_denied-${newer.getTime()}`);
+    expect(idOf(after)).not.toBe(idOf(before));
+  });
+
   it('member -> chỉ truy vấn nick trong accessibleIds', async () => {
     vi.mocked(getRequestZaloScope).mockResolvedValue({ accessibleIds: ['acc1', 'acc2'], isOrgAdmin: false });
 

@@ -152,27 +152,35 @@ export async function notificationRoutes(app: FastifyInstance) {
           createdAt: { gte: yesterday }
         },
         _count: { action: true },
+        // Mốc sự kiện MỚI NHẤT của nhóm — dùng cho cả id và createdAt.
+        _max: { createdAt: true },
       });
 
       for (const group of securityEvents) {
+        // Id tất định: trước đây dùng `Date.now()` nên mỗi lần poll 60s lại sinh id khác →
+        // Vue render lại cả danh sách (`:key="n.id"`) và không thể làm tính năng đánh dấu
+        // đã đọc / bỏ qua. Nay id chỉ đổi khi có sự kiện bảo mật MỚI.
+        const latestAt = group._max?.createdAt ?? new Date();
+        const eventStamp = latestAt.getTime();
+
         if (group.action === 'security_scope_regression') {
           notifications.push({
-            id: `sec-reg-${Date.now()}`,
+            id: `sec-reg-${eventStamp}`,
             type: 'error',
             priority: 'high',
             title: 'CẢNH BÁO: lưới an toàn phát hiện route rò dữ liệu',
             detail: `${group._count.action} lượt rò rỉ bị chặn trong 24h qua`,
-            createdAt: new Date().toISOString(),
+            createdAt: latestAt.toISOString(),
           });
         } else {
           const typeName = group.action === 'security_scope_denied' ? 'ngoài phạm vi' : 'nick riêng tư';
           notifications.push({
-            id: `sec-${group.action}-${Date.now()}`,
+            id: `sec-${group.action}-${eventStamp}`,
             type: 'error',
             priority: 'high',
             title: `${group._count.action} lượt truy cập trái phép bị chặn (24h)`,
             detail: `Lý do: Truy cập ${typeName}`,
-            createdAt: new Date().toISOString(),
+            createdAt: latestAt.toISOString(),
           });
         }
       }
