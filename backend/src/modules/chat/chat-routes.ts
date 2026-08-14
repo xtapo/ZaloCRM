@@ -130,6 +130,7 @@ export async function chatRoutes(app: FastifyInstance) {
       tab = '',
       threadType = '',          // user | group
       // Mới — Contact level
+      contactId = '',           // mở chat trực tiếp từ KH Cha khi chưa có Friend row
       statusId = '',
       assignedUserId = '',
       hasZalo = '',             // true | false | unknown
@@ -189,6 +190,7 @@ export async function chatRoutes(app: FastifyInstance) {
         { phone: { contains: search } },
       ];
     }
+    if (contactId) contactWhere.id = contactId;
     if (statusId) contactWhere.statusId = statusId;
     if (assignedUserId) contactWhere.assignedUserId = assignedUserId;
     if (hasZalo === 'true') contactWhere.hasZalo = true;

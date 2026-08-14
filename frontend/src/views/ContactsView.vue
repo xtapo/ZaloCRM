@@ -1028,7 +1028,22 @@ async function goChat(c: Contact) {
     || rows.find(r => r.relationshipKind === 'chatting_stranger')
     || rows[0];
   if (!pick) {
-    toast.error('KH này chưa liên kết với nick Zalo nào để mở chat');
+    // KH là bạn Zalo nhưng CHƯA có Friend row trong DB (vd mới KB, Friend sync chưa
+    // chạy, hoặc chỉ có conversation từ trước). Fallback: tìm conversation hiện có
+    // của KH (GET /conversations?contactId=) và mở thẳng — không chặn cứng nữa.
+    try {
+      const res = await api.get<{ conversations?: Array<{ id: string }> }>('/conversations', {
+        params: { contactId: c.id, limit: 5 },
+      });
+      const conv = (res.data.conversations || [])[0];
+      if (conv?.id) {
+        router.push({ name: 'Chat', params: { convId: conv.id } });
+        return;
+      }
+    } catch (err) {
+      console.error('[ContactsView] goChat fallback conversations failed:', err);
+    }
+    toast.error('KH này chưa có hội thoại Zalo nào để mở. Vui lòng nhắn tin Zalo từ nick chăm trước.');
     return;
   }
   try {

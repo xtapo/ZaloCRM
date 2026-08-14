@@ -31,6 +31,7 @@ import {
   redactContact,
   PRIVACY_BLUR_TOKEN,
 } from '../privacy/redact.js';
+import { logActivity } from '../activity/activity-logger.js';
 
 const CONV_DETAIL_RE = /^\/api\/v1\/conversations\/([^/]+)$/;
 const CONV_MARK_READ_RE = /^\/api\/v1\/conversations\/([^/]+)\/mark-read$/;
@@ -156,6 +157,14 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
       logger.warn(
         `[chat-security] chặn ${request.method} ${path} — user=${userId} không có quyền trên nick ${conversation.zaloAccountId}`,
       );
+      logActivity({
+        orgId: user.orgId,
+        action: 'security_scope_denied',
+        userId,
+        entityType: 'conversation',
+        entityId: conversationId,
+        details: { method: request.method, path, zaloAccountId: conversation.zaloAccountId },
+      });
       return reply.status(403).send({
         error: 'Bạn không có quyền truy cập hội thoại của nick Zalo này',
         code: 'ZALO_SCOPE_FORBIDDEN',
@@ -170,6 +179,14 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
     // Chính chủ (dù chưa mở khoá PIN) vẫn thao tác bình thường như trước.
     if (request.method !== 'GET') {
       if (isOwnerOfNick) return;
+      logActivity({
+        orgId: user.orgId,
+        action: 'privacy_locked_access',
+        userId,
+        entityType: 'conversation',
+        entityId: conversationId,
+        details: { method: request.method, path, zaloAccountId: conversation.zaloAccountId },
+      });
       return reply.status(403).send({
         error: 'Nick này đang bật chế độ riêng tư — chỉ chính chủ mới thao tác được',
         code: 'PRIVACY_LOCKED',
@@ -217,6 +234,15 @@ export function installChatSecurityHooks(app: FastifyInstance): void {
       if (removed === 0) return payload;
       if (typeof data.total === 'number') data.total = Math.max(0, data.total - removed);
       logger.error(`[chat-security] REGRESSION: lọc ${removed} hội thoại ngoài phạm vi khỏi ${CONV_LIST_PATH}`);
+      const anyReq = request as any;
+      if (anyReq.user?.orgId) {
+        logActivity({
+          orgId: anyReq.user.orgId,
+          systemSource: 'chat-security',
+          action: 'security_scope_regression',
+          details: { removed, path },
+        });
+      }
     } else {
       // Chi tiết hội thoại của nick riêng tư → che PII + preview nội dung.
       if (data?.contact) data.contact = redactContact(data.contact);

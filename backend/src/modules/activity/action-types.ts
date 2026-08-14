@@ -15,7 +15,8 @@ export type ActivityCategory =
   | 'appointment'    // Lịch hẹn: create / update / complete / cancel / reschedule
   | 'interaction'     // Tổng hợp interaction (first_inbound, silent_30d...) — KHÔNG log từng msg
   | 'system'          // contact_link_parent, merge, import, migration
-  | 'automation';     // Bot actions (auto-tag, auto-score...)
+  | 'automation'      // Bot actions (auto-tag, auto-score...)
+  | 'security';       // Truy cập trái phép, rò rỉ dữ liệu, kết nối Zalo
 
 export type ActorType = 'user' | 'bot' | 'system';
 
@@ -80,6 +81,13 @@ export const ACTION_CATEGORY: Record<string, ActivityCategory> = {
   bot_score_calc: 'automation',
   bot_status_suggest: 'automation',
   auto_tag_change: 'automation', // Phase 6+ unified auto-tag system (scoring/auto-tag.ts)
+
+  // security
+  security_scope_denied: 'security',
+  privacy_locked_access: 'security',
+  security_scope_regression: 'security',
+  zalo_session_down: 'security',
+  zalo_session_recovered: 'security',
 };
 
 export function categoryOf(action: string): ActivityCategory | null {

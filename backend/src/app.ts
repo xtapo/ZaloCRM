@@ -302,7 +302,7 @@ async function bootstrap() {
     logger.info(`Zalo CRM running on http://${config.host}:${config.port}`);
     logger.info(`Environment: ${config.nodeEnv}`);
     startAppointmentReminder(io);
-    startZaloHealthCheck();
+    startZaloHealthCheck(io);
     startContactIntelligence();
     startLabelsBackgroundSync(60_000); // realtime-ish 2-way pull every 60s
     startInteractionCron(); // daily silent_30d detection (02:00 VN)
