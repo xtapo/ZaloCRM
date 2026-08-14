@@ -1,11 +1,18 @@
 /**
  * Notification routes — computed on-the-fly notifications for the authenticated user.
- * Sources: unreplied conversations, today/tomorrow appointments, disconnected Zalo accounts.
+ * Sources: unreplied conversations, today/tomorrow appointments, disconnected Zalo accounts
+ * (chỉ trong phạm vi nick của viewer), security events (owner/admin).
  */
 import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../shared/database/prisma-client.js';
 import { authMiddleware } from '../auth/auth-middleware.js';
 import { zaloPool } from '../zalo/zalo-pool.js';
+import { getRequestZaloScope } from '../chat/chat-security-hooks.js';
+import { getSessionDownSince } from '../zalo/zalo-health-check.js';
+import { PRIVACY_BLUR_TOKEN } from '../privacy/redact.js';
+
+/** Trùng ngưỡng cảnh báo của cron zalo-health-check.ts — tránh 2 nguồn sự thật. */
+const ZALO_ALERT_THRESHOLD_MS = 15 * 60 * 1000;
 
 interface NotificationItem {
   id: string;
@@ -88,21 +95,45 @@ export async function notificationRoutes(app: FastifyInstance) {
       });
     }
 
-    // 4. Disconnected Zalo accounts
-    const accounts = await prisma.zaloAccount.findMany({
-      where: { orgId: user.orgId },
-      select: { id: true, displayName: true },
-    });
-    for (const acc of accounts) {
-      const status = zaloPool.getStatus(acc.id);
-      if (status !== 'connected') {
+    // 4. Nick Zalo mất kết nối — CHỈ trong phạm vi nick của viewer, cùng ngưỡng 15 phút với cron.
+    //    Trước đây route liệt kê mọi nick trong org kèm displayName cho mọi role → rò rỉ
+    //    tên nick của người khác (ngược tinh thần PR #1–#3) và báo động ngay khi vừa mất tick.
+    const scope = await getRequestZaloScope(request as any);
+    if (scope && (scope.isOrgAdmin || scope.accessibleIds.length > 0)) {
+      const accounts = await prisma.zaloAccount.findMany({
+        where: {
+          orgId: user.orgId,
+          ...(scope.isOrgAdmin ? {} : { id: { in: scope.accessibleIds } }),
+        },
+        select: { id: true, displayName: true, privacyMode: true, ownerUserId: true },
+      });
+
+      const viewerId = (user as any).userId ?? (user as any).id;
+
+      for (const acc of accounts) {
+        const status = zaloPool.getStatus(acc.id);
+        // 'connecting' là trạng thái đang tự reconnect → chưa phải sự cố.
+        if (status === 'connected' || status === 'connecting') continue;
+
+        const downSince = getSessionDownSince(acc.id);
+        const downMs = downSince ? Date.now() - downSince : null;
+        // Session hết hiệu lực, phải quét QR lại → báo ngay, không chờ ngưỡng.
+        const needsQr = status === 'qr_pending';
+        if (!needsQr && (downMs === null || downMs < ZALO_ALERT_THRESHOLD_MS)) continue;
+
+        const isOwnerOfNick = !!acc.ownerUserId && acc.ownerUserId === viewerId;
+        const label =
+          acc.privacyMode && !isOwnerOfNick ? PRIVACY_BLUR_TOKEN : acc.displayName || acc.id;
+
         notifications.push({
           id: `zalo-${acc.id}`,
           type: 'error',
           priority: 'high',
-          title: `Zalo "${acc.displayName}" mất kết nối`,
-          detail: `Trạng thái: ${status}`,
-          createdAt: new Date().toISOString(),
+          title: needsQr ? `Zalo "${label}" cần quét QR lại` : `Zalo "${label}" mất kết nối`,
+          detail: needsQr
+            ? 'Session hết hiệu lực — vào Cài đặt › Nick Zalo để đăng nhập lại'
+            : `Trạng thái: ${status}${downMs ? ` · mất kết nối ${Math.round(downMs / 60000)} phút` : ''}`,
+          createdAt: (downSince ? new Date(downSince) : new Date()).toISOString(),
         });
       }
     }

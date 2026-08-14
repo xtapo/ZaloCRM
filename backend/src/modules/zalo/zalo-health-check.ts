@@ -2,6 +2,12 @@
  * zalo-health-check.ts — Cron-based health monitor for Zalo account connections.
  * Runs every 5 minutes to detect disconnected accounts and auto-reconnect them.
  * Also runs a daily session refresh at 04:00 UTC to keep cookies fresh.
+ *
+ * Episode rớt kết nối được theo dõi trong `downTracker` (in-memory, module scope) để
+ * cron và `GET /api/v1/notifications` dùng CHUNG một nguồn sự thật + chung ngưỡng 15 phút.
+ * Hạn chế đã biết: state mất khi restart/deploy (đồng hồ 15 phút đếm lại) và có thể
+ * cảnh báo trùng khi chạy nhiều instance — sẽ xử lý dứt điểm bằng cột
+ * `zaloAccount.lastDisconnectedAt` ở PR sau.
  */
 import cron from 'node-cron';
 import { Prisma } from '@prisma/client';
@@ -14,9 +20,20 @@ import { logActivity } from '../activity/activity-logger.js';
 
 const DOWN_ALERT_THRESHOLD_MS = 15 * 60 * 1000; // Ngưỡng 15 phút rớt kết nối
 
+/** accountId -> { downSince, alerted } */
+const downTracker = new Map<string, { downSince: number; alerted: boolean }>();
+
+/**
+ * Thời điểm (epoch ms) nick bắt đầu rớt kết nối, hoặc null nếu đang bình thường /
+ * chưa ghi nhận episode nào. Dùng ở notification-routes để áp cùng ngưỡng với cron.
+ */
+export function getSessionDownSince(accountId: string): number | null {
+  return downTracker.get(accountId)?.downSince ?? null;
+}
+
 export function startZaloHealthCheck(io?: Server): void {
-  // In-memory tracker cho episode rớt kết nối: accountId -> { downSince, alerted }
-  const downTracker = new Map<string, { downSince: number; alerted: boolean }>();
+  // Khởi động lại monitor → episode cũ không còn ý nghĩa (và giữ test isolation).
+  downTracker.clear();
 
   // Every 5 minutes: check all accounts with saved sessions
   cron.schedule('*/5 * * * *', async () => {
