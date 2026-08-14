@@ -107,6 +107,43 @@ export async function notificationRoutes(app: FastifyInstance) {
       }
     }
 
+    // 5. Security events (last 24h) - Only for admin/owner
+    if (['owner', 'admin'].includes(user.role)) {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const securityEvents = await prisma.activityLog.groupBy({
+        by: ['action'],
+        where: {
+          orgId: user.orgId,
+          action: { in: ['security_scope_denied', 'privacy_locked_access', 'security_scope_regression'] },
+          createdAt: { gte: yesterday }
+        },
+        _count: { action: true },
+      });
+
+      for (const group of securityEvents) {
+        if (group.action === 'security_scope_regression') {
+          notifications.push({
+            id: `sec-reg-${Date.now()}`,
+            type: 'error',
+            priority: 'high',
+            title: 'CẢNH BÁO: lưới an toàn phát hiện route rò dữ liệu',
+            detail: `${group._count.action} lượt rò rỉ bị chặn trong 24h qua`,
+            createdAt: new Date().toISOString(),
+          });
+        } else {
+          const typeName = group.action === 'security_scope_denied' ? 'ngoài phạm vi' : 'nick riêng tư';
+          notifications.push({
+            id: `sec-${group.action}-${Date.now()}`,
+            type: 'error',
+            priority: 'high',
+            title: `${group._count.action} lượt truy cập trái phép bị chặn (24h)`,
+            detail: `Lý do: Truy cập ${typeName}`,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+    }
+
     return { notifications };
   });
 }

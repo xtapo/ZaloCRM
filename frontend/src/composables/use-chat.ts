@@ -4,6 +4,7 @@ import { io, Socket } from 'socket.io-client';
 import type { Contact } from '@/composables/use-contacts';
 import { useAuthStore } from '@/stores/auth';
 import { applyPendingTags } from '@/composables/use-pending-mutations';
+import { useToast } from '@/composables/use-toast';
 
 interface ZaloAccount {
   id: string;
@@ -773,6 +774,16 @@ export function useChat() {
           msg.seenAt = data.seenAt ?? msg.seenAt;
         }
       }
+    });
+
+    socket.on('zalo:session-alert', (data: { accountId: string; displayName: string | null; status: string; downMinutes: number }) => {
+      const { toast } = useToast();
+      toast.error(`Nick Zalo "${data.displayName || 'Khách'}" mất kết nối ${data.downMinutes} phút — vào Cài đặt → Kênh để kết nối lại`);
+    });
+
+    socket.on('zalo:session-recovered', (data: { accountId: string; displayName: string | null }) => {
+      const { toast } = useToast();
+      toast.success(`Nick Zalo "${data.displayName || 'Khách'}" đã kết nối lại thành công`);
     });
   }
 

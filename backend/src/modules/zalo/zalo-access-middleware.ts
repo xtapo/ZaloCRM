@@ -18,6 +18,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { prisma } from '../../shared/database/prisma-client.js';
 import { logger } from '../../shared/utils/logger.js';
 import { getZaloScope } from './zalo-scope.js';
+import { logActivity } from '../activity/activity-logger.js';
 
 type Permission = 'read' | 'chat' | 'admin';
 
@@ -65,6 +66,14 @@ export function requireZaloAccess(minPermission: Permission) {
           logger.warn(
             `[zalo-access] chặn user=${userId} truy cập nick riêng tư ${zaloAccountId} (owner=${account.ownerUserId})`,
           );
+          logActivity({
+            orgId: user.orgId,
+            action: 'privacy_locked_access',
+            userId,
+            entityType: 'zalo_account',
+            entityId: zaloAccountId,
+            details: { method: request.method, path: (request.raw.url ?? '').split('?')[0], zaloAccountId },
+          });
           return reply.status(403).send({
             error: 'Nick này đang bật chế độ riêng tư — chỉ chính chủ mới truy cập được',
             code: 'PRIVACY_LOCKED',

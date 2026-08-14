@@ -14,6 +14,9 @@ vi.mock('../src/shared/database/prisma-client.js', () => ({
     conversation: { findFirst: vi.fn() }
   }
 }));
+vi.mock('../src/modules/activity/activity-logger.js', () => ({
+  logActivity: vi.fn()
+}));
 
 describe('zalo-access-middleware', () => {
   let req: any, reply: any;
@@ -22,7 +25,7 @@ describe('zalo-access-middleware', () => {
     mockScope.accessibleIds = ['acc1'];
     mockScope.ownedIds = new Set(['acc1']);
     mockScope.isOrgAdmin = false;
-    req = { user: { id: 'u1', orgId: 'o1', role: 'member' }, params: { zaloAccountId: 'acc1' }, query: {}, body: {} };
+    req = { user: { id: 'u1', orgId: 'o1', role: 'member' }, params: { zaloAccountId: 'acc1' }, query: {}, body: {}, method: 'GET', raw: { url: '/test' } };
     reply = { status: vi.fn(() => reply), send: vi.fn() };
   });
 
