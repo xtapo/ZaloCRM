@@ -31,6 +31,7 @@ import { logActivity } from '../activity/activity-logger.js';
 
 const ENSURE_CONVERSATION_RE = /^\/api\/v1\/friends\/([^/]+)\/ensure-conversation$/;
 const CONTACT_DETAIL_RE = /^\/api\/v1\/contacts\/([^/]+)$/;
+const CONTACT_FRIENDSHIPS_RE = /^\/api\/v1\/contacts\/([^/]+)\/friendships$/;
 
 /** Segment KHÔNG phải contactId trên `/api/v1/contacts/...` */
 const RESERVED_CONTACT_SEGMENTS = new Set([
@@ -110,6 +111,74 @@ async function scopeFor(request: FastifyRequest, user: AuthUser): Promise<Reques
   return anyRequest.__contactFriendScope as RequestScope;
 }
 
+interface FilterFriendsResult {
+  visible: any[];
+  hidden: number;
+  locked: number;
+}
+
+/**
+ * Lọc danh sách friend/friendship theo scope nick và gắn cờ chatLocked cho nick riêng tư.
+ */
+async function filterAndLockFriends(
+  friends: any[],
+  user: AuthUser,
+  scope: RequestScope,
+): Promise<FilterFriendsResult> {
+  if (!Array.isArray(friends) || friends.length === 0) {
+    return { visible: friends || [], hidden: 0, locked: 0 };
+  }
+
+  const userId = userIdOf(user);
+  const accountIds = Array.from(
+    new Set(friends.map((f: any) => f?.zaloAccountId).filter(Boolean)),
+  ) as string[];
+
+  if (accountIds.length === 0) {
+    return { visible: friends, hidden: 0, locked: 0 };
+  }
+
+  const accounts = await prisma.zaloAccount.findMany({
+    where: { id: { in: accountIds }, orgId: user.orgId },
+    select: { id: true, privacyMode: true, ownerUserId: true },
+  });
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
+  const allowedIds = new Set(scope.accessibleIds);
+
+  let hidden = 0;
+  let locked = 0;
+  const visible: any[] = [];
+
+  for (const friend of friends) {
+    const accountId = friend?.zaloAccountId;
+    if (!accountId) {
+      visible.push(friend);
+      continue;
+    }
+    const account = accountById.get(accountId);
+    const isOwnerOfNick = !!account?.ownerUserId && account.ownerUserId === userId;
+
+    if (!scope.isOrgAdmin && !allowedIds.has(accountId) && !isOwnerOfNick) {
+      hidden += 1;
+      continue;
+    }
+
+    const chatLocked =
+      account?.privacyMode === 'main' &&
+      !isOwnerOfNick &&
+      !(scope.isOrgAdmin && ALLOW_ADMIN_PRIVACY_BYPASS);
+
+    if (chatLocked) {
+      locked += 1;
+      visible.push({ ...friend, chatLocked: true, chatLockedReason: 'PRIVACY_LOCKED' });
+    } else {
+      visible.push(friend);
+    }
+  }
+
+  return { visible, hidden, locked };
+}
+
 export function installContactFriendScopeHooks(app: FastifyInstance): void {
   // ── 1. Chặn ensure-conversation trên nick ngoài quyền / nick riêng tư ────────
   app.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -180,15 +249,22 @@ export function installContactFriendScopeHooks(app: FastifyInstance): void {
     }
   });
 
-  // ── 2. Lọc friends[] của contact detail theo scope nick ──────────────────────
+  // ── 2. Lọc friends[]/friendships[] theo scope nick và gắn chatLocked ──────────
   app.addHook('onSend', async (request: FastifyRequest, reply: FastifyReply, payload: unknown) => {
     if (request.method !== 'GET') return payload;
     if (typeof payload !== 'string') return payload;
     if (reply.statusCode < 200 || reply.statusCode >= 300) return payload;
 
     const path = pathOf(request);
-    const match = CONTACT_DETAIL_RE.exec(path);
-    if (!match || RESERVED_CONTACT_SEGMENTS.has(match[1])) return payload;
+    const isFriendships = CONTACT_FRIENDSHIPS_RE.test(path);
+    const isContactDetail = !isFriendships && CONTACT_DETAIL_RE.test(path);
+
+    if (!isContactDetail && !isFriendships) return payload;
+
+    if (isContactDetail) {
+      const match = CONTACT_DETAIL_RE.exec(path);
+      if (match && RESERVED_CONTACT_SEGMENTS.has(match[1])) return payload;
+    }
 
     const user = await authenticate(app, request);
     if (!user?.orgId) return payload;
@@ -200,68 +276,55 @@ export function installContactFriendScopeHooks(app: FastifyInstance): void {
     } catch {
       return payload;
     }
-    if (!Array.isArray(data?.friends) || data.friends.length === 0) return payload;
+    if (!data || typeof data !== 'object') return payload;
 
     const scope = await scopeFor(request, user);
-    const accountIds = Array.from(
-      new Set(data.friends.map((f: any) => f?.zaloAccountId).filter(Boolean)),
-    ) as string[];
-    if (accountIds.length === 0) return payload;
 
-    const accounts = await prisma.zaloAccount.findMany({
-      where: { id: { in: accountIds }, orgId: user.orgId },
-      select: { id: true, privacyMode: true, ownerUserId: true },
-    });
-    const accountById = new Map(accounts.map((a) => [a.id, a]));
-    const allowedIds = new Set(scope.accessibleIds);
+    // Endpoint GET /api/v1/contacts/:id/friendships:
+    // data có thể là array hoặc { friendships: [...] }
+    if (isFriendships) {
+      const targetList = Array.isArray(data) ? data : data.friendships;
+      if (!Array.isArray(targetList) || targetList.length === 0) return payload;
 
-    let hidden = 0;
-    let locked = 0;
-    const visible: any[] = [];
+      const { visible, hidden, locked } = await filterAndLockFriends(targetList, user, scope);
+      if (hidden === 0 && locked === 0) return payload;
 
-    for (const friend of data.friends) {
-      const accountId = friend?.zaloAccountId;
-      if (!accountId) {
-        visible.push(friend);
-        continue;
-      }
-      const account = accountById.get(accountId);
-      const isOwnerOfNick = !!account?.ownerUserId && account.ownerUserId === userId;
-
-      if (!scope.isOrgAdmin && !allowedIds.has(accountId) && !isOwnerOfNick) {
-        hidden += 1;
-        continue;
-      }
-
-      const chatLocked =
-        account?.privacyMode === 'main' &&
-        !isOwnerOfNick &&
-        !(scope.isOrgAdmin && ALLOW_ADMIN_PRIVACY_BYPASS);
-
-      if (chatLocked) {
-        locked += 1;
-        visible.push({ ...friend, chatLocked: true, chatLockedReason: 'PRIVACY_LOCKED' });
+      let nextData: any;
+      if (Array.isArray(data)) {
+        nextData = visible;
       } else {
-        visible.push(friend);
+        data.friendships = visible;
+        nextData = data;
       }
+      const next = JSON.stringify(nextData);
+      reply.header('content-length', Buffer.byteLength(next));
+      return next;
     }
 
-    if (hidden === 0 && locked === 0) return payload;
+    // Endpoint GET /api/v1/contacts/:id
+    if (isContactDetail) {
+      if (!Array.isArray(data?.friends) || data.friends.length === 0) return payload;
 
-    data.friends = visible;
-    data.friendsHiddenByScope = hidden;
-    if (hidden > 0 && typeof data.childrenCount === 'number') {
-      data.childrenCount = Math.max(0, data.childrenCount - hidden);
-    }
-    if (hidden > 0) {
-      logger.debug(
-        `[contact-friend-scope] ẩn ${hidden} friend ngoài phạm vi khỏi ${path} (user=${userId})`,
-      );
+      const { visible, hidden, locked } = await filterAndLockFriends(data.friends, user, scope);
+      if (hidden === 0 && locked === 0) return payload;
+
+      data.friends = visible;
+      data.friendsHiddenByScope = hidden;
+      if (hidden > 0 && typeof data.childrenCount === 'number') {
+        data.childrenCount = Math.max(0, data.childrenCount - hidden);
+      }
+      if (hidden > 0) {
+        logger.debug(
+          `[contact-friend-scope] ẩn ${hidden} friend ngoài phạm vi khỏi ${path} (user=${userId})`,
+        );
+      }
+
+      const next = JSON.stringify(data);
+      reply.header('content-length', Buffer.byteLength(next));
+      return next;
     }
 
-    const next = JSON.stringify(data);
-    reply.header('content-length', Buffer.byteLength(next));
-    return next;
+    return payload;
   });
 
   logger.info('[contact-friend-scope] Contact/friend scope hooks installed');

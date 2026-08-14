@@ -5,6 +5,7 @@ import type { Contact } from '@/composables/use-contacts';
 import { useAuthStore } from '@/stores/auth';
 import { applyPendingTags } from '@/composables/use-pending-mutations';
 import { useToast } from '@/composables/use-toast';
+import { router } from '@/router/index';
 
 interface ZaloAccount {
   id: string;
@@ -520,6 +521,7 @@ export function useChat() {
         messagesConvId.value = null;
         loadingMsgs.value = false;
         clearAiState();
+        router.replace({ name: 'Chat' }).catch(() => {});
         return;
       }
     }

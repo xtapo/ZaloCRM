@@ -1024,14 +1024,17 @@ function openDetail(c: Contact) {
 async function goChat(c: Contact) {
   let friends: ApiFriendship[] = [];
   let hiddenByScope = 0;
+  let fetchFailed = false;
   try {
     const res = await api.get<Contact & { friends?: ApiFriendship[]; friendsHiddenByScope?: number }>(`/contacts/${c.id}`);
     friends = (res.data?.friends ?? []) as ApiFriendship[];
     hiddenByScope = Number(res.data?.friendsHiddenByScope ?? 0);
     friendshipCache.value[c.id] = friends.map(f => mapFriendshipToChildRow(f, c));
   } catch (err) {
+    fetchFailed = true;
     console.error('[ContactsView] goChat fetch contact failed:', err);
   }
+  if (fetchFailed) return;
 
   const candidates = friends.filter(f => !f.chatLocked);
   if (candidates.length === 0) {
