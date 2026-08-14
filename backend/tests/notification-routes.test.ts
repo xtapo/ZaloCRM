@@ -5,6 +5,7 @@ import { notificationRoutes } from '../src/modules/notifications/notification-ro
 import { zaloPool } from '../src/modules/zalo/zalo-pool.js';
 import { getRequestZaloScope } from '../src/modules/chat/chat-security-hooks.js';
 import { getDownSinceBatch } from '../src/modules/zalo/status-log-service.js';
+import { PRIVACY_BLUR_TOKEN } from '../src/modules/privacy/redact.js';
 
 vi.mock('../src/modules/auth/auth-middleware.js', () => ({
   authMiddleware: vi.fn(async () => {})
@@ -167,7 +168,7 @@ describe('notification-routes', () => {
 
   it('rớt kết nối 5 phút -> chưa báo; 20 phút -> báo', async () => {
     vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
-      { id: 'acc1', displayName: 'Nick 1', privacyMode: false, ownerUserId: 'u1' }
+      { id: 'acc1', displayName: 'Nick 1', privacyMode: 'sub', ownerUserId: 'u1' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected' as any);
 
@@ -187,8 +188,8 @@ describe('notification-routes', () => {
     currentRole = 'admin';
     vi.mocked(getRequestZaloScope).mockResolvedValue({ accessibleIds: [], isOrgAdmin: true });
     vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
-      { id: 'acc1', displayName: 'Nick 1', privacyMode: false, ownerUserId: 'u1' },
-      { id: 'acc2', displayName: 'Nick 2', privacyMode: false, ownerUserId: 'u1' }
+      { id: 'acc1', displayName: 'Nick 1', privacyMode: 'sub', ownerUserId: 'u1' },
+      { id: 'acc2', displayName: 'Nick 2', privacyMode: 'sub', ownerUserId: 'u1' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected' as any);
     vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc2', Date.now() - 20 * MINUTE]]));
@@ -203,7 +204,7 @@ describe('notification-routes', () => {
 
   it('qr_pending -> báo ngay dù chưa đủ 15 phút', async () => {
     vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
-      { id: 'acc1', displayName: 'Nick 1', privacyMode: false, ownerUserId: 'u1' }
+      { id: 'acc1', displayName: 'Nick 1', privacyMode: 'sub', ownerUserId: 'u1' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('qr_pending' as any);
     vi.mocked(getDownSinceBatch).mockResolvedValue(new Map());
@@ -214,11 +215,11 @@ describe('notification-routes', () => {
     expect(item.title).toContain('quét QR');
   });
 
-  it('nick privacyMode của người khác -> che tên trong cảnh báo', async () => {
+  it("nick privacyMode 'main' của người khác -> che tên trong cảnh báo", async () => {
     currentRole = 'admin';
     vi.mocked(getRequestZaloScope).mockResolvedValue({ accessibleIds: [], isOrgAdmin: true });
     vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
-      { id: 'acc9', displayName: 'Nick Bí Mật', privacyMode: true, ownerUserId: 'u2' }
+      { id: 'acc9', displayName: 'Nick Bí Mật', privacyMode: 'main', ownerUserId: 'u2' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected' as any);
     vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc9', Date.now() - 20 * MINUTE]]));
@@ -227,11 +228,28 @@ describe('notification-routes', () => {
     const item = data.notifications.find((n: any) => n.id === 'zalo-acc9');
     expect(item).toBeTruthy();
     expect(item.title).not.toContain('Nick Bí Mật');
+    expect(item.title).toContain(PRIVACY_BLUR_TOKEN);
+  });
+
+  it("nick 'sub' của người khác -> VẪN hiện tên, không che oan", async () => {
+    currentRole = 'admin';
+    vi.mocked(getRequestZaloScope).mockResolvedValue({ accessibleIds: [], isOrgAdmin: true });
+    vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
+      { id: 'acc8', displayName: 'Nick Chung', privacyMode: 'sub', ownerUserId: 'u2' }
+    ] as any);
+    vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected' as any);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc8', Date.now() - 20 * MINUTE]]));
+
+    const data = await get();
+    const item = data.notifications.find((n: any) => n.id === 'zalo-acc8');
+    expect(item).toBeTruthy();
+    expect(item.title).toContain('Nick Chung');
+    expect(item.title).not.toContain(PRIVACY_BLUR_TOKEN);
   });
 
   it('trạng thái connecting -> không báo động', async () => {
     vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
-      { id: 'acc1', displayName: 'Nick 1', privacyMode: false, ownerUserId: 'u1' }
+      { id: 'acc1', displayName: 'Nick 1', privacyMode: 'sub', ownerUserId: 'u1' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('connecting' as any);
     vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc1', Date.now() - 60 * MINUTE]]));
