@@ -174,7 +174,8 @@ git pull
 docker compose up -d --build
 ```
 
-Dữ liệu không bị mất — database lưu trong Docker volume.
+- Dữ liệu không bị mất — database lưu trong Docker volume.
+- **Cơ sở dữ liệu:** Khi khởi động qua Docker, hệ thống tự động đồng bộ cấu trúc database mới nhất (`prisma db push`), bạn không cần chạy lệnh migration thủ công.
 
 ---
 
@@ -239,3 +240,15 @@ SELECT email, role FROM users WHERE role = 'owner';
 ```
 
 Liên hệ developer để reset mật khẩu qua database.
+
+### Lỗi Database / Migration (`P3005: migrate-baseline`) khi chạy ngoài Docker
+
+Nếu bạn chạy backend trực tiếp bằng Node.js (môi trường dev/bare-metal) và gặp lỗi `The database schema is not empty (P3005)` khi chạy `npm run db:deploy`:
+- **Nguyên nhân:** Database đã có cấu trúc từ trước nhưng chưa được khởi tạo bảng theo dõi lịch sử migration (`_prisma_migrations`).
+- **Cách xử lý:** Chạy lệnh đồng bộ trực tiếp schema:
+  ```bash
+  cd backend
+  npm run db:push
+  ```
+- *Lưu ý:* Khi chạy bằng Docker, lệnh này đã được tích hợp tự động trong quá trình khởi động container.
+

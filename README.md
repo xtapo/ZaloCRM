@@ -152,13 +152,17 @@ git pull origin main
 #    Nếu dùng Cloudflare R2, dùng endpoint/account/key của R2 trong block S3_*.
 diff .env .env.example
 
-# 4. Rebuild + restart app
+# 4. Rebuild + restart app (tự động đồng bộ schema database mới)
 docker compose up -d --build app
 
 # 5. Verify
 curl http://localhost:3080/
 docker logs zalo-crm-app --tail 50 | grep -E "facebook|media|storage|listener|cron"
 ```
+
+> 💡 **Lưu ý về Database:** 
+> - Khi khởi chạy bằng Docker, ứng dụng **tự động đồng bộ schema database** (`prisma db push`), không cần chạy migration thủ công.
+> - Nếu chạy trực tiếp trên host/dev ngoài Docker, dùng lệnh `cd backend && npm run db:push` (hoặc `npm run db:deploy` nếu DB đã baseline migration).
 
 ### Biến môi trường cần rà soát ở v3.3
 
