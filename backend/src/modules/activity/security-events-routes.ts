@@ -111,16 +111,55 @@ export async function securityEventsRoutes(app: FastifyInstance): Promise<void> 
         where.AND = andClauses;
       }
 
+      const viewerId = (user as any).userId ?? (user as any).id;
+
       if (search) {
+        // Tìm các nick privacyMode='main' của người khác khớp tên search để chặn rò rỉ qua search oracle
+        const hiddenNicks = await prisma.zaloAccount.findMany({
+          where: {
+            orgId: user.orgId,
+            privacyMode: 'main',
+            ownerUserId: viewerId ? { not: viewerId } : undefined,
+            displayName: { contains: search, mode: 'insensitive' },
+          },
+          select: { id: true },
+        });
+        const hiddenMatchIds = hiddenNicks.map((n) => n.id);
+
+        const nameMatchConditions: Record<string, any>[] = [
+          { details: { path: ['displayName'], string_contains: search } },
+          { details: { path: ['accountName'], string_contains: search } },
+        ];
+
+        let nameSearchClause: Record<string, any>;
+        if (hiddenMatchIds.length > 0) {
+          nameSearchClause = {
+            AND: [
+              { OR: nameMatchConditions },
+              {
+                NOT: {
+                  OR: [
+                    { entityType: 'zalo_account', entityId: { in: hiddenMatchIds } },
+                    ...hiddenMatchIds.map((hid) => ({
+                      details: { path: ['accountId'], equals: hid },
+                    })),
+                  ],
+                },
+              },
+            ],
+          };
+        } else {
+          nameSearchClause = { OR: nameMatchConditions };
+        }
+
         where.OR = [
           { action: { contains: search, mode: 'insensitive' } },
           { systemSource: { contains: search, mode: 'insensitive' } },
-          { details: { path: ['displayName'], string_contains: search } },
-          { details: { path: ['accountName'], string_contains: search } },
           { details: { path: ['reason'], string_contains: search } },
           { details: { path: ['path'], string_contains: search } },
           { user: { fullName: { contains: search, mode: 'insensitive' } } },
           { user: { email: { contains: search, mode: 'insensitive' } } },
+          nameSearchClause,
         ];
       }
 
@@ -134,7 +173,6 @@ export async function securityEventsRoutes(app: FastifyInstance): Promise<void> 
       });
 
       // 6. Privacy Redaction cho nick privacyMode === 'main'
-      const viewerId = (user as any).userId ?? (user as any).id;
       const zaloAccountIds = new Set<string>();
 
       for (const e of events) {

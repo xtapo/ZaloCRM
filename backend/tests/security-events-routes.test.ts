@@ -252,7 +252,8 @@ describe('security-events-routes', () => {
   });
 
   /* ── B. Test cho search & where.OR ───────────────────────────────────── */
-  it('(B.1) search có giá trị -> dựng đúng where.OR với path và mode insensitive', async () => {
+  it('(B.1) search có giá trị (không có hidden nick) -> dựng đúng where.OR với path và mode insensitive', async () => {
+    vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([]);
     await getEvents({ search: 'Alpha' });
 
     expect(prisma.activityLog.findMany).toHaveBeenCalledWith(
@@ -261,12 +262,16 @@ describe('security-events-routes', () => {
           OR: [
             { action: { contains: 'Alpha', mode: 'insensitive' } },
             { systemSource: { contains: 'Alpha', mode: 'insensitive' } },
-            { details: { path: ['displayName'], string_contains: 'Alpha' } },
-            { details: { path: ['accountName'], string_contains: 'Alpha' } },
             { details: { path: ['reason'], string_contains: 'Alpha' } },
             { details: { path: ['path'], string_contains: 'Alpha' } },
             { user: { fullName: { contains: 'Alpha', mode: 'insensitive' } } },
             { user: { email: { contains: 'Alpha', mode: 'insensitive' } } },
+            {
+              OR: [
+                { details: { path: ['displayName'], string_contains: 'Alpha' } },
+                { details: { path: ['accountName'], string_contains: 'Alpha' } },
+              ],
+            },
           ],
         }),
       }),
@@ -279,6 +284,149 @@ describe('security-events-routes', () => {
     const calls = vi.mocked(prisma.activityLog.findMany).mock.calls;
     const lastCallWhere = calls[calls.length - 1][0]?.where;
     expect(lastCallWhere?.OR).toBeUndefined();
+  });
+
+  it('(B.3.a) chủ nick main search đúng tên nick của mình -> THẤY dòng, tên hiện bình thường', async () => {
+    currentUserRole = 'owner';
+    currentUserId = 'u-boss-1';
+
+    // Nick main của u-boss-1
+    vi.mocked(prisma.zaloAccount.findMany).mockImplementation(async (args: any) => {
+      // Khi tìm hiddenNicks (ownerUserId != u-boss-1) -> trả rỗng vì u-boss-1 là chủ nick
+      if (args?.where?.ownerUserId) return [];
+      // Khi tìm privacyAccounts sau fetch -> trả thông tin nick
+      return [{ id: 'acc-boss', privacyMode: 'main', ownerUserId: 'u-boss-1', displayName: 'Nick Vip Boss' } as any];
+    });
+
+    vi.mocked(prisma.activityLog.findMany).mockResolvedValue([
+      {
+        id: 'log-1',
+        orgId: 'org-1',
+        userId: 'u-boss-1',
+        actorType: 'user',
+        category: 'security',
+        action: 'zalo_session_down',
+        entityType: 'zalo_account',
+        entityId: 'acc-boss',
+        details: { displayName: 'Nick Vip Boss', accountId: 'acc-boss' },
+        createdAt: new Date(),
+        user: null,
+      } as any,
+    ]);
+
+    const res = await getEvents({ search: 'Vip Boss' });
+    expect(res.statusCode).toBe(200);
+    const data = res.json();
+    expect(data.events).toHaveLength(1);
+    expect(data.events[0].details.displayName).toBe('Nick Vip Boss'); // Tên hiện bình thường vì là chủ nick
+  });
+
+  it('(B.3.b) admin KHÔNG phải chủ nick main search tên nick đó -> KHÔNG tìm thấy dòng nào qua tên', async () => {
+    currentUserRole = 'admin';
+    currentUserId = 'u-admin-other';
+
+    // Nick main thuộc về u-boss-1 khác u-admin-other
+    vi.mocked(prisma.zaloAccount.findMany).mockImplementation(async (args: any) => {
+      if (args?.where?.ownerUserId) {
+        return [{ id: 'acc-boss' } as any]; // hiddenMatchIds = ['acc-boss']
+      }
+      return [{ id: 'acc-boss', privacyMode: 'main', ownerUserId: 'u-boss-1', displayName: 'Nick Vip Boss' } as any];
+    });
+
+    // Khi query activityLog với NOT condition loại trừ acc-boss, DB trả rỗng
+    vi.mocked(prisma.activityLog.findMany).mockResolvedValue([]);
+
+    const res = await getEvents({ search: 'Vip Boss' });
+    expect(res.statusCode).toBe(200);
+    const data = res.json();
+    expect(data.events).toHaveLength(0); // 0 kết quả
+
+    // Assert query contains NOT clause with hiddenMatchId
+    expect(prisma.activityLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            expect.objectContaining({
+              AND: [
+                expect.objectContaining({
+                  OR: [
+                    { details: { path: ['displayName'], string_contains: 'Vip Boss' } },
+                    { details: { path: ['accountName'], string_contains: 'Vip Boss' } },
+                  ],
+                }),
+                expect.objectContaining({
+                  NOT: {
+                    OR: [
+                      { entityType: 'zalo_account', entityId: { in: ['acc-boss'] } },
+                      { details: { path: ['accountId'], equals: 'acc-boss' } },
+                    ],
+                  },
+                }),
+              ],
+            }),
+          ]),
+        }),
+      }),
+    );
+  });
+
+  it('(B.3.c) search tên nick sub của người khác -> VẪN thấy, tên hiện bình thường', async () => {
+    currentUserRole = 'admin';
+    currentUserId = 'u-admin-other';
+
+    // Nick sub của người khác: hiddenNicks trả rỗng vì privacyMode != 'main'
+    vi.mocked(prisma.zaloAccount.findMany).mockImplementation(async (args: any) => {
+      if (args?.where?.ownerUserId) return [];
+      return [{ id: 'acc-sub', privacyMode: 'sub', ownerUserId: 'u-boss-1', displayName: 'Nick Sub Cong Khai' } as any];
+    });
+
+    vi.mocked(prisma.activityLog.findMany).mockResolvedValue([
+      {
+        id: 'log-sub',
+        orgId: 'org-1',
+        userId: 'u-boss-1',
+        actorType: 'user',
+        category: 'security',
+        action: 'zalo_session_down',
+        entityType: 'zalo_account',
+        entityId: 'acc-sub',
+        details: { displayName: 'Nick Sub Cong Khai', accountId: 'acc-sub' },
+        createdAt: new Date(),
+        user: null,
+      } as any,
+    ]);
+
+    const res = await getEvents({ search: 'Sub Cong Khai' });
+    expect(res.statusCode).toBe(200);
+    const data = res.json();
+    expect(data.events).toHaveLength(1);
+    expect(data.events[0].details.displayName).toBe('Nick Sub Cong Khai');
+  });
+
+  it('(B.3.d) search theo details.reason vẫn hoạt động độc lập không bị chặn', async () => {
+    currentUserRole = 'admin';
+    currentUserId = 'u-admin-other';
+
+    vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.activityLog.findMany).mockResolvedValue([
+      {
+        id: 'log-reason',
+        orgId: 'org-1',
+        userId: 'u-boss-1',
+        actorType: 'user',
+        category: 'security',
+        action: 'security_scope_denied',
+        details: { reason: 'Unauthorized access token' },
+        createdAt: new Date(),
+        user: null,
+      } as any,
+    ]);
+
+    const res = await getEvents({ search: 'Unauthorized' });
+    expect(res.statusCode).toBe(200);
+    const data = res.json();
+    expect(data.events).toHaveLength(1);
+    expect(data.events[0].details.reason).toBe('Unauthorized access token');
   });
 
   /* ── D. Chặn limit âm / clamp ────────────────────────────────────────── */
