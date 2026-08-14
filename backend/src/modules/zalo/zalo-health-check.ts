@@ -24,6 +24,23 @@ import { getDownSince } from './status-log-service.js';
 const DOWN_ALERT_THRESHOLD_MS = 15 * 60 * 1000;
 
 /**
+ * Vùng phủ của monitor: nick có session để reconnect HOẶC nick đã từng kết nối thành công.
+ *
+ * Trước đây where chỉ lọc `sessionData` nên nick từng chạy bình thường nhưng mất
+ * credential (vd `saveCredentials` fail — hàm đó fire-and-forget) rơi hết khỏi radar:
+ * không ai cảnh báo dù nick đã chết hàng giờ.
+ *
+ * Nick CHƯA từng đăng nhập QR (cả hai trường đều null) vẫn bị loại — tạo nick rỗng rồi
+ * để đó không phải sự cố, không được sinh cảnh báo rác.
+ */
+const MONITORED_ACCOUNTS_WHERE = {
+  OR: [
+    { sessionData: { not: Prisma.JsonNull } },
+    { lastConnectedAt: { not: null } },
+  ],
+};
+
+/**
  * Episode hiện tại đã được cảnh báo chưa? Dedup dựa trên ActivityLog nên vẫn đúng sau
  * restart hoặc khi chạy nhiều instance (trước đây dùng cờ in-memory `alerted`).
  */
@@ -64,11 +81,11 @@ async function shouldAnnounceRecovery(orgId: string, accountId: string): Promise
 }
 
 export function startZaloHealthCheck(io?: Server): void {
-  // Every 5 minutes: check all accounts with saved sessions
+  // Every 5 minutes: check monitored accounts (xem MONITORED_ACCOUNTS_WHERE)
   cron.schedule('*/5 * * * *', async () => {
     try {
       const accounts = await prisma.zaloAccount.findMany({
-        where: { sessionData: { not: Prisma.JsonNull } },
+        where: MONITORED_ACCOUNTS_WHERE,
         select: { id: true, orgId: true, displayName: true, sessionData: true },
       });
 
@@ -105,6 +122,8 @@ export function startZaloHealthCheck(io?: Server): void {
             }
           }
 
+          // Chỉ nick còn credential mới tự reconnect được; nick mất sessionData vẫn được
+          // cảnh báo ở trên để người dùng biết mà quét QR lại.
           const session = acc.sessionData as any;
           if (session?.imei) {
             logger.info(`[health-check] Reconnecting ${acc.displayName || acc.id}...`);
@@ -137,6 +156,7 @@ export function startZaloHealthCheck(io?: Server): void {
   });
 
   // Daily at 04:00 UTC (11:00 AM VN): refresh all sessions to keep cookies alive
+  // Vẫn chỉ lọc theo sessionData — không có credential thì không có gì để refresh.
   cron.schedule('0 4 * * *', async () => {
     logger.info('[health-check] Daily session refresh starting...');
     try {

@@ -20,3 +20,7 @@ TODO.local.md
 /frontend/public/friends-v2.html
 /frontend/public/Giao Diện Tính Năng*.xlsx
 backend/static/
+
+# Test output artifacts — từng bị commit nhầm 50KB vào nhánh feat/ops-observability
+test_output.txt
+backend/test_output.txt

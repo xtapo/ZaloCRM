@@ -142,4 +142,35 @@ describe('zalo-health-check', () => {
     expect(mockIo.emit).not.toHaveBeenCalled();
     expect(logActivity).not.toHaveBeenCalled();
   });
+
+  it('vùng phủ: lọc OR sessionData hoặc lastConnectedAt, không chỉ sessionData', async () => {
+    vi.mocked(zaloPool.getStatus).mockReturnValue('connected');
+
+    await cronCallback();
+
+    const arg = vi.mocked(prisma.zaloAccount.findMany).mock.calls[0][0] as any;
+    expect(arg.where.OR).toEqual([
+      { sessionData: expect.anything() },
+      { lastConnectedAt: { not: null } },
+    ]);
+  });
+
+  it('nick từng kết nối nhưng mất sessionData -> vẫn cảnh báo, không gọi reconnect', async () => {
+    vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
+      { id: 'acc2', orgId: 'o1', displayName: 'Nick mất session', sessionData: null }
+    ] as any);
+    vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected');
+    vi.mocked(getDownSince).mockResolvedValue(Date.now() - 45 * MINUTE);
+
+    await cronCallback();
+
+    expect(logActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'zalo_session_down', entityId: 'acc2' })
+    );
+    expect(mockIo.emit).toHaveBeenCalledWith(
+      'zalo:session-alert',
+      expect.objectContaining({ accountId: 'acc2', downMinutes: 45 })
+    );
+    expect(zaloPool.reconnect).not.toHaveBeenCalled();
+  });
 });
