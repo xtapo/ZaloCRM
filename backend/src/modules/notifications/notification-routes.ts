@@ -8,7 +8,7 @@ import { prisma } from '../../shared/database/prisma-client.js';
 import { authMiddleware } from '../auth/auth-middleware.js';
 import { zaloPool } from '../zalo/zalo-pool.js';
 import { getRequestZaloScope } from '../chat/chat-security-hooks.js';
-import { getSessionDownSince } from '../zalo/zalo-health-check.js';
+import { getDownSinceBatch } from '../zalo/status-log-service.js';
 import { PRIVACY_BLUR_TOKEN } from '../privacy/redact.js';
 
 /** Trùng ngưỡng cảnh báo của cron zalo-health-check.ts — tránh 2 nguồn sự thật. */
@@ -98,6 +98,8 @@ export async function notificationRoutes(app: FastifyInstance) {
     // 4. Nick Zalo mất kết nối — CHỈ trong phạm vi nick của viewer, cùng ngưỡng 15 phút với cron.
     //    Trước đây route liệt kê mọi nick trong org kèm displayName cho mọi role → rò rỉ
     //    tên nick của người khác (ngược tinh thần PR #1–#3) và báo động ngay khi vừa mất tick.
+    //    Mốc `downSince` đọc từ `zalo_account_status_log` (1 query batch) nên bền qua restart
+    //    và khớp tuyệt đối với ngưỡng cron.
     const scope = await getRequestZaloScope(request as any);
     if (scope && (scope.isOrgAdmin || scope.accessibleIds.length > 0)) {
       const accounts = await prisma.zaloAccount.findMany({
@@ -109,13 +111,14 @@ export async function notificationRoutes(app: FastifyInstance) {
       });
 
       const viewerId = (user as any).userId ?? (user as any).id;
+      const downSinceMap = await getDownSinceBatch(accounts.map((acc) => acc.id));
 
       for (const acc of accounts) {
         const status = zaloPool.getStatus(acc.id);
         // 'connecting' là trạng thái đang tự reconnect → chưa phải sự cố.
         if (status === 'connected' || status === 'connecting') continue;
 
-        const downSince = getSessionDownSince(acc.id);
+        const downSince = downSinceMap.get(acc.id) ?? null;
         const downMs = downSince ? Date.now() - downSince : null;
         // Session hết hiệu lực, phải quét QR lại → báo ngay, không chờ ngưỡng.
         const needsQr = status === 'qr_pending';

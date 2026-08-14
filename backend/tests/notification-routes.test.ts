@@ -4,7 +4,7 @@ import { prisma } from '../src/shared/database/prisma-client.js';
 import { notificationRoutes } from '../src/modules/notifications/notification-routes.js';
 import { zaloPool } from '../src/modules/zalo/zalo-pool.js';
 import { getRequestZaloScope } from '../src/modules/chat/chat-security-hooks.js';
-import { getSessionDownSince } from '../src/modules/zalo/zalo-health-check.js';
+import { getDownSinceBatch } from '../src/modules/zalo/status-log-service.js';
 
 vi.mock('../src/modules/auth/auth-middleware.js', () => ({
   authMiddleware: vi.fn(async () => {})
@@ -27,8 +27,8 @@ vi.mock('../src/modules/chat/chat-security-hooks.js', () => ({
   getRequestZaloScope: vi.fn()
 }));
 
-vi.mock('../src/modules/zalo/zalo-health-check.js', () => ({
-  getSessionDownSince: vi.fn()
+vi.mock('../src/modules/zalo/status-log-service.js', () => ({
+  getDownSinceBatch: vi.fn()
 }));
 
 const MINUTE = 60 * 1000;
@@ -49,7 +49,7 @@ describe('notification-routes', () => {
     vi.mocked(prisma.activityLog.groupBy).mockResolvedValue([] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('connected' as any);
     vi.mocked(getRequestZaloScope).mockResolvedValue({ accessibleIds: ['acc1'], isOrgAdmin: false });
-    vi.mocked(getSessionDownSince).mockReturnValue(null);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map());
 
     app = Fastify();
     app.decorateRequest('user', null);
@@ -126,11 +126,11 @@ describe('notification-routes', () => {
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected' as any);
 
-    vi.mocked(getSessionDownSince).mockReturnValue(Date.now() - 5 * MINUTE);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc1', Date.now() - 5 * MINUTE]]));
     const early = await get();
     expect(early.notifications.some((n: any) => n.id === 'zalo-acc1')).toBe(false);
 
-    vi.mocked(getSessionDownSince).mockReturnValue(Date.now() - 20 * MINUTE);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc1', Date.now() - 20 * MINUTE]]));
     const late = await get();
     const item = late.notifications.find((n: any) => n.id === 'zalo-acc1');
     expect(item).toBeTruthy();
@@ -138,12 +138,30 @@ describe('notification-routes', () => {
     expect(item.priority).toBe('high');
   });
 
+  it('batch downSince -> chỉ 1 query cho nhiều nick', async () => {
+    currentRole = 'admin';
+    vi.mocked(getRequestZaloScope).mockResolvedValue({ accessibleIds: [], isOrgAdmin: true });
+    vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
+      { id: 'acc1', displayName: 'Nick 1', privacyMode: false, ownerUserId: 'u1' },
+      { id: 'acc2', displayName: 'Nick 2', privacyMode: false, ownerUserId: 'u1' }
+    ] as any);
+    vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected' as any);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc2', Date.now() - 20 * MINUTE]]));
+
+    const data = await get();
+
+    expect(getDownSinceBatch).toHaveBeenCalledTimes(1);
+    expect(getDownSinceBatch).toHaveBeenCalledWith(['acc1', 'acc2']);
+    expect(data.notifications.some((n: any) => n.id === 'zalo-acc1')).toBe(false);
+    expect(data.notifications.some((n: any) => n.id === 'zalo-acc2')).toBe(true);
+  });
+
   it('qr_pending -> báo ngay dù chưa đủ 15 phút', async () => {
     vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([
       { id: 'acc1', displayName: 'Nick 1', privacyMode: false, ownerUserId: 'u1' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('qr_pending' as any);
-    vi.mocked(getSessionDownSince).mockReturnValue(null);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map());
 
     const data = await get();
     const item = data.notifications.find((n: any) => n.id === 'zalo-acc1');
@@ -158,7 +176,7 @@ describe('notification-routes', () => {
       { id: 'acc9', displayName: 'Nick Bí Mật', privacyMode: true, ownerUserId: 'u2' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('disconnected' as any);
-    vi.mocked(getSessionDownSince).mockReturnValue(Date.now() - 20 * MINUTE);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc9', Date.now() - 20 * MINUTE]]));
 
     const data = await get();
     const item = data.notifications.find((n: any) => n.id === 'zalo-acc9');
@@ -171,7 +189,7 @@ describe('notification-routes', () => {
       { id: 'acc1', displayName: 'Nick 1', privacyMode: false, ownerUserId: 'u1' }
     ] as any);
     vi.mocked(zaloPool.getStatus).mockReturnValue('connecting' as any);
-    vi.mocked(getSessionDownSince).mockReturnValue(Date.now() - 60 * MINUTE);
+    vi.mocked(getDownSinceBatch).mockResolvedValue(new Map([['acc1', Date.now() - 60 * MINUTE]]));
 
     const data = await get();
     expect(data.notifications.some((n: any) => n.id === 'zalo-acc1')).toBe(false);
