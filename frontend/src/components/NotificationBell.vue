@@ -70,6 +70,7 @@ function handleClick(n: Notification) {
   else if (n.id.startsWith('apt-')) router.push('/appointments');
   else if (n.id.startsWith('zalo-')) router.push('/zalo-accounts');
   else if (n.id === 'tmr-apts') router.push('/appointments');
+  else if (n.id.startsWith('sec-')) router.push('/security-events');
 }
 
 onMounted(() => {

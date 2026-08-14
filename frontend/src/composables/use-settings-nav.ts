@@ -66,6 +66,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'departments', label: 'Sơ đồ tổ chức', icon: '🌳', route: '/settings/rbac/departments', permission: 'admin', aliases: ['phòng ban', 'department', 'tree', 'đội nhóm', 'team'] },
       { id: 'users', label: 'Nhân viên', icon: '👤', route: '/settings/rbac/users', permission: 'admin', aliases: ['user', 'sale', 'nhân sự'] },
       { id: 'permission-groups', label: 'Phân quyền', icon: '🛡', route: '/settings/rbac/permission-groups', permission: 'owner', aliases: ['phân quyền', 'permission', 'role', 'vai trò', 'nhóm quyền'] },
+      { id: 'security-events', label: 'Sự kiện bảo mật', icon: '🛡️', route: '/security-events', permission: 'admin', aliases: ['bảo mật', 'security', 'log', 'sự kiện', 'cảnh báo', 'audit'] },
       { id: 'audit', label: 'Audit log', icon: '📜', route: '/settings/org/audit', permission: 'owner', comingSoon: true },
       { id: 'billing', label: 'Gói cước & Billing', icon: '💳', route: '/settings/org/billing', permission: 'owner', comingSoon: true },
     ],

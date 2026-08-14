@@ -19,7 +19,8 @@ export type ActivityCategory =
   | 'appointment'
   | 'interaction'
   | 'system'
-  | 'automation';
+  | 'automation'
+  | 'security';
 
 export interface CategoryMeta {
   label: string;
@@ -38,6 +39,7 @@ export const CATEGORY_META: Record<ActivityCategory, CategoryMeta> = {
   interaction:   { label: 'Tương tác',     icon: '💬', color: '#5D4037', defaultVisible: false }, // nhiều event
   system:        { label: 'Hệ thống',      icon: '⚙️', color: '#546E7A', defaultVisible: false },
   automation:    { label: 'Tự động (Bot)', icon: '🤖', color: '#00897B', defaultVisible: true }, // bao gồm auto_tag_change — sale cần thấy KH state change
+  security:      { label: 'Bảo mật',       icon: '🛡️', color: '#D32F2F', defaultVisible: true },
 };
 
 /* Action-level metadata — icon đặc biệt + label động cho từng action.
@@ -106,6 +108,13 @@ export const ACTION_META: Record<string, ActionMeta> = {
   bot_score_calc:     { label: 'Bot tính điểm' },
   bot_status_suggest: { label: 'Bot suggest status' },
   auto_tag_change:    { label: 'Cập nhật auto-tag', icon: '🤖' },
+
+  // security
+  security_scope_denied:     { label: 'Truy cập ngoài phạm vi', icon: '🚫' },
+  privacy_locked_access:     { label: 'Truy cập nick riêng tư', icon: '🔒' },
+  security_scope_regression: { label: 'Rò rỉ dữ liệu phát hiện', icon: '⚠️' },
+  zalo_session_down:         { label: 'Zalo mất kết nối', icon: '🔴' },
+  zalo_session_recovered:    { label: 'Zalo kết nối lại', icon: '🟢' },
 };
 
 export function categoryOf(action: string, fallback: ActivityCategory = 'system'): ActivityCategory {
@@ -131,6 +140,9 @@ export function categoryOf(action: string, fallback: ActivityCategory = 'system'
     contact_split: 'system', data_import: 'system', data_export: 'system',
     bot_tag_auto: 'automation', bot_score_calc: 'automation', bot_status_suggest: 'automation',
     auto_tag_change: 'automation',
+    security_scope_denied: 'security', privacy_locked_access: 'security',
+    security_scope_regression: 'security', zalo_session_down: 'security',
+    zalo_session_recovered: 'security',
   };
   return map[action] || fallback;
 }
