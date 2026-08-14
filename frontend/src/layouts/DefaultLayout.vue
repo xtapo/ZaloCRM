@@ -64,6 +64,12 @@
             <v-list-item to="/settings/team/users" title="Nhân viên" prepend-icon="mdi-account-cog-outline" />
             <v-list-item to="/settings/team/teams" title="Đội nhóm" prepend-icon="mdi-account-group-outline" />
             <v-list-item to="/settings/team/roles" title="Vai trò &amp; Phân quyền" prepend-icon="mdi-shield-account-outline" />
+            <v-list-item
+              v-if="authStore.user?.role === 'owner' || authStore.user?.role === 'admin'"
+              to="/security-events"
+              title="Sự kiện bảo mật"
+              prepend-icon="mdi-shield-alert-outline"
+            />
             <v-divider />
             <v-list-subheader>CRM &amp; Kênh</v-list-subheader>
             <v-list-item to="/settings/crm/tags" title="Tag CRM" prepend-icon="mdi-tag-multiple-outline" />

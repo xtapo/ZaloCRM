@@ -182,6 +182,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/security-events',
+    name: 'SecurityEvents',
+    component: () => import('@/views/SecurityEventsView.vue'),
+    meta: { requiresAuth: true, roles: ['owner', 'admin'] },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/NotFoundView.vue'),
@@ -226,6 +232,15 @@ router.beforeEach(async (to, _from, next) => {
       await authStore.init();
       if (!authStore.isAuthenticated) {
         return next('/login');
+      }
+    }
+
+    // Role-based access control
+    const allowedRoles = to.meta.roles as string[] | undefined;
+    if (allowedRoles && Array.isArray(allowedRoles)) {
+      const userRole = authStore.user?.role;
+      if (!userRole || !allowedRoles.includes(userRole)) {
+        return next('/');
       }
     }
   }

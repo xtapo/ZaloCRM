@@ -44,6 +44,7 @@ import { crmTagRoutes } from './modules/contacts/crm-tag-routes.js';
 import { crmTagGroupRoutes } from './modules/contacts/crm-tag-group-routes.js';
 import { userPreferenceRoutes } from './modules/auth/user-preference-routes.js';
 import { timelineRoutes } from './modules/activity/timeline-routes.js';
+import { securityEventsRoutes } from './modules/activity/security-events-routes.js';
 import { scoringRoutes } from './modules/scoring/scoring-routes.js';
 import { zaloLabelsRoutes, startLabelsBackgroundSync } from './modules/zalo/zalo-labels-routes.js';
 import { startAppointmentReminder } from './modules/contacts/appointment-reminder.js';
@@ -209,6 +210,7 @@ async function bootstrap() {
   await app.register(crmTagGroupRoutes);
   await app.register(userPreferenceRoutes);
   await app.register(timelineRoutes);
+  await app.register(securityEventsRoutes);
   await app.register(scoringRoutes);
   // Phase 8 — Engagement heatmap timeline + admin recompute/backfill
   const { registerEngagementRoutes } = await import('./modules/engagement/engagement-routes.js');
