@@ -515,6 +515,12 @@ export function useChat() {
         }
       } catch (err) {
         console.error('Failed to load conversation detail for deep-link:', err);
+        selectedConvId.value = null;
+        messages.value = [];
+        messagesConvId.value = null;
+        loadingMsgs.value = false;
+        clearAiState();
+        return;
       }
     }
     await fetchMessages(convId);
