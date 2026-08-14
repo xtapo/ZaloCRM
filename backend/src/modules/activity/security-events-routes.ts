@@ -1,9 +1,8 @@
 /**
-/**
  * security-events-routes.ts — Endpoint quản lý và tra cứu Sự kiện Bảo mật (ActivityLog category='security').
  *
  * Chỉ cho phép role ['owner', 'admin'] truy cập.
- * Hỗ trợ filter: from, to, actions, search, cursor pagination (createdAt DESC).
+ * Hỗ trợ filter: from, to, actions, search, composite cursor pagination (createdAt DESC, id DESC).
  * Redaction: Che tên nick/tài khoản có privacyMode === 'main' nếu viewer không phải chủ sở hữu.
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
@@ -44,43 +43,84 @@ export async function securityEventsRoutes(app: FastifyInstance): Promise<void> 
         });
       }
 
-      const limit = Math.min(parseInt(request.query.limit || '50') || 50, 200);
-      const cursorDate = request.query.cursor ? new Date(request.query.cursor) : null;
-      if (cursorDate && Number.isNaN(cursorDate.getTime())) {
-        return reply.status(400).send({ error: 'Invalid cursor' });
+      // 2. Limit clamp (chặn limit âm, min 1, max 200)
+      const parsedLimit = parseInt(request.query.limit || '50', 10);
+      const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 200));
+
+      // 3. Parse composite cursor: "<ISO>|<id>"
+      let cursorDate: Date | null = null;
+      let cursorId: string | null = null;
+      if (request.query.cursor) {
+        const parts = request.query.cursor.split('|');
+        if (parts.length !== 2 || !parts[0] || !parts[1]) {
+          return reply.status(400).send({
+            error: 'Invalid cursor format. Expected <ISO>|<id>',
+            code: 'INVALID_CURSOR',
+          });
+        }
+        cursorDate = new Date(parts[0]);
+        cursorId = parts[1];
+        if (Number.isNaN(cursorDate.getTime())) {
+          return reply.status(400).send({
+            error: 'Invalid cursor format. Expected <ISO>|<id>',
+            code: 'INVALID_CURSOR',
+          });
+        }
       }
 
-      // 2. Action filter
-      const actionsArr = request.query.actions
-        ? request.query.actions.split(',').map((s) => s.trim()).filter(Boolean)
-        : null;
-
-      const validActions = actionsArr
-        ? actionsArr.filter((a) => SECURITY_ACTIONS.includes(a))
-        : SECURITY_ACTIONS;
+      // 4. Action filter — nếu truyền chuỗi không hợp lệ thì trả rỗng
+      let filterActions: string[] | null = null;
+      if (typeof request.query.actions === 'string' && request.query.actions.trim()) {
+        const rawList = request.query.actions.split(',').map((s) => s.trim()).filter(Boolean);
+        filterActions = rawList.filter((a) => SECURITY_ACTIONS.includes(a));
+        if (filterActions.length === 0) {
+          return { events: [], nextCursor: null };
+        }
+      }
 
       const fromDate = request.query.from ? new Date(request.query.from) : null;
       const toDate = request.query.to ? new Date(request.query.to) : null;
       const search = (request.query.search || '').trim();
 
-      // 3. Xây dựng WHERE clause — BẮT BUỘC theo user.orgId
-      const where: Record<string, unknown> = {
+      // 5. Xây dựng WHERE clause — BẮT BUỘC theo user.orgId
+      const where: Record<string, any> = {
         orgId: user.orgId,
         category: 'security',
-        action: { in: validActions.length ? validActions : SECURITY_ACTIONS },
+        action: { in: filterActions !== null ? filterActions : SECURITY_ACTIONS },
       };
 
       const dateConditions: Record<string, Date> = {};
       if (fromDate && !Number.isNaN(fromDate.getTime())) dateConditions.gte = fromDate;
       if (toDate && !Number.isNaN(toDate.getTime())) dateConditions.lte = toDate;
-      if (cursorDate) dateConditions.lt = cursorDate;
-      if (Object.keys(dateConditions).length) where.createdAt = dateConditions;
+      if (Object.keys(dateConditions).length) {
+        where.createdAt = dateConditions;
+      }
+
+      // Cursor composite condition: createdAt < cursorDate OR (createdAt = cursorDate AND id < cursorId)
+      const andClauses: Record<string, any>[] = [];
+      if (cursorDate && cursorId) {
+        andClauses.push({
+          OR: [
+            { createdAt: { lt: cursorDate } },
+            { createdAt: cursorDate, id: { lt: cursorId } },
+          ],
+        });
+      }
+
+      if (andClauses.length > 0) {
+        where.AND = andClauses;
+      }
 
       if (search) {
         where.OR = [
           { action: { contains: search, mode: 'insensitive' } },
           { systemSource: { contains: search, mode: 'insensitive' } },
-          { details: { string_contains: search } },
+          { details: { path: ['displayName'], string_contains: search } },
+          { details: { path: ['accountName'], string_contains: search } },
+          { details: { path: ['reason'], string_contains: search } },
+          { details: { path: ['path'], string_contains: search } },
+          { user: { fullName: { contains: search, mode: 'insensitive' } } },
+          { user: { email: { contains: search, mode: 'insensitive' } } },
         ];
       }
 
@@ -89,11 +129,11 @@ export async function securityEventsRoutes(app: FastifyInstance): Promise<void> 
         include: {
           user: { select: { id: true, fullName: true, email: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit,
       });
 
-      // 4. Privacy Redaction cho nick privacyMode
+      // 6. Privacy Redaction cho nick privacyMode === 'main'
       const viewerId = (user as any).userId ?? (user as any).id;
       const zaloAccountIds = new Set<string>();
 
@@ -120,7 +160,7 @@ export async function securityEventsRoutes(app: FastifyInstance): Promise<void> 
       const privacyMap = new Map<string, { isPrivate: boolean; ownerUserId: string | null; displayName: string | null }>();
       for (const acc of privacyAccounts) {
         privacyMap.set(acc.id, {
-          isPrivate: acc.privacyMode === 'main' || acc.privacyMode === 'true' || (acc.privacyMode as any) === true,
+          isPrivate: acc.privacyMode === 'main',
           ownerUserId: acc.ownerUserId,
           displayName: acc.displayName,
         });
@@ -159,7 +199,7 @@ export async function securityEventsRoutes(app: FastifyInstance): Promise<void> 
       });
 
       const nextCursor = events.length === limit
-        ? events[events.length - 1].createdAt.toISOString()
+        ? `${events[events.length - 1].createdAt.toISOString()}|${events[events.length - 1].id}`
         : null;
 
       return {

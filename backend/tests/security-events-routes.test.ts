@@ -96,16 +96,14 @@ describe('security-events-routes', () => {
     expect(data.events[0].user.fullName).toBe('Huỳnh Quang Nhân');
   });
 
-  it('(c) filter khoảng ngày cắt đúng biên (from, to, cursor, actions)', async () => {
+  it('(c) filter khoảng ngày cắt đúng biên (from, to, actions)', async () => {
     currentUserRole = 'admin';
     const fromStr = '2026-08-10T00:00:00.000Z';
     const toStr = '2026-08-14T23:59:59.000Z';
-    const cursorStr = '2026-08-13T12:00:00.000Z';
 
     await getEvents({
       from: fromStr,
       to: toStr,
-      cursor: cursorStr,
       actions: 'zalo_session_down,zalo_session_recovered',
       limit: '25',
     });
@@ -119,11 +117,10 @@ describe('security-events-routes', () => {
           createdAt: {
             gte: new Date(fromStr),
             lte: new Date(toStr),
-            lt: new Date(cursorStr),
           },
         }),
         take: 25,
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       }),
     );
   });
@@ -141,7 +138,7 @@ describe('security-events-routes', () => {
     );
   });
 
-  it('(e) nick privacyMode của người khác -> tên nick trong details bị che bằng PRIVACY_BLUR_TOKEN', async () => {
+  it('(e) nick privacyMode === main của người khác -> tên nick trong details bị che bằng PRIVACY_BLUR_TOKEN', async () => {
     currentUserRole = 'admin';
     currentUserId = 'u-admin-1';
 
@@ -177,5 +174,137 @@ describe('security-events-routes', () => {
     expect(res.statusCode).toBe(200);
     const data = res.json();
     expect(data.events[0].details.displayName).toBe(PRIVACY_BLUR_TOKEN);
+  });
+
+  /* ── A. Phân trang cursor composite không mất bản ghi ───────────────── */
+  it('(A.1) cursor composite phân trang 5 bản ghi cùng createdAt, limit=2 không trùng không thiếu', async () => {
+    const sameDate = new Date('2026-08-14T10:00:00.000Z');
+    // 5 bản ghi cùng millisecond
+    const allDbRecords = [
+      { id: 'sec-5', orgId: 'org-1', category: 'security', action: 'zalo_session_down', createdAt: sameDate, details: {} },
+      { id: 'sec-4', orgId: 'org-1', category: 'security', action: 'zalo_session_down', createdAt: sameDate, details: {} },
+      { id: 'sec-3', orgId: 'org-1', category: 'security', action: 'zalo_session_down', createdAt: sameDate, details: {} },
+      { id: 'sec-2', orgId: 'org-1', category: 'security', action: 'zalo_session_down', createdAt: sameDate, details: {} },
+      { id: 'sec-1', orgId: 'org-1', category: 'security', action: 'zalo_session_down', createdAt: sameDate, details: {} },
+    ];
+
+    // Mô phỏng query Prisma lọc theo composite condition
+    vi.mocked(prisma.activityLog.findMany).mockImplementation(async (args: any) => {
+      let filtered = [...allDbRecords];
+      const andClauses = args?.where?.AND;
+      if (andClauses && andClauses[0]?.OR) {
+        const orList = andClauses[0].OR;
+        const ltDate = orList[0]?.createdAt?.lt;
+        const eqDate = orList[1]?.createdAt;
+        const ltId = orList[1]?.id?.lt;
+
+        filtered = filtered.filter((row) => {
+          if (row.createdAt < ltDate) return true;
+          if (row.createdAt.getTime() === eqDate.getTime() && row.id < ltId) return true;
+          return false;
+        });
+      }
+      return filtered.slice(0, args.take || 50) as any;
+    });
+
+    const collectedIds: string[] = [];
+
+    // Trang 1
+    const res1 = await getEvents({ limit: '2' });
+    expect(res1.statusCode).toBe(200);
+    const data1 = res1.json();
+    expect(data1.events).toHaveLength(2);
+    expect(data1.events.map((e: any) => e.id)).toEqual(['sec-5', 'sec-4']);
+    expect(data1.nextCursor).toBe(`${sameDate.toISOString()}|sec-4`);
+    collectedIds.push(...data1.events.map((e: any) => e.id));
+
+    // Trang 2
+    const res2 = await getEvents({ limit: '2', cursor: data1.nextCursor });
+    expect(res2.statusCode).toBe(200);
+    const data2 = res2.json();
+    expect(data2.events).toHaveLength(2);
+    expect(data2.events.map((e: any) => e.id)).toEqual(['sec-3', 'sec-2']);
+    expect(data2.nextCursor).toBe(`${sameDate.toISOString()}|sec-2`);
+    collectedIds.push(...data2.events.map((e: any) => e.id));
+
+    // Trang 3
+    const res3 = await getEvents({ limit: '2', cursor: data2.nextCursor });
+    expect(res3.statusCode).toBe(200);
+    const data3 = res3.json();
+    expect(data3.events).toHaveLength(1);
+    expect(data3.events.map((e: any) => e.id)).toEqual(['sec-1']);
+    expect(data3.nextCursor).toBeNull();
+    collectedIds.push(...data3.events.map((e: any) => e.id));
+
+    // Assert đúng 5 ID không trùng không thiếu
+    expect(collectedIds).toEqual(['sec-5', 'sec-4', 'sec-3', 'sec-2', 'sec-1']);
+    expect(new Set(collectedIds).size).toBe(5);
+  });
+
+  it('(A.2) cursor sai định dạng -> 400 INVALID_CURSOR', async () => {
+    const resMalformed1 = await getEvents({ cursor: 'invalid-no-pipe' });
+    expect(resMalformed1.statusCode).toBe(400);
+    expect(resMalformed1.json()).toEqual(expect.objectContaining({ code: 'INVALID_CURSOR' }));
+
+    const resMalformed2 = await getEvents({ cursor: 'not-a-date|id-1' });
+    expect(resMalformed2.statusCode).toBe(400);
+    expect(resMalformed2.json()).toEqual(expect.objectContaining({ code: 'INVALID_CURSOR' }));
+  });
+
+  /* ── B. Test cho search & where.OR ───────────────────────────────────── */
+  it('(B.1) search có giá trị -> dựng đúng where.OR với path và mode insensitive', async () => {
+    await getEvents({ search: 'Alpha' });
+
+    expect(prisma.activityLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { action: { contains: 'Alpha', mode: 'insensitive' } },
+            { systemSource: { contains: 'Alpha', mode: 'insensitive' } },
+            { details: { path: ['displayName'], string_contains: 'Alpha' } },
+            { details: { path: ['accountName'], string_contains: 'Alpha' } },
+            { details: { path: ['reason'], string_contains: 'Alpha' } },
+            { details: { path: ['path'], string_contains: 'Alpha' } },
+            { user: { fullName: { contains: 'Alpha', mode: 'insensitive' } } },
+            { user: { email: { contains: 'Alpha', mode: 'insensitive' } } },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('(B.2) search rỗng -> KHÔNG có where.OR', async () => {
+    await getEvents({ search: '   ' });
+
+    const calls = vi.mocked(prisma.activityLog.findMany).mock.calls;
+    const lastCallWhere = calls[calls.length - 1][0]?.where;
+    expect(lastCallWhere?.OR).toBeUndefined();
+  });
+
+  /* ── D. Chặn limit âm / clamp ────────────────────────────────────────── */
+  it('(D) limit=-5 hoặc limit=0 -> clamp về take hợp lệ, không âm', async () => {
+    await getEvents({ limit: '-5' });
+    expect(prisma.activityLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 1 }),
+    );
+
+    await getEvents({ limit: '0' });
+    expect(prisma.activityLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 1 }),
+    );
+
+    await getEvents({ limit: '999' });
+    expect(prisma.activityLog.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 200 }),
+    );
+  });
+
+  /* ── E. Lọc actions không hợp lệ trả về rỗng ─────────────────────────── */
+  it('(E) actions chứa toàn chuỗi không hợp lệ -> trả mảng rỗng', async () => {
+    const res = await getEvents({ actions: 'chuoi_khong_hop_le,action_gia' });
+    expect(res.statusCode).toBe(200);
+    const data = res.json();
+    expect(data).toEqual({ events: [], nextCursor: null });
+    expect(prisma.activityLog.findMany).not.toHaveBeenCalled();
   });
 });
