@@ -94,6 +94,9 @@ import { eventBuffer } from './shared/event-buffer.js';
 // Phase Riêng Tư 2026-08-13 — cách ly tin nhắn theo nick (realtime + REST)
 import { installSocketPrivacyGuard } from './shared/realtime/socket-privacy.js';
 import { installChatSecurityHooks } from './modules/chat/chat-security-hooks.js';
+// Fix 2026-08-14 — "Mở chat" ở mục Khách hàng: lọc friends theo scope nick + chặn sớm
+// ensure-conversation trên nick ngoài quyền (xem contact-friend-scope-hooks.ts)
+import { installContactFriendScopeHooks } from './modules/contacts/contact-friend-scope-hooks.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -172,6 +175,10 @@ async function bootstrap() {
   // Phase Riêng Tư 2026-08-13 — hook bảo mật hội thoại. PHẢI đăng ký trước mọi route
   // để hook root áp dụng được cho chat-routes.
   installChatSecurityHooks(app);
+
+  // Fix 2026-08-14 — cùng lý do: hook root cho contact detail + ensure-conversation,
+  // phải đăng ký trước contactRoutes.
+  installContactFriendScopeHooks(app);
 
   // CSRF Protection Hook (Commit B)
   app.addHook('preHandler', async (request, reply) => {
