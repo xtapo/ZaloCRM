@@ -3,11 +3,12 @@
  * Runs every 5 minutes to detect disconnected accounts and auto-reconnect them.
  * Also runs a daily session refresh at 04:00 UTC to keep cookies fresh.
  *
- * Episode rớt kết nối được theo dõi trong `downTracker` (in-memory, module scope) để
- * cron và `GET /api/v1/notifications` dùng CHUNG một nguồn sự thật + chung ngưỡng 15 phút.
- * Hạn chế đã biết: state mất khi restart/deploy (đồng hồ 15 phút đếm lại) và có thể
- * cảnh báo trùng khi chạy nhiều instance — sẽ xử lý dứt điểm bằng cột
- * `zaloAccount.lastDisconnectedAt` ở PR sau.
+ * Episode rớt kết nối KHÔNG còn giữ trong Map in-memory. Nguồn sự thật là open record
+ * (endedAt IS NULL) của bảng `zalo_account_status_log` — xem `status-log-service.ts`:
+ *   - Bền qua restart/deploy: đồng hồ 15 phút không bị đếm lại từ 0.
+ *   - Chung cho mọi instance: nhiều pod đọc cùng một mốc `downSince`.
+ * Chống cảnh báo trùng cũng dựa trên DB (ActivityLog) thay vì cờ `alerted` in-memory:
+ * chỉ cảnh báo khi CHƯA có bản ghi `zalo_session_down` nào kể từ khi episode bắt đầu.
  */
 import cron from 'node-cron';
 import { Prisma } from '@prisma/client';
@@ -17,24 +18,52 @@ import { logger } from '../../shared/utils/logger.js';
 
 import type { Server } from 'socket.io';
 import { logActivity } from '../activity/activity-logger.js';
+import { getDownSince } from './status-log-service.js';
 
-const DOWN_ALERT_THRESHOLD_MS = 15 * 60 * 1000; // Ngưỡng 15 phút rớt kết nối
-
-/** accountId -> { downSince, alerted } */
-const downTracker = new Map<string, { downSince: number; alerted: boolean }>();
+// Ngưỡng 15 phút rớt kết nối. Dùng `>=` để khớp đúng ngưỡng ở GET /api/v1/notifications.
+const DOWN_ALERT_THRESHOLD_MS = 15 * 60 * 1000;
 
 /**
- * Thời điểm (epoch ms) nick bắt đầu rớt kết nối, hoặc null nếu đang bình thường /
- * chưa ghi nhận episode nào. Dùng ở notification-routes để áp cùng ngưỡng với cron.
+ * Episode hiện tại đã được cảnh báo chưa? Dedup dựa trên ActivityLog nên vẫn đúng sau
+ * restart hoặc khi chạy nhiều instance (trước đây dùng cờ in-memory `alerted`).
  */
-export function getSessionDownSince(accountId: string): number | null {
-  return downTracker.get(accountId)?.downSince ?? null;
+async function alreadyAlerted(orgId: string, accountId: string, since: Date): Promise<boolean> {
+  const found = await prisma.activityLog.findFirst({
+    where: {
+      orgId,
+      action: 'zalo_session_down',
+      entityType: 'zalo_account',
+      entityId: accountId,
+      createdAt: { gte: since },
+    },
+    select: { id: true },
+  });
+  return !!found;
+}
+
+/**
+ * Có nên báo "đã kết nối lại" không: chỉ khi episode rớt gần nhất ĐÃ được cảnh báo và
+ * chưa có bản ghi recovered nào sau đó → tránh spam mỗi tick cron 5 phút.
+ */
+async function shouldAnnounceRecovery(orgId: string, accountId: string): Promise<boolean> {
+  const base = { orgId, entityType: 'zalo_account', entityId: accountId };
+  const [down, recovered] = await Promise.all([
+    prisma.activityLog.findFirst({
+      where: { ...base, action: 'zalo_session_down' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    }),
+    prisma.activityLog.findFirst({
+      where: { ...base, action: 'zalo_session_recovered' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    }),
+  ]);
+  if (!down) return false;
+  return !recovered || recovered.createdAt < down.createdAt;
 }
 
 export function startZaloHealthCheck(io?: Server): void {
-  // Khởi động lại monitor → episode cũ không còn ý nghĩa (và giữ test isolation).
-  downTracker.clear();
-
   // Every 5 minutes: check all accounts with saved sessions
   cron.schedule('*/5 * * * *', async () => {
     try {
@@ -45,15 +74,18 @@ export function startZaloHealthCheck(io?: Server): void {
 
       for (const acc of accounts) {
         const status = zaloPool.getStatus(acc.id);
-        const tracker = downTracker.get(acc.id);
 
         if (status !== 'connected' && status !== 'connecting' && status !== 'qr_pending') {
-          if (!tracker) {
-            downTracker.set(acc.id, { downSince: Date.now(), alerted: false });
-          } else {
-            const downMinutes = Math.floor((Date.now() - tracker.downSince) / 60000);
-            if (Date.now() - tracker.downSince > DOWN_ALERT_THRESHOLD_MS && !tracker.alerted) {
-              tracker.alerted = true;
+          const downSince = await getDownSince(acc.id);
+
+          if (downSince !== null) {
+            const downMs = Date.now() - downSince;
+            const downMinutes = Math.floor(downMs / 60000);
+
+            if (
+              downMs >= DOWN_ALERT_THRESHOLD_MS &&
+              !(await alreadyAlerted(acc.orgId, acc.id, new Date(downSince)))
+            ) {
               logActivity({
                 orgId: acc.orgId,
                 systemSource: 'zalo-health-check',
@@ -81,24 +113,21 @@ export function startZaloHealthCheck(io?: Server): void {
             });
           }
         } else if (status === 'connected') {
-          if (tracker) {
-            if (tracker.alerted) {
-              logActivity({
-                orgId: acc.orgId,
-                systemSource: 'zalo-health-check',
-                action: 'zalo_session_recovered',
-                entityType: 'zalo_account',
-                entityId: acc.id,
-                details: { displayName: acc.displayName },
+          if (await shouldAnnounceRecovery(acc.orgId, acc.id)) {
+            logActivity({
+              orgId: acc.orgId,
+              systemSource: 'zalo-health-check',
+              action: 'zalo_session_recovered',
+              entityType: 'zalo_account',
+              entityId: acc.id,
+              details: { displayName: acc.displayName },
+            });
+            if (io) {
+              io.to(`org:${acc.orgId}`).emit('zalo:session-recovered', {
+                accountId: acc.id,
+                displayName: acc.displayName,
               });
-              if (io) {
-                io.to(`org:${acc.orgId}`).emit('zalo:session-recovered', {
-                  accountId: acc.id,
-                  displayName: acc.displayName,
-                });
-              }
             }
-            downTracker.delete(acc.id);
           }
         }
       }

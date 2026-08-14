@@ -79,6 +79,44 @@ export async function writeTransition(input: {
 }
 
 /**
+ * Thời điểm (epoch ms) nick BẮT ĐẦU rời trạng thái 'connected', đọc từ open record
+ * (endedAt IS NULL) của status log. Trả null nếu nick đang connected hoặc chưa có record.
+ *
+ * Vì nguồn dữ liệu nằm ở DB (không phải biến in-memory), giá trị này BỀN qua restart/deploy
+ * và giống nhau ở mọi instance — đây là nguồn sự thật duy nhất cho ngưỡng cảnh báo 15 phút
+ * dùng chung bởi cron zalo-health-check và GET /api/v1/notifications.
+ */
+export async function getDownSince(accountId: string): Promise<number | null> {
+  const open = await prisma.zaloAccountStatusLog.findFirst({
+    where: { accountId, endedAt: null },
+    select: { status: true, startedAt: true },
+  });
+  if (!open || open.status === 'connected') return null;
+  return open.startedAt.getTime();
+}
+
+/**
+ * Batch version cho route liệt kê nhiều nick — 1 query thay vì N+1.
+ * Map chỉ chứa nick đang KHÔNG connected; nick connected bị bỏ khỏi map (tương đương null).
+ */
+export async function getDownSinceBatch(accountIds: string[]): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (accountIds.length === 0) return result;
+
+  const rows = await prisma.zaloAccountStatusLog.findMany({
+    where: {
+      accountId: { in: accountIds },
+      endedAt: null,
+      status: { not: 'connected' },
+    },
+    select: { accountId: true, startedAt: true },
+  });
+
+  for (const r of rows) result.set(r.accountId, r.startedAt.getTime());
+  return result;
+}
+
+/**
  * Tính uptime % trong window N ngày qua cho 1 nick.
  *
  * Algorithm:
