@@ -124,9 +124,13 @@ export async function notificationRoutes(app: FastifyInstance) {
         const needsQr = status === 'qr_pending';
         if (!needsQr && (downMs === null || downMs < ZALO_ALERT_THRESHOLD_MS)) continue;
 
+        // `privacy_mode` là TEXT NOT NULL DEFAULT 'sub' với CHECK IN ('main','sub'), nên
+        // kiểm tra truthy đúng với MỌI nick → trước đây nick thường của người khác
+        // cũng bị che tên, owner/admin không còn biết nick nào đang rớt. Chỉ nick 'main'
+        // mới riêng tư — giống ngỡ nghĩa privacyMode !== 'main' trong privacy/redact.ts.
+        const isPrivateNick = acc.privacyMode === 'main';
         const isOwnerOfNick = !!acc.ownerUserId && acc.ownerUserId === viewerId;
-        const label =
-          acc.privacyMode && !isOwnerOfNick ? PRIVACY_BLUR_TOKEN : acc.displayName || acc.id;
+        const label = isPrivateNick && !isOwnerOfNick ? PRIVACY_BLUR_TOKEN : acc.displayName || acc.id;
 
         notifications.push({
           id: `zalo-${acc.id}`,
