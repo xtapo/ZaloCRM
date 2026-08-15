@@ -525,8 +525,8 @@ defineExpose({ rootCount: rootNoteCount });
   flex-shrink: 0;
 }
 .tl-count {
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 11px;
@@ -573,7 +573,7 @@ defineExpose({ rootCount: rootNoteCount });
 .chip:hover { color: var(--smax-primary); }
 .chip.active {
   background: #fff;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   box-shadow: 0 1px 2px rgba(0,0,0,0.06);
 }
 .settings-btn {
