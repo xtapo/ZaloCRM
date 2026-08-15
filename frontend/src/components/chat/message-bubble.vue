@@ -738,7 +738,7 @@ function openFile(href: string) {
 .sender-name {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   margin-bottom: 4px;
   line-height: 1.2;
 }
@@ -762,7 +762,7 @@ function openFile(href: string) {
   border: 1px solid var(--smax-grey-200, #ebedf0);
 }
 .message-bubble.is-self {
-  background: var(--smax-bubble-self, #d0e6ff);
+  background: var(--smax-bubble-self, var(--smax-primary-light, #dcfce7));
   color: var(--smax-text, #212121);
   border-radius: 15px 15px 4px 15px;
 }
@@ -821,8 +821,8 @@ function openFile(href: string) {
   color: rgba(75, 85, 105, 0.85);
 }
 .receipt-chip.seen {
-  background: rgba(37, 99, 235, 0.10);
-  color: #2563eb;
+  background: var(--smax-primary-soft, rgba(22, 163, 74, 0.12));
+  color: var(--smax-primary, #16a34a);
 }
 .receipt-chip svg { display: block; flex-shrink: 0; }
 .receipt-label { line-height: 1.2; }
@@ -836,14 +836,14 @@ function openFile(href: string) {
 .reply-card {
   padding: 6px 10px;
   border-radius: 7px;
-  background: rgba(33, 150, 243, 0.08);
-  border-left: 3px solid var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft, rgba(22, 163, 74, 0.08));
+  border-left: 3px solid var(--smax-primary);
   margin-bottom: 6px;
 }
 .reply-header {
   display: flex; align-items: center; gap: 4px;
   font-size: 10.5px;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   font-weight: 600;
   margin-bottom: 2px;
 }
@@ -892,14 +892,14 @@ function openFile(href: string) {
   white-space: pre-wrap;
 }
 :deep(.mention) {
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   font-weight: 500;
-  background: var(--smax-primary-soft, #e3f2fd);
+  background: var(--smax-primary-soft);
   padding: 0 4px;
   border-radius: 3px;
 }
 :deep(.link) {
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   text-decoration: underline;
 }
 
@@ -983,7 +983,7 @@ function openFile(href: string) {
   color: var(--smax-text);
 }
 .voice-link {
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   text-decoration: none;
   font-weight: 500;
 }
@@ -996,7 +996,7 @@ function openFile(href: string) {
   border-radius: 9px;
   max-width: 280px;
 }
-.voice-mic-icon { color: var(--smax-primary, #2962ff); flex-shrink: 0; }
+.voice-mic-icon { color: var(--smax-primary); flex-shrink: 0; }
 .voice-audio { height: 32px; flex: 1; min-width: 0; }
 .voice-fallback { font-size: 12px; color: var(--smax-grey-700); font-style: italic; }
 
