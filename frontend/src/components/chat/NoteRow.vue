@@ -173,7 +173,7 @@ function commitEdit() {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--smax-primary, #2962ff), #5e92ff);
+  background: linear-gradient(135deg, var(--smax-primary), var(--smax-primary-dark));
   color: #fff;
   display: flex;
   align-items: center;
@@ -278,8 +278,8 @@ function commitEdit() {
 }
 .reaction-chip:hover { transform: scale(1.06); }
 .reaction-chip.mine {
-  background: var(--smax-primary-soft, #e3f2fd);
-  border-color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  border-color: var(--smax-primary);
 }
 .reaction-count {
   color: var(--smax-grey-700);
