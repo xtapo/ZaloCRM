@@ -391,8 +391,8 @@ defineExpose({ rootCount });
   text-transform: uppercase;
 }
 .notes-count {
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 11px;
@@ -422,8 +422,8 @@ defineExpose({ rootCount });
   transition: border-color 0.15s;
 }
 .note-composer:focus-within {
-  border-color: var(--smax-primary, #2962ff);
-  box-shadow: 0 0 0 3px rgba(33,150,243,0.08);
+  border-color: var(--smax-primary);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
 }
 .reply-composer {
   margin-top: 6px;
@@ -448,7 +448,7 @@ defineExpose({ rootCount });
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--smax-primary, #2962ff);
+  background: var(--smax-primary);
   color: #fff;
   border: none;
   font-size: 14px;
