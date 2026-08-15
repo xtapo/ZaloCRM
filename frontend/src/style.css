@@ -26,6 +26,9 @@
   /* Header giờ là light pill nổi trên canvas */
   --smax-header-bg: #ffffff;
   --smax-header-border: rgba(17, 24, 39, 0.06);
+  /* Chiều cao top nav — ChatView & các layout full-height dùng biến này để
+     tính calc(100vh - ...). Phải khớp .smax-topnav trong DefaultLayout.vue. */
+  --smax-topnav-h: 76px;
 
   --smax-text: #111827;
   --smax-text-muted: #6b7280;
@@ -36,7 +39,7 @@
 
   /* ── Thang grey (giữ tên legacy --smax-grey-*) ─────────────
      Các biến này được dùng rải rác trong TagChipList, CareStatusBadge,
-     ToastContainer, các view chat/contacts… nên bắt buộc phải tồn tại. */
+     ToastContainer, ChatView, các view chat/contacts… nên bắt buộc phải tồn tại. */
   --smax-grey-50: #f9fafb;
   --smax-grey-100: #f3f4f6;
   --smax-grey-200: #e5e7eb;
