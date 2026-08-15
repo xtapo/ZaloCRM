@@ -1,0 +1,33 @@
+name: UI color guard
+
+on:
+  pull_request:
+    paths:
+      - "frontend/src/**"
+      - "scripts/check-hardcoded-colors.mjs"
+      - ".github/workflows/ui-color-guard.yml"
+
+jobs:
+  color-guard:
+    name: Chặn màu hard-code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Cần đủ lịch sử để so diff với nhánh base.
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Fetch base branch
+        run: git fetch --no-tags origin ${{ github.base_ref }}
+
+      - name: Run color guard
+        env:
+          COLOR_GUARD_BASE: origin/${{ github.base_ref }}
+        run: node scripts/check-hardcoded-colors.mjs
