@@ -6,6 +6,41 @@
 
 ---
 
+## 0. Quyết định đã chốt (15/08/2026)
+
+> [!NOTE]
+> Hai câu hỏi mở trong bản thảo đầu đã có câu trả lời. Ghi lại ở đây vì chúng ràng buộc thiết kế của **tất cả** các phase bên dưới.
+
+### 0.1 — Agent vĩnh viễn cần người duyệt
+
+Không có Phase 9 "tự động gửi". `propose_message` chỉ tạo nháp, suốt vòng đời sản phẩm.
+
+Đây là **ràng buộc sản phẩm**, không phải hạn chế tạm thời của Phase 8. Hệ quả kỹ thuật rất dễ chịu:
+
+- Không cần thiết kế đường nâng quyền cho agent
+- Không có feature flag `auto_send` — thứ mà sớm muộn cũng có người bật nhầm trên production
+- Mọi thao tác ghi ra Zalo đi qua **đúng một cổng duyệt duy nhất**, nên audit trail là một đường thẳng chứ không phải một cái cây
+
+### 0.2 — Ngân sách token điền thủ công theo từng org
+
+Không có giá trị mặc định, không suy ra từ gói cước. Admin nhập số tại `/settings/crm/agent`.
+
+> [!WARNING]
+> **Bỏ trống = agent không chạy** (fail-closed), chứ không phải chạy vô hạn. Một ô cấu hình bị quên không được phép biến thành hoá đơn LLM cuối tháng.
+
+```prisma
+model Organization {
+  // ... các field hiện có
+  agentTokenBudgetMonthly Int?       // null = chưa cấu hình → agent không nhận task
+  agentTokenUsedThisMonth Int        @default(0)
+  agentBudgetResetAt      DateTime?  // mốc reset chu kỳ
+}
+```
+
+Hết ngân sách thì dispatcher **ngừng nhận task mới**, nhưng session đang chạy vẫn được hoàn tất — dừng giữa chừng sẽ để lại `Fact` ghi dở mà không có `FactEvidence` đi kèm.
+
+---
+
 ## 1. Kết luận thẩm định
 
 **Có thể tích hợp — ở mức ý tưởng và kiến trúc, không ở mức source code.**
@@ -144,6 +179,7 @@ Hai dispatcher chạy song song sẽ lấy tập việc **rời nhau**. Một ru
 - [ ] `kill -9` một instance giữa chừng → task quay về `pending` trong ≤ 60s
 - [ ] `scoring-scheduler` và broadcast-scheduler đã chuyển sang enqueue task thay vì tự chạy
 - [ ] `dueAt` thay thế hoàn toàn cron expression cho các job theo-đối-tượng
+- [ ] Dispatcher từ chối nhận task khi org chưa điền ngân sách token (mục 0.2)
 
 ---
 
@@ -274,7 +310,7 @@ Mở rộng `backend/src/modules/ai/provider-registry.ts` để hỗ trợ funct
 | `suggest_fact` | write-soft | Tạo `FactSuggestion` |
 | `schedule_recheck` | **write** | Tạo `AgentTask`, bắt buộc có `reason` |
 | `ask_human` | write-soft | Đặt câu hỏi hiện trên tab Agent |
-| `propose_message` | **write-gated** | Soạn tin nháp — **không tự gửi ở Phase 8** |
+| `propose_message` | **write-gated** | Soạn tin nháp — **không bao giờ tự gửi** (mục 0.1) |
 
 > [!CAUTION]
 > **Không có tool nào nhận tham số `confidence`.** Đây là ràng buộc cứng, cần một test tự động quét signature của toàn bộ tool để đảm bảo.
@@ -328,7 +364,18 @@ model AgentStep {
 }
 ```
 
+`AgentSession.tokenCost` cộng dồn vào `Organization.agentTokenUsedThisMonth` khi session kết thúc.
+
 **Tab "Agent"** thêm vào `ContactProfileView` (Vue): dòng thời gian các bước, lead nào bị loại và vì sao, câu hỏi agent đang chờ trả lời — trả lời ngay tại chỗ. Đẩy realtime qua Socket.IO đã có sẵn.
+
+### Màn hình cấu hình `/settings/crm/agent`
+
+Sinh ra từ quyết định 0.2:
+
+- Ô nhập **ngân sách token/tháng** (bắt buộc, không có giá trị gợi ý sẵn)
+- Thanh tiến độ đã dùng / tổng
+- Trạng thái: `chưa cấu hình` (agent không chạy) · `đang chạy` · `hết ngân sách`
+- Bật/tắt từng `kind` task
 
 ### Capability printout
 
@@ -339,6 +386,7 @@ In ra lúc boot, và **nạp vào đầu mỗi session** để agent lập kế 
 [agent] on   Facebook Lead (META_APP_SECRET)
 [agent] off  Object storage backfill (S3_ENDPOINT)
 [agent] on   AI provider: anthropic, gemini
+[agent] off  Gửi tin tự động — vĩnh viễn tắt theo thiết kế
 ```
 
 ---
@@ -364,12 +412,12 @@ Hiện tại `decay-cron.ts` giảm điểm theo công thức cứng. Thay bằn
 
 | Rủi ro | Biện pháp |
 | --- | --- |
-| **Agent tự chủ + zca-js = khoá nick** | Phase 8 agent **read-only + suggest**. `propose_message` chỉ tạo nháp. Mọi thao tác gửi vẫn qua người duyệt và qua đúng lớp chống block hiện có (200 tin/ngày, phát hiện gửi quá nhanh) |
+| **Agent tự chủ + zca-js = khoá nick** | Agent **read-only + suggest — vĩnh viễn**, không riêng Phase 8 (mục 0.1). `propose_message` chỉ tạo nháp. Mọi thao tác gửi luôn qua người duyệt và qua đúng lớp chống block hiện có (200 tin/ngày, phát hiện gửi quá nhanh) |
 | **Nghị định 13/2023 về bảo vệ dữ liệu cá nhân** | Không enrichment tự động từ web về cá nhân người Việt. Chỉ dùng dữ liệu khách tự cung cấp trong chat / lead form. Ghi rõ trong `ranh-gioi-du-lieu.md` |
 | **Rò rỉ đa tenant** | Mọi tool nhận `organizationId` từ session, **không** từ tham số của LLM. Test: agent của org A không truy được contact org B |
 | **Prompt injection từ tin nhắn khách** | Nội dung tin nhắn khách luôn được bọc trong khối dữ liệu có nhãn, không nối thẳng vào system prompt |
 | **Privacy PIN V2** | Contact bị khoá PIN phải vô hình với agent |
-| **Chi phí LLM chạy nền** | Ngân sách token theo org trong `AgentSession.tokenCost`, dừng khi hết |
+| **Chi phí LLM chạy nền** | Ngân sách token **điền thủ công** theo org (`Organization.agentTokenBudgetMonthly`), cộng dồn từ `AgentSession.tokenCost`. Chưa điền → agent không chạy. Hết ngân sách → ngừng nhận task mới (mục 0.2) |
 
 Nguyên tắc sandbox của Comp AI đáng ghi nhớ cho tương lai dù Phase 8 chưa cần: *shell không có egress và không có `DATABASE_URL` thì chỉ là một bộ xử lý văn bản; có cả hai thì nó có hình dạng của một đường rò dữ liệu.*
 
@@ -387,6 +435,7 @@ Nguyên tắc sandbox của Comp AI đáng ghi nhớ cho tương lai dù Phase 8
 | Perplexity / RapidAPI LinkedIn | Khách SME Việt trên Zalo phần lớn là cá nhân, không có LinkedIn hay company domain. Giá trị thấp, rủi ro pháp lý cao |
 | Context (brand data) | Phụ thuộc domain công ty — không áp dụng được |
 | Single-tenant | Đi ngược hoàn toàn kiến trúc Organization + RBAC |
+| Agent tự gửi tin | Quyết định sản phẩm, không phải giới hạn kỹ thuật (mục 0.1) |
 
 ---
 
@@ -405,7 +454,8 @@ Nguyên tắc sandbox của Comp AI đáng ghi nhớ cho tương lai dù Phase 8
 
 - [ ] Backup DB và tag `v3.3` làm mốc rollback
 - [ ] Chốt danh sách nguồn bằng chứng và độ mạnh ở mục 4
-- [ ] Quyết định: agent có được gửi tin tự động ở Phase 9 không, hay vĩnh viễn cần người duyệt
-- [ ] Chốt ngân sách token theo org
+- [x] ~~Quyết định: agent có được gửi tin tự động ở Phase 9 không~~ → **vĩnh viễn cần người duyệt** (chốt 15/08/2026)
+- [x] ~~Chốt ngân sách token theo org~~ → **điền thủ công, bỏ trống thì agent không chạy** (chốt 15/08/2026)
+- [ ] Thêm UI nhập ngân sách token vào `/settings/crm/agent` — hạng mục mới sinh ra từ quyết định 0.2
 - [ ] Thêm MIT notice của `trycompai/crm` vào `THIRD-PARTY-LICENSES.md` nếu có mượn đoạn code nào
 - [ ] Viết `bang-chung.md` và `ranh-gioi-du-lieu.md` **trước** khi viết tool đầu tiên
