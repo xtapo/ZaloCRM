@@ -499,7 +499,7 @@ watch(activeTab, (newTab, oldTab) => {
   font-size: 13px; outline: none;
   font-family: inherit; background: #fff; color: #111827;
 }
-.field input:focus, .field textarea:focus, .field select:focus { border-color: #6366F1; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--smax-primary, #16a34a); box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15); }
 .field textarea {
   font-family: "JetBrains Mono", Menlo, Consolas, monospace;
   font-size: 12px; min-height: 140px; resize: vertical;
