@@ -303,7 +303,7 @@ const engagementTrendClass = computed(() => {
 }
 .sb-card.lead .sb-num { color: #F59E0B; }
 .sb-card.priority .sb-num { color: #EF4444; }
-.sb-card.eng .sb-num { color: #3B82F6; }
+.sb-card.eng .sb-num { color: #16A34A; }
 
 .sb-lbl {
   font-size: 10px;
@@ -425,7 +425,7 @@ const engagementTrendClass = computed(() => {
   font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 10.5px;
   margin-bottom: 10px;
-  color: #93C5FD;
+  color: #86EFAC;
   letter-spacing: -0.01em;
 }
 .sb-tooltip .tt-section {
