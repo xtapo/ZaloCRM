@@ -6,7 +6,7 @@
 
       <!-- Meta chips -->
       <div class="d-flex gap-1 flex-wrap mb-3">
-        <v-chip v-if="poll.isMultiChoice || poll.multi" size="x-small" color="blue" variant="tonal">
+        <v-chip v-if="poll.isMultiChoice || poll.multi" size="x-small" color="primary" variant="tonal">
           Chọn nhiều
         </v-chip>
         <v-chip v-if="poll.isAnonymous || poll.anonymous" size="x-small" color="purple" variant="tonal">
