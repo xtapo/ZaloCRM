@@ -268,7 +268,7 @@ function relativeTime(iso: string | null): string {
   border-radius: 4px;
   transition: width 0.3s ease;
 }
-.sip-dim.eng .sip-dim-bar > span { background: linear-gradient(90deg, #60a5fa, #3b82f6); }
+.sip-dim.eng .sip-dim-bar > span { background: linear-gradient(90deg, #4ade80, #16a34a); }
 .sip-dim.int .sip-dim-bar > span { background: linear-gradient(90deg, #34d399, #10b981); }
 .sip-dim.fit .sip-dim-bar > span { background: linear-gradient(90deg, #a78bfa, #8b5cf6); }
 .sip-dim.vel .sip-dim-bar > span { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
@@ -298,7 +298,7 @@ function relativeTime(iso: string | null): string {
 }
 .sip-signals-expand {
   font-size: 10.5px;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   background: transparent;
   border: none;
   cursor: pointer;
