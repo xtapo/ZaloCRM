@@ -90,7 +90,7 @@ const actorTypeClass = computed(() => `type-${props.actorType}`);
   flex-shrink: 0;
 }
 .mp-avatar.type-user {
-  background: linear-gradient(135deg, var(--smax-primary, #2962ff), #5e92ff);
+  background: linear-gradient(135deg, var(--smax-primary), var(--smax-primary-dark));
 }
 .mp-avatar.type-bot {
   background: linear-gradient(135deg, #00897b, #4db6ac);
