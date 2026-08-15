@@ -1,12 +1,12 @@
 <template>
-  <v-card>
-    <v-card-title class="text-body-1">Thời gian trả lời trung bình</v-card-title>
+  <v-card class="chart-card">
+    <v-card-title class="chart-title">Thểi gian trả lọi trung bình</v-card-title>
     <v-card-text>
       <div v-if="chartData" class="chart-wrap">
         <Line :data="chartData" :options="chartOptions" />
       </div>
-      <div v-else class="text-center pa-8 text-grey">Không có dữ liệu</div>
-      <div v-if="data?.overall" class="text-caption text-grey mt-2 text-center">
+      <div v-else class="chart-empty">Không có dữ liệu</div>
+      <div v-if="data?.overall" class="chart-caption">
         Trung bình tổng: {{ formatTime(data.overall) }}
       </div>
     </v-card-text>
@@ -28,6 +28,7 @@ import {
   Filler,
 } from 'chart.js';
 import type { ResponseTimeData } from '@/composables/use-analytics';
+import { BRAND, lineChartOptions } from '@/constants/chart-theme';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -39,30 +40,27 @@ const chartData = computed(() => {
     labels: props.data.daily.map((d) => d.date.slice(5)),
     datasets: [
       {
-        label: 'TG trả lời (giây)',
+        label: 'TG trả lọi (giây)',
         data: props.data.daily.map((d) => d.avgSeconds),
-        borderColor: '#00BCD4',
-        backgroundColor: 'rgba(0,188,212,0.1)',
+        borderColor: BRAND.green,
+        backgroundColor: 'rgba(22, 163, 74, 0.12)',
         fill: true,
-        tension: 0.3,
       },
     ],
   };
 });
 
 const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
+  ...lineChartOptions,
   plugins: {
+    ...lineChartOptions.plugins,
     legend: { display: false },
     tooltip: {
+      ...lineChartOptions.plugins.tooltip,
       callbacks: {
         label: (ctx: any) => formatTime(ctx.raw),
       },
     },
-  },
-  scales: {
-    y: { beginAtZero: true, title: { display: true, text: 'Giây' } },
   },
 };
 
@@ -76,5 +74,29 @@ function formatTime(seconds: number | null): string {
 </script>
 
 <style scoped>
+.chart-card {
+  border-radius: 24px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+}
+.chart-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  padding-bottom: 0;
+}
 .chart-wrap { position: relative; height: 280px; width: 100%; }
+.chart-empty {
+  text-align: center;
+  padding: 32px 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
+.chart-caption {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #9ca3af;
+}
 </style>

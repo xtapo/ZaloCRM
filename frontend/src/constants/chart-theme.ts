@@ -2,8 +2,8 @@
  * Palette & options dùng chung cho mọi biểu đồ Chart.js trong ZaloCRM.
  *
  * Mục đích: tránh mỗi component tự hard-code màu (trước đây có #1565C0,
- * #42A5F5, #1877F2, #00F2FF... lẫn lộn) — tất cả giờ lấy từ 1 nguồn theo
- * design system "soft green".
+ * #42A5F5, #1877F2, #00BCD4, #00F2FF... lẫn lộn) — tất cả giờ lấy từ 1 nguồn
+ * theo design system "soft green".
  */
 
 /** Màu thương hiệu — khớp tokens trong style.css / vuetify.ts */
@@ -37,7 +37,7 @@ export const CHART_SERIES: string[] = [
   BRAND.grey,
 ];
 
-/** Màu theo trạng thái pipeline khách hàng. */
+/** Màu theo trạng thái pipeline / phễu chuyển đổi (dùng chung 2 chỗ). */
 export const PIPELINE_COLORS: Record<string, string> = {
   new: BRAND.greyLight,
   contacted: BRAND.greenSoft,
@@ -67,7 +67,7 @@ export function seriesColor(index: number): string {
   return CHART_SERIES[index % CHART_SERIES.length];
 }
 
-/** Legend dạng pill nhỏ, chữ xám — giống mockup. */
+/** Legend dạng điểm tròn nhỏ, chữ xám — giống mockup. */
 const legend = (position: 'top' | 'right' | 'bottom') => ({
   position,
   labels: {
@@ -93,25 +93,39 @@ const tooltip = {
   boxPadding: 4,
 };
 
+const softScales = {
+  x: {
+    grid: { display: false },
+    border: { display: false },
+    ticks: { color: BRAND.textMuted, font: { size: 11 } },
+  },
+  y: {
+    beginAtZero: true,
+    grid: { color: BRAND.gridLine },
+    border: { display: false },
+    ticks: { color: BRAND.textMuted, font: { size: 11 } },
+  },
+};
+
 /** Options cho bar chart: cột bo tròn, chỉ kẻ ngang mờ. */
 export const barChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   borderRadius: 10,
   plugins: { legend: legend('top'), tooltip },
-  scales: {
-    x: {
-      grid: { display: false },
-      border: { display: false },
-      ticks: { color: BRAND.textMuted, font: { size: 11 } },
-    },
-    y: {
-      beginAtZero: true,
-      grid: { color: BRAND.gridLine },
-      border: { display: false },
-      ticks: { color: BRAND.textMuted, font: { size: 11 } },
-    },
+  scales: softScales,
+};
+
+/** Options cho line chart: điểm tròn mềm, grid nhạt. */
+export const lineChartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: legend('top'), tooltip },
+  elements: {
+    line: { tension: 0.4, borderWidth: 3 },
+    point: { radius: 0, hoverRadius: 5, hitRadius: 12 },
   },
+  scales: softScales,
 };
 
 /** Options cho pie/doughnut: legend bên phải, viền trắng tách miếng. */
