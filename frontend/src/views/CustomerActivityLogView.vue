@@ -420,7 +420,7 @@ watch(() => route.params.id, () => {
   font-weight: 600;
   cursor: pointer;
 }
-.export-btn:hover:not(:disabled) { background: #1e4cc7; }
+.export-btn:hover:not(:disabled) { background: var(--smax-primary-hover, #15803d); }
 .export-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Layout */
