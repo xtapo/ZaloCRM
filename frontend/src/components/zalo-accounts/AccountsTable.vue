@@ -326,12 +326,12 @@ function shortName(name: string): string {
 }
 
 const GRADIENTS = [
-  ['#6366F1', '#A855F7'],
+  ['#4ADE80', '#16A34A'],
   ['#10B981', '#059669'],
+  ['#06B6D4', '#0D9488'],
   ['#F59E0B', '#D97706'],
   ['#EC4899', '#BE185D'],
-  ['#3B82F6', '#1D4ED8'],
-  ['#14B8A6', '#0F766E'],
+  ['#8B5CF6', '#6D28D9'],
 ];
 function hashIdx(s: string, mod: number): number {
   let h = 0;
@@ -401,7 +401,7 @@ tbody tr.alert:hover { background: #FFF5F5 }
 
 .td-chk { width: 32px }
 .td-actions { text-align: right }
-.chk { width: 14px; height: 14px; accent-color: #6366F1; cursor: pointer }
+.chk { width: 14px; height: 14px; accent-color: var(--smax-primary, #16a34a); cursor: pointer }
 
 .name-cell {
   display: flex;
@@ -525,7 +525,7 @@ tbody tr.alert:hover { background: #FFF5F5 }
 .progress .bar > i {
   display: block;
   height: 100%;
-  background: #6366F1;
+  background: var(--smax-primary, #16a34a);
   border-radius: 99px;
 }
 .progress.high .bar > i { background: #F59E0B }
@@ -567,9 +567,9 @@ tbody tr.alert:hover { background: #FFF5F5 }
   transition: background 0.1s;
 }
 .owner-cell.clickable { cursor: pointer; }
-.owner-cell.clickable:hover { background: #EEF0FF; }
+.owner-cell.clickable:hover { background: var(--smax-primary-soft, #eaf7ef); }
 .owner-cell.clickable:hover .owner-edit-icon { opacity: 1; }
-.owner-edit-icon { color: #5E6AD2; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
+.owner-edit-icon { color: var(--smax-primary, #16a34a); opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
 .owner-avatar { margin-left: 0 !important; flex-shrink: 0; }
 
 /* Department cell — Phase 4 2026-05-22 */
