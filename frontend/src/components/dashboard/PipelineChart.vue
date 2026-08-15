@@ -1,9 +1,9 @@
 <template>
-  <v-card>
-    <v-card-title class="text-body-1">Pipeline khách hàng</v-card-title>
+  <v-card class="chart-card">
+    <v-card-title class="chart-title">Pipeline khách hàng</v-card-title>
     <v-card-text>
-      <Doughnut v-if="chartData" :data="chartData" :options="chartOptions" style="height: 250px;" />
-      <div v-else class="text-center pa-8 text-grey">Không có dữ liệu</div>
+      <Doughnut v-if="chartData" :data="chartData" :options="pieChartOptions" style="height: 250px;" />
+      <div v-else class="chart-empty">Không có dữ liệu</div>
     </v-card-text>
   </v-card>
 </template>
@@ -12,20 +12,13 @@
 import { computed } from 'vue';
 import { Doughnut } from 'vue-chartjs';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { BRAND, PIPELINE_COLORS, pieChartOptions } from '@/constants/chart-theme';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const props = defineProps<{
   data: { status: string | null; _count: { _all: number } | number }[];
 }>();
-
-const statusColors: Record<string, string> = {
-  new: '#9E9E9E',
-  contacted: '#42A5F5',
-  interested: '#FF9800',
-  converted: '#66BB6A',
-  lost: '#EF5350',
-};
 
 const statusLabels: Record<string, string> = {
   new: 'Mới',
@@ -47,14 +40,29 @@ const chartData = computed(() => {
     labels: filtered.map(d => statusLabels[d.status || ''] || d.status),
     datasets: [{
       data: filtered.map(d => getCount(d)),
-      backgroundColor: filtered.map(d => statusColors[d.status || ''] || '#BDBDBD'),
+      backgroundColor: filtered.map(d => PIPELINE_COLORS[d.status || ''] || BRAND.greyLight),
     }],
   };
 });
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { position: 'right' as const, labels: { boxWidth: 12 } } },
-};
 </script>
+
+<style scoped>
+.chart-card {
+  border-radius: 24px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+}
+.chart-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  padding-bottom: 0;
+}
+.chart-empty {
+  text-align: center;
+  padding: 32px 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
+</style>
