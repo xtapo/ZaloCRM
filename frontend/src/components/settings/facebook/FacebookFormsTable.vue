@@ -105,6 +105,6 @@ function formatRelativeTime(iso: string): string {
 }
 .list-link:hover {
   text-decoration: underline;
-  color: #1565c0;
+  color: var(--smax-primary, #16a34a);
 }
 </style>
