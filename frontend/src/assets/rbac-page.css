@@ -365,7 +365,7 @@
 /* ── Card grid layout (for non-tree pages like Users) ── */
 .dept-page .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 12px;
 }
 .dept-page .card-grid .dept-card { cursor: pointer; }
