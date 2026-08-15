@@ -79,7 +79,7 @@ function initials(name?: string | null): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 function avatarColor(name?: string | null): string {
-  const colors = ['linear-gradient(135deg,#f59e0b,#ef4444)', 'linear-gradient(135deg,#3b82f6,#1e40af)', 'linear-gradient(135deg,#10b981,#059669)', 'linear-gradient(135deg,#8b5cf6,#6d28d9)'];
+  const colors = ['linear-gradient(135deg,#4ade80,#16a34a)', 'linear-gradient(135deg,#10b981,#059669)', 'linear-gradient(135deg,#f59e0b,#d97706)', 'linear-gradient(135deg,#8b5cf6,#6d28d9)'];
   const h = (name || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
   return colors[h % colors.length];
 }
@@ -174,7 +174,7 @@ function avatarColor(name?: string | null): string {
 }
 .pv-lock-emblem::before {
   content: ''; position: absolute; inset: -5px; border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent, #3b82f6, transparent, #1e40af, transparent);
+  background: conic-gradient(from 0deg, transparent, #16a34a, transparent, #15803d, transparent);
   animation: pv-glow 5s linear infinite;
   filter: blur(8px); opacity: 0.35; z-index: 1;
 }
@@ -215,7 +215,7 @@ function avatarColor(name?: string | null): string {
   font-size: 9.5px; color: #1e40af;
   word-break: break-all; line-height: 1.5;
 }
-.pv-enc-hash .pv-blink { animation: pv-blink 1s infinite; color: #3b82f6; }
+.pv-enc-hash .pv-blink { animation: pv-blink 1s infinite; color: var(--smax-primary, #16a34a); }
 @keyframes pv-blink { 50% { opacity: 0.3; } }
 
 .pv-status-row {
