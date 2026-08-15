@@ -153,7 +153,7 @@ function formatNum(n: number): string {
 .bar > i {
   display: block;
   height: 100%;
-  background: #6366F1;
+  background: var(--smax-primary, #16a34a);
   border-radius: 99px;
 }
 .bar-pct {
