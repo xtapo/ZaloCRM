@@ -237,12 +237,12 @@ function toggleSort() {
 }
 .cfb-tabs.main-tab-style .cfb-tab:hover {
   background: rgba(255, 255, 255, 0.6);
-  color: #4338CA;
+  color: var(--smax-primary);
 }
 .cfb-tabs.main-tab-style .cfb-tab.active {
   background: white;
-  color: #6366F1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(99, 102, 241, 0.1);
+  color: var(--smax-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(22, 163, 74, 0.1);
 }
 .cfb-tab .tab-label {
   overflow: hidden;
@@ -283,6 +283,6 @@ function toggleSort() {
   font-family: inherit;
   transition: color 0.15s, background 0.15s;
 }
-.mini-sort:hover { color: #4338CA; background: white; }
+.mini-sort:hover { color: var(--smax-primary); background: white; }
 .mini-sort .ic { width: 10px; height: 10px; opacity: 0.7; }
 </style>
