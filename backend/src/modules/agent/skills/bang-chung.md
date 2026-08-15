@@ -26,11 +26,11 @@ Một dữ kiện sai mà tự tin còn tệ hơn một ô trống. Ô trống t
 | --- | --- | --- |
 | `zalo.self-stated` | Mạnh | Khách tự gõ ra trong tin nhắn |
 | `facebook.lead-form` | Mạnh | Khách tự điền vào form — xem cảnh báo về `fieldMap` bên dưới |
-| `zalo.bank-card` | Mạnh | Khách gửi card chuyển khoản / QR |
 | `crm.phone-match` | Mạnh | Hai bản ghi trùng số sau khi chuẩn hoá |
+| `zalo.bank-card` | Trung bình | Card chuyển khoản/QR — **chỉ có STK + mã NH, KHÔNG có tên chủ thẻ, KHÔNG có SĐT** |
 | `zalo.friend-sync` | Trung bình | **Chỉ 4 trường:** tên hiển thị, avatar, `globalId`, `username` |
 | `zalo.alias` | Trung bình | Sale tự đặt, pull định kỳ nên có thể cũ |
-| `zalo.label` | Trung bình | Sale tự gắn, phản ánh quy ước nội bộ |
+| `zalo.label` | Trung bình | Zalo Labels 2-way sync, phản ánh quy ước sale (grace 30s, cooldown 5s) |
 | `llm.inference` | **Yếu** | Chính bạn suy ra từ ngữ cảnh |
 
 Quy tắc đọc bảng: **độ mạnh thuộc về nguồn, không thuộc về cảm giác của bạn về nguồn đó.** Một câu khách tự nói vẫn là `Mạnh` kể cả khi bạn thấy nó khó tin. Một suy luận của bạn vẫn là `Yếu` kể cả khi bạn thấy nó hiển nhiên.
@@ -49,6 +49,25 @@ zaloUsername      — handle @abc
 **Không có số điện thoại. Không có giới tính. Không có ngày sinh.** Nếu bạn cần ba thứ đó, nguồn duy nhất hợp lệ là khách tự nói ra trong chat hoặc tự điền vào lead form.
 
 Dữ liệu này do cron chạy **mỗi 15 phút**, nên có thể cũ tới 15 phút. Đừng kết luận "khách chưa đổi tên" chỉ vì bản ghi bạn đọc chưa đổi.
+
+### `zalo.bank-card` chỉ chứa số tài khoản và mã ngân hàng
+
+Đã đối chiếu `zinstant-proxy-routes.ts` (`parseVietQR`). Tin nhắn chuyển khoản Zalo zinstant embed chuỗi VietQR EMVCo, backend trích xuất được `bankBin` (mã ngân hàng) và `accountNumber` (số tài khoản).
+
+**Tuyệt đối KHÔNG có tên chủ tài khoản, KHÔNG có số điện thoại, KHÔNG có tên khách hàng.**
+
+Hệ quả:
+- `zalo.bank-card` **không thể dùng làm bằng chứng nhận diện khách hàng hay trích xuất họ tên**.
+- Nếu khách gửi thẻ ngân hàng (inbound) để nhận chuyển khoản: chỉ trích xuất thuộc tính số tài khoản / ngân hàng với độ mạnh **Trung bình** (phải tạo `suggest_fact` nếu ô đã có giá trị khác, hoặc cần xác nhận vì không có tên chủ thẻ đối chiếu).
+- Nếu là tin nhắn do sale gửi (outbound): đó là STK của công ty/sale, tuyệt đối không ghi vào hồ sơ khách hàng.
+
+### `zalo.label` — đồng bộ hai chiều có độ trễ
+
+Đã đối chiếu `zalo-labels-routes.ts`. Zalo Label được đồng bộ 2 chiều giữa CRM và SDK Zalo:
+- Khi sale gán nhãn trên CRM: đẩy lên Zalo qua `updateLabels()` và cập nhật DB với grace window 30s (`ASSIGN_GRACE_MS = 30_000`) và cooldown 5s (`SYNC_COOLDOWN_MS = 5_000`) để tránh lag eventual consistency của Zalo ghi đè.
+- Khi đồng bộ từ Zalo: `getLabels()` từ Zalo SDK là nguồn có thẩm quyền, mirror sang `Friend.crmTagsPerNick` (prefix `🔵 `) và `CrmTag`.
+- Khi nhãn bị xoá hoặc sửa trực tiếp trên app Zalo điện thoại/máy tính của sale: SDK Zalo **không có webhook realtime**, CRM chỉ phát hiện và cập nhật trong lần sync tiếp theo (nút "Đồng bộ ngay" hoặc trigger touch).
+- Độ mạnh là **Trung bình**, phản ánh quy ước phân loại nội bộ của sale đối với khách hàng tại thời điểm đồng bộ gần nhất.
 
 ### `facebook.lead-form` — nhãn trường do admin cấu hình
 
