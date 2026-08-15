@@ -108,7 +108,7 @@
                       text="📘 Tệp được liên kết tự động từ Facebook (hoặc nguồn tự động khác). Không thể đổi tên."
                     >
                       <template #activator="{ props: tp }">
-                        <v-icon v-bind="tp" size="14" color="blue-grey" class="ms-1" aria-hidden="true">
+                        <v-icon v-bind="tp" size="14" color="grey-darken-1" class="ms-1" aria-hidden="true">
                           mdi-lock-outline
                         </v-icon>
                       </template>
@@ -321,11 +321,12 @@ function initials(name: string): string {
 }
 
 const GRADIENTS: [string, string][] = [
-  ['#6366F1', '#A855F7'],
+  ['#4ADE80', '#16A34A'],
   ['#10B981', '#059669'],
+  ['#06B6D4', '#0D9488'],
   ['#F59E0B', '#D97706'],
   ['#EC4899', '#BE185D'],
-  ['#3B82F6', '#1D4ED8'],
+  ['#8B5CF6', '#6D28D9'],
 ];
 function hashIdx(s: string, mod: number): number {
   let h = 0;
