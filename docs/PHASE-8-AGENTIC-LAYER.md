@@ -180,6 +180,7 @@ Hai dispatcher chạy song song sẽ lấy tập việc **rời nhau**. Một ru
 - [ ] `scoring-scheduler` và broadcast-scheduler đã chuyển sang enqueue task thay vì tự chạy
 - [ ] `dueAt` thay thế hoàn toàn cron expression cho các job theo-đối-tượng
 - [ ] Dispatcher từ chối nhận task khi org chưa điền ngân sách token (mục 0.2)
+- [ ] `agent_tasks` được tạo bằng migration thật, không qua `db push --accept-data-loss` (mục 10)
 
 ---
 
@@ -196,13 +197,16 @@ ZaloCRM có lợi thế mà Comp AI không có: nguồn bằng chứng tốt nh�
 | Nguồn bằng chứng | Mã | Độ mạnh | Đã có sẵn ở đâu |
 | --- | --- | --- | --- |
 | Khách tự nhắn số điện thoại trong chat | `zalo.self-stated` | Mạnh | `Message` + `shared/phone/` |
-| Zalo profile qua SDK (touch-profile) | `zalo.profile-sdk` | Mạnh | endpoint touch-profile v3.2 |
 | Form Facebook Lead khách tự điền | `facebook.lead-form` | Mạnh | Facebook Lead Ingestion v3.3 |
 | Card chuyển khoản / QR trong chat | `zalo.bank-card` | Mạnh | bank/QR render v3.0 |
-| Trùng khớp `phoneNormalized` | `crm.phone-match` | Mạnh | `shared/phone/` |
-| Alias sale tự đặt trong Zalo | `zalo.alias` | Trung bình | `Friend.aliasInNick` |
+| Trùng khớp SĐT sau chuẩn hoá | `crm.phone-match` | Mạnh | `normalizeVnMobile()`, `normalizeVnPhone()` |
+| Profile khách đồng bộ về qua `Friend` | `zalo.friend-sync` | Trung bình — **chờ xác minh** | `friend-sync-service.ts` (mục 10) |
+| Alias sale tự đặt trong Zalo | `zalo.alias` | Trung bình | `Friend.aliasInNick` — pull định kỳ nên có thể cũ |
 | Zalo Label được gắn | `zalo.label` | Trung bình | Zalo Labels 2-way sync |
 | Suy luận từ ngữ cảnh hội thoại bởi LLM | `llm.inference` | **Yếu — luôn là suggestion** | module `ai` |
+
+> [!CAUTION]
+> Bản thảo đầu của bảng này có hai chỗ sai, đã sửa sau khi đối chiếu code thật. Xem **mục 10** để biết sai ở đâu và vì sao nó nguy hiểm.
 
 ### Schema
 
@@ -303,8 +307,8 @@ Mở rộng `backend/src/modules/ai/provider-registry.ts` để hỗ trợ funct
 | `read_chat_history` | read | Đọc `Message` của một conversation, có phân trang |
 | `search_crm` | read | Tìm contact/message/appointment — bọc lại module `search` |
 | `get_contact_profile` | read | Hồ sơ + facts hiện tại + nguồn |
-| `identify_contact` | read | Đối chiếu `phoneNormalized`, globalId, alias |
-| `enrich_from_zalo` | read | Gọi touch-profile SDK lấy gender/phone/birthday |
+| `identify_contact` | read | Đối chiếu SĐT sau chuẩn hoá, globalId, alias |
+| `enrich_from_zalo` | read | Đọc profile khách từ `Friend` đã đồng bộ |
 | `read_facebook_lead` | read | Đọc lead form gốc đã ingest |
 | `record_fact` | **write** | Ghi qua ledger, bắt buộc kèm `source` + `excerpt` |
 | `suggest_fact` | write-soft | Tạo `FactSuggestion` |
@@ -315,17 +319,22 @@ Mở rộng `backend/src/modules/ai/provider-registry.ts` để hỗ trợ funct
 > [!CAUTION]
 > **Không có tool nào nhận tham số `confidence`.** Đây là ràng buộc cứng, cần một test tự động quét signature của toàn bộ tool để đảm bảo.
 
+> [!WARNING]
+> `enrich_from_zalo` **không** được gọi `profile-operations.ts`. File đó ghi đè profile của chính nick sale. Xem mục 10.
+
 ### Skills — prose versioned như code
 
 Đặt tại `backend/src/modules/agent/skills/`, viết bằng tiếng Việt, load vào system prompt theo ngữ cảnh:
 
-| File | Nội dung |
-| --- | --- |
-| `bang-chung.md` | Thế nào là bằng chứng mạnh/yếu, khi nào được ghi |
-| `nhan-dien-khach.md` | Quy tắc đối chiếu SĐT VN, alias, tài khoản Zalo trùng |
-| `ranh-gioi-du-lieu.md` | Cái gì tuyệt đối không được suy đoán, không được ghi |
-| `viet-tom-tat.md` | Văn phong tóm tắt khách hàng cho sale Việt |
-| `chong-block-zalo.md` | Ràng buộc tần suất, giờ gửi, hạn mức |
+| File | Nội dung | Trạng thái |
+| --- | --- | --- |
+| `bang-chung.md` | Thế nào là bằng chứng mạnh/yếu, khi nào được ghi | ✅ Đã viết (PR #18) |
+| `ranh-gioi-du-lieu.md` | Cái gì tuyệt đối không được suy đoán, không được ghi | ✅ Đã viết (PR #18) |
+| `nhan-dien-khach.md` | Quy tắc đối chiếu SĐT VN, alias, tài khoản Zalo trùng | ✅ Đã viết (PR #18) |
+| `viet-tom-tat.md` | Văn phong tóm tắt khách hàng cho sale Việt | ✅ Đã viết (PR #18) |
+| `chong-block-zalo.md` | Ràng buộc tần suất, giờ gửi, hạn mức | ✅ Đã viết (PR #18) |
+
+Quy tắc phân xử: khi `bang-chung.md` cho phép ghi mà `ranh-gioi-du-lieu.md` cấm, **ranh giới thắng**.
 
 Lợi ích phụ: khách hàng doanh nghiệp custom được nghiệp vụ bằng cách sửa markdown, không cần đụng code — khớp thẳng với dịch vụ *Customize AI prompt theo nghiệp vụ* đang chào bán.
 
@@ -412,12 +421,13 @@ Hiện tại `decay-cron.ts` giảm điểm theo công thức cứng. Thay bằn
 
 | Rủi ro | Biện pháp |
 | --- | --- |
-| **Agent tự chủ + zca-js = khoá nick** | Agent **read-only + suggest — vĩnh viễn**, không riêng Phase 8 (mục 0.1). `propose_message` chỉ tạo nháp. Mọi thao tác gửi luôn qua người duyệt và qua đúng lớp chống block hiện có (200 tin/ngày, phát hiện gửi quá nhanh) |
+| **Agent tự chủ + zca-js = khoá nick** | Agent **read-only + suggest — vĩnh viễn**, không riêng Phase 8 (mục 0.1). `propose_message` chỉ tạo nháp. Mọi thao tác gửi qua người duyệt và qua lớp chống block hiện có (`message` 200 tin/ngày, burst 5/30s). **Lưu ý lớp này fail-open** — agent phải tự đếm và fail-closed (mục 10) |
 | **Nghị định 13/2023 về bảo vệ dữ liệu cá nhân** | Không enrichment tự động từ web về cá nhân người Việt. Chỉ dùng dữ liệu khách tự cung cấp trong chat / lead form. Ghi rõ trong `ranh-gioi-du-lieu.md` |
 | **Rò rỉ đa tenant** | Mọi tool nhận `organizationId` từ session, **không** từ tham số của LLM. Test: agent của org A không truy được contact org B |
 | **Prompt injection từ tin nhắn khách** | Nội dung tin nhắn khách luôn được bọc trong khối dữ liệu có nhãn, không nối thẳng vào system prompt |
 | **Privacy PIN V2** | Contact bị khoá PIN phải vô hình với agent |
 | **Chi phí LLM chạy nền** | Ngân sách token **điền thủ công** theo org (`Organization.agentTokenBudgetMonthly`), cộng dồn từ `AgentSession.tokenCost`. Chưa điền → agent không chạy. Hết ngân sách → ngừng nhận task mới (mục 0.2) |
+| **Agent ăn hết hạn mức của sale** | Agent không tiêu quá **30%** hạn mức ngày của bất kỳ nhóm thao tác nào. `friend_read` và `query` là hai nhóm dùng chung với sale (mục 10) |
 
 Nguyên tắc sandbox của Comp AI đáng ghi nhớ cho tương lai dù Phase 8 chưa cần: *shell không có egress và không có `DATABASE_URL` thì chỉ là một bộ xử lý văn bản; có cả hai thì nó có hình dạng của một đường rò dữ liệu.*
 
@@ -453,9 +463,102 @@ Nguyên tắc sandbox của Comp AI đáng ghi nhớ cho tương lai dù Phase 8
 ### Việc cần làm trước khi code
 
 - [ ] Backup DB và tag `v3.3` làm mốc rollback
-- [ ] Chốt danh sách nguồn bằng chứng và độ mạnh ở mục 4
+- [ ] Chốt danh sách nguồn bằng chứng và độ mạnh ở mục 4 — đã đối chiếu code, riêng `zalo.friend-sync` còn chờ xác minh
 - [x] ~~Quyết định: agent có được gửi tin tự động ở Phase 9 không~~ → **vĩnh viễn cần người duyệt** (chốt 15/08/2026)
 - [x] ~~Chốt ngân sách token theo org~~ → **điền thủ công, bỏ trống thì agent không chạy** (chốt 15/08/2026)
+- [x] ~~Viết `bang-chung.md` và `ranh-gioi-du-lieu.md` trước khi viết tool đầu tiên~~ → **đã viết cả 5 file skill** (PR #18)
 - [ ] Thêm UI nhập ngân sách token vào `/settings/crm/agent` — hạng mục mới sinh ra từ quyết định 0.2
 - [ ] Thêm MIT notice của `trycompai/crm` vào `THIRD-PARTY-LICENSES.md` nếu có mượn đoạn code nào
-- [ ] Viết `bang-chung.md` và `ranh-gioi-du-lieu.md` **trước** khi viết tool đầu tiên
+- [ ] Đọc `friend-sync-service.ts` để chốt độ mạnh của `zalo.friend-sync`
+- [ ] Quyết định có sửa `zalo-rate-limiter.ts` thành fail-open có ngưỡng hay giữ nguyên và để agent tự phòng
+- [ ] Review pháp lý mục Nghị định 13/2023 trong `ranh-gioi-du-lieu.md`
+
+---
+
+## 10. Đối chiếu với code thật (15/08/2026)
+
+Mục 4 và 5 ban đầu viết dựa trên README và cấu trúc thư mục. Sau đó đã đọc code thật để kiểm chứng từng mã nguồn bằng chứng.
+
+> [!NOTE]
+> **GitHub code search không index repo này** — bốn truy vấn đều trả về rỗng. Phải đọc trực tiếp từng file. Chậm hơn, nhưng đổi lại mọi con số dưới đây là số thật trong code.
+
+### Xác nhận đúng
+
+| Giả định ban đầu | Kết quả |
+| --- | --- |
+| `Friend.aliasInNick` tồn tại | ✅ Đúng. Kèm `zaloUidInNick`, `contactId`, `zaloAccountId` |
+| Có lớp chuẩn hoá SĐT dùng lại được | ✅ Đúng — `shared/phone/normalize-vn-phone.ts` |
+| Có hạn mức chống block 200 tin/ngày | ✅ Đúng, và chi tiết hơn nhiều: **9 nhóm thao tác** riêng biệt |
+| Zalo Labels 2-way sync | ✅ Đúng — `zalo-labels-routes.ts` |
+
+### Sai #1 — `zalo.profile-sdk` mô tả sai bản chất
+
+Bản thảo ghi nguồn này là "Zalo profile qua SDK (touch-profile)", độ mạnh **Mạnh**.
+
+Thực tế `profile-operations.ts` quản lý profile của **chính tài khoản Zalo của doanh nghiệp**: `updateProfile()` đổi tên / giới tính / ngày sinh của nick sale, cộng `listAvatars` / `deleteAvatar` / `reuseAvatar`. Nó không lấy thông tin khách hàng.
+
+> [!CAUTION]
+> Nếu cứ theo bản thảo mà viết `enrich_from_zalo`, agent sẽ gọi một hàm **ghi đè profile nick của nhân viên** trong khi tưởng mình đang đọc dữ liệu khách hàng.
+
+**Đã sửa thành:** mã `zalo.friend-sync`, độ mạnh **Trung bình**, nguồn thật cần xác minh lại từ `friend-sync-service.ts` / `friend-event-handler.ts` trước khi cho phép ghi.
+
+### Sai #2 — tên field `phoneNormalized` là bịa
+
+Code thật dùng hai helper:
+
+```ts
+normalizeVnMobile(raw)  // shared/utils/phone.ts
+                        // → "84XXXXXXXXX" canonical, không có dấu +
+
+normalizeVnPhone(raw)   // shared/phone/normalize-vn-phone.ts
+                        // → { phoneE164, phoneLocal, valid, invalidReason }
+                        // phoneE164 = "+84XXXXXXXXX", phoneLocal = "0XXXXXXXXX"
+```
+
+Đầu số di động hợp lệ là **3/5/7/8/9**. Comment trong file ghi `+84[3-9]` nhưng regex thật là `/^[35789]/`, tức `+844...` và `+846...` bị loại — regex đúng, comment sai.
+
+Hàm tự cắt tiền tố `p:`, `tel:`, `sdt:`, `sđt:`, `phone:`, `dt:`, `đt:`. Riêng `p:` là dấu vết của **Facebook Lead Ads** — gặp `p:+84...` nghĩa là dữ liệu đến từ lead form, phải ghi `source` là `facebook.lead-form` chứ không phải `zalo.self-stated`.
+
+Chuỗi dưới 9 chữ số bị loại với `invalidReason: 'too_short'`.
+
+### Phát hiện #1 — rate limiter là fail-open
+
+> [!CAUTION]
+> `checkLimits()` trong `zalo-rate-limiter.ts` bọc toàn bộ thân hàm trong `try/catch` và trả `{ allowed: true }` khi có lỗi. Redis chết, mạng chập, key hỏng — **mọi thao tác đều được cho qua**.
+
+Với người ngồi gõ thì thiết kế này hợp lý: người không gửi nổi 500 tin trong một phút dù hệ thống cho phép. Với agent thì ngược lại — agent **phát được** 500 request/phút, và hôm Redis chết chính là hôm khoá nick của nhân viên.
+
+Đây là lý do `chong-block-zalo.md` bắt agent tự đếm và fail-closed, ngược chiều với tầng dưới. Việc có sửa chính rate limiter hay không là quyết định riêng, vì nó ảnh hưởng cả đường người dùng.
+
+Hạn mức thật (`CATEGORY_LIMITS`):
+
+| Nhóm | Mỗi ngày | Burst |
+| --- | --- | --- |
+| `message` | 200 | 5 / 30s |
+| `reaction` | 300 | 10 / 30s |
+| `chat_action` | 500 | 15 / 30s |
+| `group_admin` | 50 | 5 / 60s |
+| `group_read` | 1000 | 20 / 30s |
+| `friend_action` | 30 | 8 / 60s |
+| `friend_read` | 500 | 10 / 30s |
+| `profile` | 10 | 3 / 60s |
+| `query` | 2000 | 30 / 30s |
+
+Agent tiêu nhiều nhất ở `friend_read` và `query` — cùng bộ đếm sale đang dùng để làm việc. Nếu agent ăn hết `friend_read` lúc 10 giờ sáng, sale không tra được khách cả ngày còn lại và sẽ không biết tại sao.
+
+### Phát hiện #2 — migrations không phản ánh schema
+
+> [!WARNING]
+> `prisma/migrations/` dừng ở `20260813120000_add_user_token_version` và **không có migration nào cho Phase 6 Lead Scoring**, dù Phase 6 đã chạy.
+
+Khớp với việc entrypoint Docker dùng `prisma db push --accept-data-loss`. Nghĩa là `AgentTask` của Phase 8a cũng sẽ vào DB không qua migration review.
+
+Điều này đáng cân nhắc hơn bình thường vì `agent_tasks` là bảng **có lease**: chạy `db push --accept-data-loss` lúc đang có task `running` thì mất task, và không có gì báo cho ai biết. Nên dùng migration thật riêng cho Phase 8a.
+
+### Alias không đáng tin bằng tưởng tượng
+
+Alias được **pull định kỳ** — SDK không bắn event khi alias đổi (`FriendEvent` không có `ALIAS_CHANGE`). Mỗi lần đồng bộ tối đa **4.000 alias/nick** (200 mỗi trang × 20 trang, hard cap chống vòng lặp vô hạn).
+
+Hệ quả cho agent: **không được kết luận "khách này không có alias"**. Chỉ biết là lần pull gần nhất không thấy. Nick nào nhiều hơn 4.000 bạn bè thì danh sách bị cắt.
+
+Khi alias đổi, hệ thống ghi activity `friend_alias_change` với `systemSource: 'zalo_alias_sync'` — dấu vết tốt để truy lịch sử tên gọi.
