@@ -88,7 +88,7 @@ watch(() => route.path, () => { drawerOpen.value = false; });
 <style scoped>
 .bot-auto-shell {
   display: flex;
-  height: calc(100vh - 64px);
+  height: calc(100vh - var(--smax-topnav-h, 76px));
   position: relative;
 }
 
@@ -266,12 +266,12 @@ watch(() => route.path, () => { drawerOpen.value = false; });
   .bot-auto-shell {
     flex-direction: column;
     height: auto;
-    min-height: calc(100vh - 64px);
+    min-height: calc(100vh - var(--smax-topnav-h, 76px));
   }
   .mobile-trigger { display: flex; }
   .bot-auto-sidebar {
     position: fixed;
-    top: 64px;
+    top: var(--smax-topnav-h, 76px);
     bottom: 0;
     left: 0;
     width: 280px;
