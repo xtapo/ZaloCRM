@@ -327,14 +327,14 @@ const NickRow = defineComponent({
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     };
     const avatarColor = (name: string | null) => {
-      const palette = [
-        'linear-gradient(135deg,#f59e0b,#ef4444)',
-        'linear-gradient(135deg,#3b82f6,#1e40af)',
+      const AVATAR_COLORS = [
+        'linear-gradient(135deg,#4ade80,#16a34a)',
         'linear-gradient(135deg,#10b981,#059669)',
+        'linear-gradient(135deg,#f59e0b,#d97706)',
         'linear-gradient(135deg,#8b5cf6,#6d28d9)',
       ];
       const h = (name || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-      return palette[h % palette.length];
+      return AVATAR_COLORS[h % AVATAR_COLORS.length];
     };
     const statusLabel = (s: string) =>
       s === 'connected' ? { label: 'Đang kết nối', color: '#10B981' }
@@ -398,7 +398,7 @@ const NickRow = defineComponent({
 .pin-action { flex-shrink: 0; }
 .pin-btn { padding: 9px 18px; border: none; border-radius: 8px; background: #1E40AF; color: white; font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit; white-space: nowrap; }
 .pin-btn:hover { background: #1E3A8A; }
-.pin-btn.empty { background: #5E6AD2; }
+.pin-btn.empty { background: var(--smax-primary, #16a34a); }
 .pin-btn-group { display: flex; gap: 6px; }
 .pin-btn-split { padding: 8px 14px; border-radius: 7px; font-weight: 700; font-size: 12.5px; cursor: pointer; font-family: inherit; border: 1px solid transparent; white-space: nowrap; }
 .pin-btn-split.lock { background: #B45309; color: white; border-color: #B45309; }
@@ -454,17 +454,17 @@ const NickRow = defineComponent({
 :deep(.nr-meta) { font-size: 11.5px; color: #6B7280; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 :deep(.nr-dot) { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
 :deep(.nr-uid) { color: #9CA3AF; }
-:deep(.nr-set-internal), :deep(.nr-clear-internal) { background: transparent; border: 1px dashed #C7D2FE; color: #5E6AD2; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px; cursor: pointer; align-self: flex-start; margin-top: 2px; font-family: inherit; }
-:deep(.nr-set-internal):hover, :deep(.nr-clear-internal):hover { background: #EEF0FF; border-style: solid; }
+:deep(.nr-set-internal), :deep(.nr-clear-internal) { background: transparent; border: 1px dashed #C7D2FE; color: var(--smax-primary, #16a34a); font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px; cursor: pointer; align-self: flex-start; margin-top: 2px; font-family: inherit; }
+:deep(.nr-set-internal):hover, :deep(.nr-clear-internal):hover { background: var(--smax-primary-soft, #eaf7ef); border-style: solid; }
 :deep(.nr-clear-internal) { color: #B91C1C; border-color: #FCA5A5; }
 :deep(.nr-clear-internal:hover) { background: #FEF2F2; }
 :deep(.nr-toggle) { display: inline-flex; align-items: center; gap: 8px; background: transparent; border: none; cursor: pointer; padding: 4px 0; font-family: inherit; }
 :deep(.nr-toggle-track) { width: 38px; height: 22px; border-radius: 9999px; background: #D1D5DB; position: relative; transition: background 0.15s; }
 :deep(.nr-toggle-thumb) { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: white; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform 0.15s; }
-:deep(.nr-toggle.on .nr-toggle-track) { background: #5E6AD2; }
+:deep(.nr-toggle.on .nr-toggle-track) { background: var(--smax-primary, #16a34a); }
 :deep(.nr-toggle.on .nr-toggle-thumb) { transform: translateX(16px); }
 :deep(.nr-toggle-label) { font-size: 12px; font-weight: 600; color: #374151; min-width: 60px; text-align: left; }
-:deep(.nr-toggle.on .nr-toggle-label) { color: #5E6AD2; }
+:deep(.nr-toggle.on .nr-toggle-label) { color: var(--smax-primary, #16a34a); }
 :deep(.nr-toggle:disabled) { opacity: 0.5; cursor: not-allowed; }
 
 .ptab-error { position: fixed; bottom: 24px; right: 24px; background: #FEF2F2; color: #B91C1C; border: 1px solid #FCA5A5; padding: 12px 18px; border-radius: 10px; font-size: 13px; display: flex; align-items: center; gap: 12px; cursor: pointer; box-shadow: 0 8px 24px rgba(185, 28, 28, 0.15); z-index: 1000; max-width: 480px; }
