@@ -68,12 +68,12 @@ const roleClass = computed(() => `role-${authStore.user?.role || 'member'}`);
 <style scoped>
 .profile-page { max-width: 720px; font-family: inherit; }
 .page-head { margin-bottom: 24px; }
-.page-title { font-size: 20px; font-weight: 700; color: #1F2D3D; margin: 0 0 4px; }
-.page-desc { font-size: 13px; color: #6B7785; margin: 0; }
+.page-title { font-size: 20px; font-weight: 700; color: var(--smax-text, #1F2D3D); margin: 0 0 4px; }
+.page-desc { font-size: 13px; color: var(--smax-text-muted, #6B7785); margin: 0; }
 
 .profile-card {
-  background: white;
-  border: 1px solid #E4E5E9;
+  background: var(--smax-surface, white);
+  border: 1px solid var(--smax-surface-border, #E4E5E9);
   border-radius: 12px;
   padding: 24px;
   display: flex;
@@ -99,12 +99,12 @@ const roleClass = computed(() => `role-${authStore.user?.role || 'member'}`);
   width: 100px;
   font-size: 11.5px;
   font-weight: 600;
-  color: #6B7785;
+  color: var(--smax-text-muted, #6B7785);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.pc-value { font-size: 14px; color: #1F2D3D; font-weight: 500; }
-.pc-value.muted { font-size: 12px; color: #97A0AC; font-family: monospace; }
+.pc-value { font-size: 14px; color: var(--smax-text, #1F2D3D); font-weight: 500; }
+.pc-value.muted { font-size: 12px; color: var(--smax-text-subtle, #97A0AC); font-family: monospace; }
 
 .role-chip {
   display: inline-block;
@@ -113,9 +113,9 @@ const roleClass = computed(() => `role-${authStore.user?.role || 'member'}`);
   font-size: 11.5px;
   font-weight: 600;
 }
-.role-chip.role-owner { background: #FEF3C7; color: #92400E; }
+.role-chip.role-owner { background: var(--smax-warning-soft, #FEF3C7); color: var(--smax-warning, #92400E); }
 .role-chip.role-admin { background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary-hover, #15803d); }
-.role-chip.role-member { background: #DCFCE7; color: #166534; }
+.role-chip.role-member { background: var(--smax-success-soft, #DCFCE7); color: var(--smax-primary-hover, #166534); }
 
 .actions { display: flex; gap: 10px; }
 .btn-ghost,
@@ -124,9 +124,9 @@ const roleClass = computed(() => `role-${authStore.user?.role || 'member'}`);
   font-size: 13px;
   font-weight: 500;
   border-radius: 8px;
-  border: 1px solid #E4E5E9;
-  background: white;
-  color: #1F2D3D;
+  border: 1px solid var(--smax-surface-border, #E4E5E9);
+  background: var(--smax-surface, white);
+  color: var(--smax-text, #1F2D3D);
   cursor: pointer;
   font-family: inherit;
   text-decoration: none;

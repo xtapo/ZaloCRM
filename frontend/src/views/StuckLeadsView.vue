@@ -699,7 +699,9 @@ onMounted(loadData);
   z-index: 100;
 }
 .modal-card {
-  background: white;
+  background: var(--smax-surface, white);
+  color: var(--smax-text, #111827);
+  border: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.08));
   border-radius: var(--radius-xl, 24px);
   width: 90%;
   max-width: 520px;
@@ -708,7 +710,7 @@ onMounted(loadData);
 }
 .modal-header {
   padding: 18px 22px;
-  border-bottom: 1px solid rgba(17, 24, 39, 0.06);
+  border-bottom: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.06));
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -717,6 +719,7 @@ onMounted(loadData);
   font-family: var(--font-heading, 'Plus Jakarta Sans', sans-serif);
   margin: 0;
   font-size: 16px;
+  color: var(--smax-text, #111827);
 }
 .modal-close {
   border: none;
@@ -738,11 +741,13 @@ onMounted(loadData);
 }
 .modal-textarea {
   width: 100%;
-  border: 1px solid rgba(17, 24, 39, 0.1);
+  border: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.1));
   border-radius: var(--radius-sm, 12px);
   padding: 12px;
   font-family: inherit;
   font-size: 13px;
+  background: var(--smax-surface-muted, #f8fafc);
+  color: var(--smax-text, #111827);
   resize: vertical;
   outline: none;
 }
@@ -757,7 +762,7 @@ onMounted(loadData);
 }
 .modal-footer {
   padding: 14px 22px;
-  border-top: 1px solid rgba(17, 24, 39, 0.06);
+  border-top: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.06));
   display: flex;
   justify-content: flex-end;
   gap: 8px;

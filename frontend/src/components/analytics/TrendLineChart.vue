@@ -71,7 +71,7 @@ const chartData = computed(() => {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: var(--smax-text, #111827);
   padding-bottom: 0;
 }
 .chart-wrap { position: relative; height: 240px; width: 100%; }
@@ -79,6 +79,6 @@ const chartData = computed(() => {
   text-align: center;
   padding: 32px 0;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--smax-text-subtle, #9ca3af);
 }
 </style>

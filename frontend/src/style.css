@@ -80,6 +80,68 @@
   --shadow-glow: 0 10px 24px -8px var(--smax-primary-glow);
 }
 
+/* ════════ Legacy Dark Theme — Palette xanh lá tối (WCAG AA) ════════ */
+.v-theme--legacy-dark {
+  /* Brand green for dark mode */
+  --smax-primary: #22c55e;
+  --smax-primary-hover: #4ade80;
+  --smax-primary-dark: #15803d;
+  --smax-primary-light: #143823;
+  --smax-primary-soft: #173b26;
+  --smax-primary-glow: rgba(34, 197, 94, 0.25);
+
+  /* Canvas & surfaces for dark mode */
+  --smax-canvas: #0b1a12;
+  --smax-canvas-2: #0f2319;
+  --smax-surface: #12241a;
+  --smax-surface-muted: #17301f;
+  --smax-bg: #12241a;
+
+  --smax-header-bg: #12241a;
+  --smax-header-border: rgba(230, 244, 236, 0.1);
+
+  /* Typography / Text colors (WCAG AA: text >= 4.5:1, headers/icons >= 3:1) */
+  --smax-text: #e6f4ec;        /* ~13.5:1 ratio on #12241a */
+  --smax-text-muted: #9ca3af;  /* ~5.8:1 ratio on #12241a */
+  --smax-text-subtle: #94a3b8; /* ~5.9:1 ratio on #12241a */
+
+  --smax-surface-glass: rgba(18, 36, 26, 0.85);
+  --smax-surface-border: rgba(230, 244, 236, 0.12);
+
+  /* Dark grey scale overrides */
+  --smax-grey-50: #12241a;
+  --smax-grey-100: #17301f;
+  --smax-grey-200: #1f3d2a;
+  --smax-grey-300: #2d553b;
+  --smax-grey-400: #6b8f77;
+  --smax-grey-500: #8fa395;
+  --smax-grey-600: #9ca3af;
+  --smax-grey-700: #d1d5db;
+  --smax-grey-800: #e5e7eb;
+  --smax-grey-900: #f9fafb;
+
+  /* Semantic soft backgrounds in dark mode */
+  --smax-success: #22c55e;
+  --smax-success-soft: rgba(34, 197, 94, 0.18);
+  --smax-warning: #f59e0b;
+  --smax-warning-soft: rgba(245, 158, 11, 0.18);
+  --smax-error: #ef4444;
+  --smax-error-soft: rgba(239, 68, 68, 0.18);
+  --smax-info: #38bdf8;
+  --smax-info-soft: rgba(56, 189, 248, 0.18);
+
+  /* Chat bubble & group surface */
+  --smax-bubble-self: #173b26;
+  --smax-group-bg: #2a1b18;
+
+  /* Shadow overrides */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 10px 24px -8px var(--smax-primary-glow);
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }
@@ -244,6 +306,15 @@ h1, h2, h3, h4, .text-h1, .text-h2, .text-h3, .text-h4 {
 .chip-purple  { background: rgba(139, 92, 246, 0.12); color: #6d28d9; }
 .chip-zalo    { background: rgba(245, 158, 11, 0.16); color: #b45309; }
 
+.v-theme--legacy-dark .chip-grey    { background: rgba(230, 244, 236, 0.08); color: var(--smax-grey-700); }
+.v-theme--legacy-dark .chip-info    { background: rgba(56, 189, 248, 0.16); color: #38bdf8; }
+.v-theme--legacy-dark .chip-cyan    { background: rgba(56, 189, 248, 0.16); color: #38bdf8; }
+.v-theme--legacy-dark .chip-success { background: rgba(34, 197, 94, 0.16); color: #4ade80; }
+.v-theme--legacy-dark .chip-warning { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
+.v-theme--legacy-dark .chip-error   { background: rgba(239, 68, 68, 0.16); color: #f87171; }
+.v-theme--legacy-dark .chip-purple  { background: rgba(168, 85, 247, 0.16); color: #c084fc; }
+.v-theme--legacy-dark .chip-zalo    { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
+
 /* Badge & Chip Micro Animations */
 .chip-score {
   font-weight: 700;
@@ -292,7 +363,6 @@ h1, h2, h3, h4, .text-h1, .text-h2, .text-h3, .text-h4 {
 .soft-table {
   background: transparent;
 }
-.soft-table :deep(thead th),
 .soft-table thead th {
   font-size: 12px !important;
   font-weight: 600 !important;

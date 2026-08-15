@@ -222,7 +222,7 @@ function logout() {
 <style scoped>
 /* Canvas xám nhạt — navbar là một "pill" trắng nổi trên canvas */
 .smax-app {
-  background: #eceef0;
+  background: var(--smax-canvas, #eceef0);
 }
 
 .smax-topnav {
@@ -245,14 +245,15 @@ function logout() {
   align-items: center;
   gap: 6px;
   padding: 0 12px 0 14px;
-  background: #ffffff;
+  background: var(--smax-surface, #ffffff);
+  border: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.06));
   border-radius: 999px;
-  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.06);
+  box-shadow: var(--shadow-sm, 0 6px 18px rgba(17, 24, 39, 0.06));
 }
 
 .logo {
   width: 38px; height: 38px;
-  background: #eaf7ef; border-radius: 50%;
+  background: var(--smax-primary-soft, #eaf7ef); border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   margin-right: 8px;
   text-decoration: none;
@@ -267,22 +268,22 @@ function logout() {
 }
 
 .workspace {
-  background: #f6f8f7;
-  border: none;
+  background: var(--smax-surface-muted, #f6f8f7);
+  border: 1px solid var(--smax-surface-border, transparent);
   display: flex; align-items: center; gap: 8px;
   padding: 7px 14px; border-radius: 999px;
   margin-right: 12px;
-  cursor: pointer; color: #111827;
+  cursor: pointer; color: var(--smax-text, #111827);
   font-size: 13px; font-weight: 600;
   transition: all 0.2s ease;
 }
 .workspace:hover {
-  background: #eaf7ef;
-  color: #15803d;
+  background: var(--smax-primary-soft, #eaf7ef);
+  color: var(--smax-primary, #15803d);
 }
 .ws-logo {
   width: 22px; height: 22px;
-  background: linear-gradient(135deg, #22c55e, #15803d);
+  background: linear-gradient(135deg, var(--smax-primary, #22c55e), var(--smax-primary-dark, #15803d));
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   color: white; font-size: 11px; font-weight: 700;
@@ -298,7 +299,7 @@ function logout() {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 8px 14px; border-radius: 999px;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--smax-text-muted, #6b7280);
   font-size: 13px; font-weight: 500;
   background: transparent; border: none;
   white-space: nowrap;
@@ -323,11 +324,11 @@ function logout() {
 .nav-tab .ic { font-size: 14px; line-height: 1; }
 .nav-tab .caret { font-size: 10px; opacity: 0.6; margin-left: 2px; }
 .nav-tab:hover {
-  background: #f2f4f3;
-  color: #111827;
+  background: var(--smax-surface-muted, #f2f4f3);
+  color: var(--smax-text, #111827);
 }
 .nav-tab.active {
-  background: #16a34a;
+  background: var(--smax-primary, #16a34a);
   color: #ffffff;
   font-weight: 600;
   box-shadow: 0 8px 18px -8px rgba(22, 163, 74, 0.55);
@@ -349,17 +350,17 @@ function logout() {
   .topnav-search { display: none; }
 }
 .topnav-search :deep(.v-field) {
-  background: #f6f8f7 !important;
-  color: #111827;
+  background: var(--smax-surface-muted, #f6f8f7) !important;
+  color: var(--smax-text, #111827);
   border-radius: 999px !important;
-  border: none !important;
+  border: 1px solid var(--smax-surface-border, transparent) !important;
   box-shadow: none !important;
   transition: all 0.2s ease;
 }
 .topnav-search :deep(.v-field:hover) {
-  background: #eef1f0 !important;
+  background: var(--smax-primary-soft, #eef1f0) !important;
 }
-.topnav-search :deep(input) { color: #111827 !important; }
+.topnav-search :deep(input) { color: var(--smax-text, #111827) !important; }
 
 .icon-btn,
 :deep(.icon-btn-wrap) > * {
@@ -367,26 +368,27 @@ function logout() {
   border-radius: 50%;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  color: #6b7280;
+  color: var(--smax-text-muted, #6b7280);
   position: relative;
   font-size: 16px;
   text-decoration: none;
-  background: #f6f8f7; border: none;
+  background: var(--smax-surface-muted, #f6f8f7);
+  border: 1px solid var(--smax-surface-border, transparent);
   margin-left: 6px;
   transition: all 0.2s ease;
 }
 .icon-btn:hover,
 :deep(.icon-btn-wrap) > *:hover {
-  background: #eaf7ef;
-  color: #15803d;
+  background: var(--smax-primary-soft, #eaf7ef);
+  color: var(--smax-primary, #15803d);
 }
 
 .user-avatar {
   width: 40px; height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #22c55e, #15803d);
+  background: linear-gradient(135deg, var(--smax-primary, #22c55e), var(--smax-primary-dark, #15803d));
   color: white; font-weight: 700;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--smax-surface, #ffffff);
   cursor: pointer;
   margin-left: 8px;
   font-size: 12px;
@@ -399,16 +401,16 @@ function logout() {
 }
 
 .smax-main {
-  background: #eceef0;
+  background: var(--smax-canvas, #eceef0);
 }
 .smax-main :deep(.v-main__wrap) { min-height: calc(100vh - 76px); }
 
 :deep(.v-overlay__content > .v-list) {
-  background: #ffffff;
-  color: #111827;
+  background: var(--smax-surface, #ffffff);
+  color: var(--smax-text, #111827);
   border-radius: 20px;
-  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.1);
-  border: none;
+  box-shadow: var(--shadow-lg, 0 14px 34px rgba(17, 24, 39, 0.1));
+  border: 1px solid var(--smax-surface-border, transparent);
   padding: 6px;
 }
 :deep(.v-overlay__content > .v-list .v-list-item) {

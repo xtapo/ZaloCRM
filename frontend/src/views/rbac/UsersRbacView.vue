@@ -350,7 +350,7 @@ function avatarColor(name: string): string {
 }
 </script>
 
-<style>
+<style scoped>
 /* UsersRbacView — Airtable-style table */
 
 .at-toolbar {
@@ -368,8 +368,8 @@ function avatarColor(name: string): string {
 .at-toolbar-spacer { flex: 1; }
 .at-count {
   font-size: 12px;
-  color: #41454d;
-  background: #f0f1f3;
+  color: var(--smax-text-muted, #41454d);
+  background: var(--smax-surface-muted, #f0f1f3);
   padding: 6px 12px;
   border-radius: 9999px;
   font-weight: 500;
@@ -378,11 +378,11 @@ function avatarColor(name: string): string {
 
 /* Airtable table */
 .at-table-wrap {
-  background: white;
-  border: 1px solid #e0e2e6;
+  background: var(--smax-surface, white);
+  border: 1px solid var(--smax-surface-border, #e0e2e6);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(24,29,38,0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 .at-table {
   width: 100%;
@@ -395,15 +395,15 @@ function avatarColor(name: string): string {
 .at-table thead th {
   position: sticky;
   top: 0;
-  background: #f8fafc;
+  background: var(--smax-surface-muted, #f8fafc);
   padding: 12px 14px;
   text-align: left;
   font-weight: 600;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: #41454d;
-  border-bottom: 2px solid #e0e2e6;
+  color: var(--smax-text-muted, #41454d);
+  border-bottom: 2px solid var(--smax-surface-border, #e0e2e6);
   white-space: nowrap;
 }
 .th-num { width: 46px; text-align: center !important; }
@@ -419,16 +419,16 @@ function avatarColor(name: string): string {
 .at-table tbody tr {
   cursor: pointer;
   transition: background 0.1s;
-  border-bottom: 1px solid #f0f1f3;
+  border-bottom: 1px solid var(--smax-surface-border, #f0f1f3);
 }
-.at-table tbody tr:hover { background: #f8fafc; }
-.at-table tbody tr.row-active { background: #fdf3df; }
-.at-table tbody tr.row-active:hover { background: #fceec5; }
+.at-table tbody tr:hover { background: var(--smax-surface-muted, #f8fafc); }
+.at-table tbody tr.row-active { background: var(--smax-primary-soft, #eaf7ef); }
+.at-table tbody tr.row-active:hover { background: var(--smax-primary-soft, #d8ecda); }
 .at-table tbody tr.row-inactive .cell-name-main,
 .at-table tbody tr.row-inactive .cell-email {
-  color: #9297a0;
+  color: var(--smax-text-subtle, #9297a0);
   text-decoration: line-through;
-  text-decoration-color: #c9ccd1;
+  text-decoration-color: var(--smax-surface-border, #c9ccd1);
 }
 .at-table tbody tr:last-child { border-bottom: 0; }
 .at-table tbody td {
@@ -439,7 +439,7 @@ function avatarColor(name: string): string {
 /* Cells */
 .cell-num {
   text-align: center;
-  color: #9297a0;
+  color: var(--smax-text-subtle, #9297a0);
   font-size: 11px;
   font-weight: 500;
 }
@@ -464,7 +464,7 @@ function avatarColor(name: string): string {
 .cell-name-main {
   font-size: 13px;
   font-weight: 500;
-  color: #181d26;
+  color: var(--smax-text, #181d26);
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -477,13 +477,13 @@ function avatarColor(name: string): string {
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
-.owner-tag { color: #7a5818; }
-.admin-tag { color: #0a2e0e; }
+.owner-tag { color: var(--smax-warning, #7a5818); }
+.admin-tag { color: var(--smax-primary-hover, #0a2e0e); }
 
 .cell-email {
   font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
   font-size: 12px;
-  color: #41454d;
+  color: var(--smax-text-muted, #41454d);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -502,41 +502,41 @@ function avatarColor(name: string): string {
   white-space: nowrap;
   line-height: 1.2;
 }
-.chip-dept { background: #e3ede4; color: #0a2e0e; }
-.chip-leader { background: #fdf3df; color: #7a5818; }
-.chip-deputy { background: #f5e9d4; color: #aa2d00; }
-.chip-member { background: #f0f1f3; color: #41454d; }
-.chip-system { background: #fdf3df; color: #7a5818; }
-.chip-custom { background: #e0e9f5; color: #1b61c9; }
+.chip-dept { background: var(--smax-primary-soft, #e3ede4); color: var(--smax-primary-hover, #0a2e0e); }
+.chip-leader { background: var(--smax-warning-soft, #fdf3df); color: var(--smax-warning, #7a5818); }
+.chip-deputy { background: var(--smax-error-soft, #f5e9d4); color: var(--smax-error, #aa2d00); }
+.chip-member { background: var(--smax-surface-muted, #f0f1f3); color: var(--smax-text-muted, #41454d); }
+.chip-system { background: var(--smax-warning-soft, #fdf3df); color: var(--smax-warning, #7a5818); }
+.chip-custom { background: var(--smax-primary-soft, #e0e9f5); color: var(--smax-primary, #1b61c9); }
 /* Phase Privacy v2 2026-05-23 — Nick liên lạc nội bộ chip */
 .chip-internal {
-  background: #FEF3C7; color: #92400E;
+  background: var(--smax-warning-soft, #FEF3C7); color: var(--smax-warning, #92400E);
   text-decoration: none; cursor: pointer;
 }
-.chip-internal:hover { background: #FDE68A; }
-.chip-active { background: #d8ecda; color: #0a2e0e; }
-.chip-inactive { background: #f0f1f3; color: #9297a0; }
+.chip-internal:hover { opacity: 0.9; }
+.chip-active { background: var(--smax-primary-soft, #d8ecda); color: var(--smax-primary-hover, #0a2e0e); }
+.chip-inactive { background: var(--smax-surface-muted, #f0f1f3); color: var(--smax-text-subtle, #9297a0); }
 
 .at-empty {
-  color: #c9ccd1;
+  color: var(--smax-text-subtle, #c9ccd1);
   font-size: 12px;
 }
 
 .cell-actions { text-align: right; }
 .at-btn-icon {
-  background: white;
-  border: 1px solid #dddddd;
+  background: var(--smax-surface, white);
+  border: 1px solid var(--smax-surface-border, #dddddd);
   width: 28px;
   height: 28px;
   border-radius: 6px;
   cursor: pointer;
-  color: #41454d;
+  color: var(--smax-text-muted, #41454d);
   font-size: 12px;
   transition: all 0.1s;
 }
 .at-btn-icon:hover {
-  background: #181d26;
+  background: var(--smax-primary, #181d26);
   color: white;
-  border-color: #181d26;
+  border-color: var(--smax-primary, #181d26);
 }
 </style>
