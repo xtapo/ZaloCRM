@@ -64,9 +64,9 @@ function onSelect(key: string) {
   transition: all 0.15s;
 }
 .reaction-trigger-btn:hover {
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
-  border-color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
+  border-color: var(--smax-primary);
   transform: scale(1.08);
 }
 
