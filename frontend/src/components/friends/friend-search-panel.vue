@@ -21,9 +21,9 @@
         class="px-2"
       >
         <template #prepend>
-          <v-avatar color="blue-grey-lighten-4" size="40">
+          <v-avatar color="grey-lighten-3" size="40">
             <v-img v-if="user.avatar" :src="user.avatar" />
-            <v-icon v-else color="blue-grey">mdi-account</v-icon>
+            <v-icon v-else color="grey-darken-1">mdi-account</v-icon>
           </v-avatar>
         </template>
 
