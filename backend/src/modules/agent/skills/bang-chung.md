@@ -14,7 +14,7 @@ Một dữ kiện sai mà tự tin còn tệ hơn một ô trống. Ô trống t
 ## Ba câu hỏi trước mỗi lần ghi
 
 1. **Tôi thấy điều này ở đâu?**
-   Nếu không chỉ được ra một `Message` cụ thể, một lead form, hay một lần gọi SDK cụ thể → **không ghi**.
+   Nếu không chỉ được ra một `Message` cụ thể, một lead form, hay một bản ghi `Friend` cụ thể → **không ghi**.
 2. **Khách tự nói ra, hay tôi suy ra?**
    Khách tự nói = mạnh. Tôi suy ra = yếu, luôn luôn là đề xuất.
 3. **Nếu sale hỏi "sao bạn biết?", tôi dán được đoạn nào ra?**
@@ -25,15 +25,20 @@ Một dữ kiện sai mà tự tin còn tệ hơn một ô trống. Ô trống t
 | Mã nguồn | Độ mạnh | Nghĩa là |
 | --- | --- | --- |
 | `zalo.self-stated` | Mạnh | Khách tự gõ ra trong tin nhắn |
-| `zalo.profile-sdk` | Mạnh | Khách tự khai trên profile Zalo của họ |
 | `facebook.lead-form` | Mạnh | Khách tự điền vào form |
 | `zalo.bank-card` | Mạnh | Khách gửi card chuyển khoản / QR |
-| `crm.phone-match` | Mạnh | Hai bản ghi trùng `phoneNormalized` |
-| `zalo.alias` | Trung bình | Sale tự đặt, có thể cũ hoặc gõ vội |
+| `crm.phone-match` | Mạnh | Hai bản ghi trùng số sau khi chuẩn hoá |
+| `zalo.friend-sync` | Trung bình | Dữ liệu profile khách đồng bộ về qua `Friend` |
+| `zalo.alias` | Trung bình | Sale tự đặt, pull định kỳ nên có thể cũ |
 | `zalo.label` | Trung bình | Sale tự gắn, phản ánh quy ước nội bộ |
 | `llm.inference` | **Yếu** | Chính bạn suy ra từ ngữ cảnh |
 
-Quy tắc đọc bảng này: **độ mạnh thuộc về nguồn, không thuộc về cảm giác của bạn về nguồn đó.** Một câu khách tự nói vẫn là `Mạnh` kể cả khi bạn thấy nó khó tin. Một suy luận của bạn vẫn là `Yếu` kể cả khi bạn thấy nó hiển nhiên.
+> [!WARNING]
+> **`zalo.friend-sync` cần xác minh lại trước khi viết tool.**
+> Bản thảo đầu của spec gọi nguồn này là `zalo.profile-sdk` và trỏ vào `profile-operations.ts`. Đó là nhầm: file đó quản lý profile của **chính tài khoản Zalo của doanh nghiệp** (đổi tên, giới tính, ngày sinh, avatar của nick sale), không phải lấy thông tin khách.
+> Nguồn thật nhiều khả năng là `friend-sync-service.ts` / `friend-event-handler.ts`. Phải đọc hai file đó và chốt độ mạnh trước khi cho phép ghi từ nguồn này.
+
+Quy tắc đọc bảng: **độ mạnh thuộc về nguồn, không thuộc về cảm giác của bạn về nguồn đó.** Một câu khách tự nói vẫn là `Mạnh` kể cả khi bạn thấy nó khó tin. Một suy luận của bạn vẫn là `Yếu` kể cả khi bạn thấy nó hiển nhiên.
 
 ## Quy tắc ghi
 
@@ -56,20 +61,13 @@ Khi hai nguồn **Mạnh** mâu thuẫn nhau: **không tự chọn bên nào.** 
 - **Cắt đúng phần cần thiết.** Đừng bê cả đoạn chat riêng tư vào ledger chỉ vì trong đó có một số điện thoại.
 - Luôn kèm `sourceRefType` + `sourceRefId` để sale bấm ra được tin nhắn gốc.
 
-## Số điện thoại Việt Nam
+## Số điện thoại
 
-Trước khi so sánh hoặc ghi, luôn chuẩn hoá qua `shared/phone/`. Bốn chuỗi sau là **cùng một số**:
-
-```text
-0912 345 678
-0912345678
-+84912345678
-84912345678
-```
+Không tự viết logic so sánh số. Dùng đúng helper đang có trong `shared/phone/` và `shared/utils/phone.ts`. Chi tiết ở `nhan-dien-khach.md`.
 
 Ghi `value` theo đúng định dạng khách gõ, ghi `valueNormalized` theo dạng chuẩn. Đừng tự "sửa đẹp" số của khách trong `value`.
 
-Một chuỗi 10 chữ số không tự động là số điện thoại. Nó có thể là số tài khoản, mã đơn, hoặc CCCD — xem `ranh-gioi-du-lieu.md` về CCCD.
+Một chuỗi 10 chữ số không tự động là số điện thoại. Nó có thể là số tài khoản, mã đơn, hoặc CCCD — xem `ranh-gioi-du-lieu.md`.
 
 ## Năm ví dụ
 
@@ -81,7 +79,7 @@ Một chuỗi 10 chữ số không tự động là số điện thoại. Nó c�
 
 Khách tự gõ ra. Không cần hỏi ai.
 
-### 2. Alias của sale — tách làm hai phần
+### 2. Alias của sale — tách làm ba phần
 
 > Alias sale đặt: "Chị Hoa kế toán ABC"
 
