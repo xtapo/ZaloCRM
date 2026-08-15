@@ -586,7 +586,7 @@ onMounted(async () => {
   display: inline-flex; align-items: center; gap: 6px;
 }
 .za-tab:hover { color: #374151; }
-.za-tab.active { color: #5E6AD2; border-bottom-color: #5E6AD2; }
+.za-tab.active { color: var(--smax-primary, #16a34a); border-bottom-color: var(--smax-primary, #16a34a); }
 .za-tab-counter {
   font-size: 11px; font-weight: 700;
   padding: 2px 8px; border-radius: 9999px;
@@ -604,9 +604,9 @@ onMounted(async () => {
   font-family: inherit; color: #374151;
 }
 .chip-btn:hover { background: #F9FAFB; border-color: #C7CCEB; }
-.chip-multi.open .chip-btn { border-color: #5E6AD2; background: #EEF0FF; color: #4F5BC4; }
+.chip-multi.open .chip-btn { border-color: var(--smax-primary, #16a34a); background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary-hover, #15803d); }
 .chip-count {
-  background: #5E6AD2; color: white;
+  background: var(--smax-primary, #16a34a); color: white;
   font-size: 10px; font-weight: 700;
   padding: 1px 6px; border-radius: 10px;
   line-height: 1.4;
@@ -622,10 +622,10 @@ onMounted(async () => {
 .chip-pop-head {
   display: flex; justify-content: space-between; align-items: center;
   padding: 10px 12px; border-bottom: 1px solid #F3F4F6;
-  font-size: 11px; color: #6B7280; text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+  font-size: 11px; color: #6B7785; text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
 }
 .chip-clear {
-  background: transparent; border: none; color: #5E6AD2;
+  background: transparent; border: none; color: var(--smax-primary, #16a34a);
   font-size: 11px; cursor: pointer; font-family: inherit; font-weight: 600;
 }
 .chip-pop-list { max-height: 320px; overflow-y: auto; padding: 4px 0; }
@@ -643,8 +643,8 @@ onMounted(async () => {
   border-radius: 6px; font-size: 12.5px; color: #374151;
   cursor: pointer; user-select: none;
 }
-.toggle-group input { cursor: pointer; accent-color: #5E6AD2; }
-.toggle-group:has(input:checked) { background: #EEF0FF; border-color: #5E6AD2; color: #4F5BC4; }
+.toggle-group input { cursor: pointer; accent-color: var(--smax-primary, #16a34a); }
+.toggle-group:has(input:checked) { background: var(--smax-primary-soft, #eaf7ef); border-color: var(--smax-primary, #16a34a); color: var(--smax-primary-hover, #15803d); }
 
 .za-page {
   padding: 20px 24px 120px;
@@ -695,13 +695,13 @@ onMounted(async () => {
 .btn:disabled { opacity: 0.55; cursor: not-allowed }
 .btn svg { width: 14px; height: 14px }
 .btn-primary {
-  background: #6366F1;
+  background: var(--smax-primary, #16a34a);
   color: white;
-  border-color: #6366F1;
+  border-color: var(--smax-primary, #16a34a);
 }
 .btn-primary:hover:not(:disabled) {
-  background: #4F46E5;
-  border-color: #4F46E5;
+  background: var(--smax-primary-hover, #15803d);
+  border-color: var(--smax-primary-hover, #15803d);
   color: white;
 }
 .btn-danger {
@@ -819,7 +819,11 @@ onMounted(async () => {
   outline: none;
   font-family: inherit;
 }
-.field input:focus { border-color: #6366F1 }
+.field input:focus {
+  border-color: var(--smax-primary, #16a34a);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
+}
 .hint {
   font-size: 11px;
   color: #9CA3AF;
@@ -844,13 +848,13 @@ onMounted(async () => {
   padding: 5px 8px;
   border-radius: 7px;
   font-size: 12px;
-  color: #6B7280;
+  color: #6B7785;
   margin-bottom: 4px;
   text-align: left;
 }
 .qr-step.active {
-  background: #EEF2FF;
-  color: #4F46E5;
+  background: var(--smax-primary-soft, #eaf7ef);
+  color: var(--smax-primary-hover, #15803d);
 }
 .qr-step .n {
   width: 20px;
@@ -864,7 +868,7 @@ onMounted(async () => {
   font-weight: 700;
   font-size: 10.5px;
 }
-.qr-step.active .n { background: #6366F1; color: white }
+.qr-step.active .n { background: var(--smax-primary, #16a34a); color: white }
 .qr-scanned p { color: #047857; font-weight: 500; margin: 8px 0 }
 .qr-scanned .muted { color: #6B7280; font-weight: 400; font-size: 12px }
 .error-text {
@@ -879,7 +883,7 @@ onMounted(async () => {
   width: 40px;
   height: 40px;
   border: 3px solid #F3F4F6;
-  border-top-color: #6366F1;
+  border-top-color: var(--smax-primary, #16a34a);
   border-radius: 50%;
   margin: 20px auto;
   animation: spin 0.9s linear infinite;

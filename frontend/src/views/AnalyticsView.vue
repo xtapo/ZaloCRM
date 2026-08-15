@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="d-flex align-center mb-4 flex-wrap gap-2">
       <h1 class="text-h4">
-        <v-icon class="mr-2" style="color: #00F2FF;">mdi-chart-timeline-variant-shimmer</v-icon>
+        <v-icon class="mr-2" color="primary">mdi-chart-timeline-variant-shimmer</v-icon>
         Phân tích nâng cao
       </h1>
       <v-spacer />
@@ -35,11 +35,11 @@
       <v-tab value="overview">Tổng quan</v-tab>
       <v-tab value="funnel">Phễu khách hàng</v-tab>
       <v-tab value="team">Đội nhóm</v-tab>
-      <v-tab value="response">Thời gian trả lời</v-tab>
-      <v-tab value="builder">Báo cáo tùy chỉnh</v-tab>
+      <v-tab value="response">Thểi gian trả lọi</v-tab>
+      <v-tab value="builder">Báo cáo tùy chọnh</v-tab>
     </v-tabs>
 
-    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4" />
+    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4 rounded-pill" height="3" />
 
     <v-window v-model="tab">
       <!-- Overview -->
@@ -75,7 +75,7 @@
           </v-col>
           <v-col cols="12" v-if="responseTime?.byUser?.length">
             <v-card>
-              <v-card-title class="text-body-1">Thời gian trả lời theo nhân viên</v-card-title>
+              <v-card-title class="text-body-1">Thểi gian trả lọi theo nhân viên</v-card-title>
               <v-card-text>
                 <v-data-table
                   :headers="rtUserHeaders"
@@ -131,7 +131,7 @@ const tab = ref('overview');
 
 const rtUserHeaders = [
   { title: 'Họ tên', key: 'fullName' },
-  { title: 'TG trả lời TB', key: 'avgSeconds', align: 'end' as const },
+  { title: 'TG trả lọi TB', key: 'avgSeconds', align: 'end' as const },
 ];
 
 function formatTime(seconds: number | null): string {

@@ -357,7 +357,7 @@ function close() {
 }
 .ps-emblem::before {
   content: ''; position: absolute; inset: -6px; border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent, #3b82f6, transparent, #1e40af, transparent);
+  background: conic-gradient(from 0deg, transparent, #16a34a, transparent, #15803d, transparent);
   animation: ps-glow 5s linear infinite;
   filter: blur(8px); opacity: 0.4; z-index: 1;
 }
@@ -397,7 +397,7 @@ function close() {
   font-size: 9.5px; color: #1e40af;
   word-break: break-all; line-height: 1.5;
 }
-.ps-enc-hash .ps-blink { animation: ps-blink 1s infinite; color: #3b82f6; }
+.ps-enc-hash .ps-blink { animation: ps-blink 1s infinite; color: var(--smax-primary, #16a34a); }
 @keyframes ps-blink { 50% { opacity: 0.3; } }
 
 .ps-form {
@@ -423,7 +423,7 @@ function close() {
   font-size: 13px; font-family: inherit;
   background: white;
 }
-.ps-input:focus { outline: none; border-color: #5E6AD2; box-shadow: 0 0 0 3px rgba(94,106,210,0.12); }
+.ps-input:focus { outline: none; border-color: var(--smax-primary, #16a34a); box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15); }
 .ps-input.ps-pin-input {
   font-size: 22px; letter-spacing: 14px;
   text-align: center; font-family: 'JetBrains Mono', monospace;

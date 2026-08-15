@@ -292,7 +292,7 @@ function formatRelativeTime(iso: string): string {
 .apt-row {
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-left: 4px solid #2563eb; /* default upcoming blue */
+  border-left: 4px solid var(--smax-primary, #16a34a); /* default upcoming */
   border-radius: 10px;
   padding: 10px 12px;
   margin-bottom: 8px;
@@ -300,7 +300,7 @@ function formatRelativeTime(iso: string): string {
 }
 .apt-row.apt-upcoming {
   background: #fff;
-  border-left-color: #2563eb;
+  border-left-color: var(--smax-primary, #16a34a);
 }
 .apt-row.apt-overdue {
   background: #fef2f2;
@@ -340,7 +340,7 @@ function formatRelativeTime(iso: string): string {
   white-space: nowrap;
 }
 .apt-status-pill.s-overdue   { background: #fee2e2; color: #991b1b; }
-.apt-status-pill.s-scheduled { background: #dbeafe; color: #1d4ed8; }
+.apt-status-pill.s-scheduled { background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary-hover, #15803d); }
 .apt-status-pill.s-completed { background: #dcfce7; color: #14532d; }
 .apt-status-pill.s-cancelled { background: #f1f5f9; color: #64748b; text-decoration: line-through; }
 .apt-status-pill.s-no_show   { background: #fbe6dc; color: #7a2000; }
@@ -370,7 +370,7 @@ function formatRelativeTime(iso: string): string {
   font-family: ui-monospace, 'SF Mono', Consolas, monospace;
   margin-bottom: 3px;
 }
-.apt-datetime { color: #1d4ed8; font-weight: 600; }
+.apt-datetime { color: var(--smax-primary-hover, #15803d); font-weight: 600; }
 .apt-row.apt-overdue .apt-datetime { color: #dc2626; }
 .apt-row.apt-done .apt-datetime { color: #64748b; text-decoration: line-through; }
 .apt-dur { color: #6b7280; font-weight: 500; font-family: 'Inter', sans-serif; font-size: 11px; }

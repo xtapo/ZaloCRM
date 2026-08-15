@@ -249,7 +249,7 @@ function formatRelative(iso: string): string {
 @media (max-width: 900px) {
   .apt-panel {
     position: fixed;
-    top: var(--smax-topnav-h, 52px);
+    top: var(--smax-topnav-h, 76px);
     right: 0;
     bottom: 0;
     left: 0;
@@ -261,7 +261,7 @@ function formatRelative(iso: string): string {
   .panel-overlay--mobile-only {
     display: block;
     position: fixed;
-    inset: var(--smax-topnav-h, 52px) 0 0 0;
+    inset: var(--smax-topnav-h, 76px) 0 0 0;
     background: rgba(24,29,38,0.22);
     z-index: -1;
   }

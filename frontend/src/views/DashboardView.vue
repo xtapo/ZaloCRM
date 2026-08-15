@@ -41,7 +41,7 @@
       </div>
     </div>
 
-    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4 rounded-lg" height="3" />
+    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-4 rounded-pill" height="3" />
 
     <!-- KPI Section -->
     <KpiCards :kpi="kpi" class="mb-6" />
@@ -112,9 +112,10 @@ onMounted(() => fetchAll());
 .dash-icon-badge {
   width: 48px;
   height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0.04));
-  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 50%;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -124,13 +125,14 @@ onMounted(() => fetchAll());
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 22px;
   font-weight: 700;
-  color: #0f172a;
+  letter-spacing: -0.02em;
+  color: #111827;
   margin: 0;
 }
 
 .dash-subtitle {
   font-size: 13px;
-  color: #64748b;
+  color: #6b7280;
   margin: 2px 0 0 0;
 }
 
@@ -138,21 +140,21 @@ onMounted(() => fetchAll());
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: 9999px;
-  background: rgba(16, 185, 129, 0.1);
-  color: #059669;
+  background: #dcfce7;
+  color: #15803d;
   font-size: 11px;
-  font-weight: 600;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  font-weight: 700;
+  border: none;
 }
 
 .live-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #10b981;
-  box-shadow: 0 0 8px #10b981;
+  background: #16a34a;
+  box-shadow: 0 0 8px #16a34a;
   animation: pulse-dot 2s infinite;
 }
 
@@ -166,22 +168,27 @@ onMounted(() => fetchAll());
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  border-radius: 10px;
+  padding: 9px 18px;
+  border-radius: 9999px;
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #334155;
+  border: none;
+  color: #374151;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
 }
 
 .btn-refresh:hover:not(:disabled) {
-  background: #f8fafc;
-  border-color: #94a3b8;
-  color: #0f172a;
+  background: #16a34a;
+  color: #ffffff;
+  box-shadow: 0 10px 24px -8px rgba(22, 163, 74, 0.45);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .spin-icon {
@@ -197,19 +204,19 @@ onMounted(() => fetchAll());
   display: block;
   max-width: 380px;
   margin: 0 0 16px auto;
-  padding: 6px 12px;
-  background: rgba(37, 99, 235, 0.06);
-  border: 1px solid rgba(37, 99, 235, 0.18);
-  border-radius: 8px;
-  color: #2563eb;
+  padding: 6px 14px;
+  background: #dcfce7;
+  border: none;
+  border-radius: 9999px;
+  color: #15803d;
   font-size: 12.5px;
-  font-weight: 500;
+  font-weight: 600;
   text-decoration: none;
   overflow: hidden;
   white-space: nowrap;
 }
 .contact-marquee:hover {
-  background: rgba(37, 99, 235, 0.12);
+  background: #bbf7d0;
 }
 .marquee-track {
   display: inline-block;

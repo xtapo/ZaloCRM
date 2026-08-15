@@ -33,7 +33,7 @@
               <v-icon
                 v-if="['api', 'webhook'].includes(currentList.sourceType)"
                 size="14"
-                color="blue-grey"
+                color="grey-darken-1"
                 class="ms-1"
                 aria-hidden="true"
               >
@@ -219,13 +219,13 @@
             <!-- Group header: show when first col in a group -->
             <v-list-subheader
               v-if="col.group && (idx === 0 || ALL_COLUMNS[idx - 1].group !== col.group)"
-              style="font-size:10.5px;font-weight:700;color:#6366F1;letter-spacing:.04em;padding:6px 16px 2px"
+              style="font-size:10.5px;font-weight:700;color:var(--smax-primary, #16a34a);letter-spacing:.04em;padding:6px 16px 2px"
             >
               {{ col.group }}
             </v-list-subheader>
             <v-list-item @click="toggleColumn(col.key)">
               <template #prepend>
-                <v-icon size="16" :color="isColVisible(col.key) ? '#6366F1' : '#9CA3AF'">
+                <v-icon size="16" :color="isColVisible(col.key) ? 'primary' : '#9CA3AF'">
                   {{ isColVisible(col.key) ? 'mdi-checkbox-marked' : 'mdi-checkbox-blank-outline' }}
                 </v-icon>
               </template>
@@ -1042,12 +1042,12 @@ function initials(name: string): string {
 }
 
 const NICK_GRADIENTS: [string, string][] = [
+  ['#4ADE80', '#16A34A'],
   ['#10B981', '#059669'],
-  ['#EC4899', '#BE185D'],
-  ['#3B82F6', '#1D4ED8'],
+  ['#06B6D4', '#0D9488'],
   ['#F59E0B', '#D97706'],
-  ['#6366F1', '#A855F7'],
-  ['#14B8A6', '#0F766E'],
+  ['#EC4899', '#BE185D'],
+  ['#8B5CF6', '#6D28D9'],
 ];
 function hashIdx(s: string, mod: number): number {
   let h = 0;
@@ -1071,7 +1071,7 @@ function nickAvatarStyle(name: string): Record<string, string> {
   margin-bottom: 14px; font-size: 12px; color: #6B7280;
 }
 .breadcrumb a {
-  color: #6366F1; text-decoration: none; cursor: pointer;
+  color: var(--smax-primary, #16a34a); text-decoration: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: 4px;
 }
 .breadcrumb a:hover { text-decoration: underline; }
@@ -1107,10 +1107,10 @@ function nickAvatarStyle(name: string): Record<string, string> {
   border-radius: 9px; padding: 10px 12px;
   cursor: pointer; transition: all .12s;
 }
-.hero-stat:hover { border-color: #E0E7FF; background: #EEF2FF; }
+.hero-stat:hover { border-color: var(--smax-primary-soft, #eaf7ef); background: var(--smax-primary-soft, #eaf7ef); }
 .hero-stat.active {
-  border-color: #6366F1; background: #EEF2FF;
-  box-shadow: 0 0 0 3px rgba(99,102,241,.1);
+  border-color: var(--smax-primary, #16a34a); background: var(--smax-primary-soft, #eaf7ef);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
 }
 .hero-stat .l {
   font-size: 10.5px; color: #6B7280;
@@ -1212,10 +1212,10 @@ function nickAvatarStyle(name: string): Record<string, string> {
 }
 .entries-table tbody tr { transition: background .1s; cursor: pointer; }
 .entries-table tbody tr:hover { background: #FAFBFC; }
-.entries-table tbody tr.selected { background: #EEF2FF; }
+.entries-table tbody tr.selected { background: var(--smax-primary-soft, #eaf7ef); }
 .entries-table tbody tr:last-child td { border-bottom: none; }
 
-.chk { width: 14px; height: 14px; accent-color: #6366F1; cursor: pointer; }
+.chk { width: 14px; height: 14px; accent-color: var(--smax-primary, #16a34a); cursor: pointer; }
 
 .ix { color: #6B7280; font-family: "JetBrains Mono", monospace; font-size: 11px; width: 40px; }
 .phone-cell {
@@ -1252,13 +1252,13 @@ function nickAvatarStyle(name: string): Record<string, string> {
 .cell-input {
   width: 100%;
   padding: 4px 6px;
-  border: 1px solid #6366F1;
+  border: 1px solid var(--smax-primary, #16a34a);
   border-radius: 4px;
   font-size: 12px;
   font-family: inherit;
   outline: none;
   background: #fff;
-  box-shadow: 0 0 0 2px rgba(99,102,241,.15);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
 }
 .cell-input.saving { opacity: 0.6; }
 .phone-cell.editable .cell-input {
@@ -1288,11 +1288,11 @@ function nickAvatarStyle(name: string): Record<string, string> {
 .title-input {
   font-size: 18px; font-weight: 700;
   padding: 2px 6px;
-  border: 1px solid #6366F1; border-radius: 5px;
+  border: 1px solid var(--smax-primary, #16a34a); border-radius: 5px;
   outline: none;
   font-family: inherit;
   background: #fff;
-  box-shadow: 0 0 0 2px rgba(99,102,241,.15);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
   min-width: 280px;
 }
 
@@ -1311,7 +1311,7 @@ function nickAvatarStyle(name: string): Record<string, string> {
   color: #111827;
 }
 .add-input::placeholder { color: #9CA3AF; font-style: italic; }
-.add-input:focus { border-color: #6366F1; border-style: solid; box-shadow: 0 0 0 2px rgba(99,102,241,.15); }
+.add-input:focus { border-color: var(--smax-primary, #16a34a); border-style: solid; box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15); }
 .add-input:disabled { background: #F4F5F8; cursor: wait; }
 .add-hint {
   margin-left: 12px;
@@ -1334,12 +1334,12 @@ function nickAvatarStyle(name: string): Record<string, string> {
 }
 .undo-toast b { font-family: "JetBrains Mono", monospace; }
 .undo-btn {
-  background: #6366F1; color: #fff;
+  background: var(--smax-primary, #16a34a); color: #fff;
   border: none; padding: 6px 12px; border-radius: 6px;
   font-size: 12px; font-weight: 600; cursor: pointer;
   font-family: inherit;
 }
-.undo-btn:hover { background: #4F46E5; }
+.undo-btn:hover { background: var(--smax-primary-hover, #15803d); }
 
 .flash-toast {
   position: fixed; bottom: 24px; left: 50%;
@@ -1454,7 +1454,7 @@ function nickAvatarStyle(name: string): Record<string, string> {
   color: white; flex-shrink: 0;
 }
 .nick-cell .more {
-  font-size: 10px; color: #6366F1; background: #EEF2FF;
+  font-size: 10px; color: var(--smax-primary, #16a34a); background: var(--smax-primary-soft, #eaf7ef);
   padding: 0 5px; border-radius: 99px; font-weight: 700;
 }
 
@@ -1505,7 +1505,7 @@ function nickAvatarStyle(name: string): Record<string, string> {
 }
 .fb-qa-q { font-weight: 600; color: #4B5563; flex-shrink: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
 .fb-qa-a { color: #111827; overflow: hidden; text-overflow: ellipsis; }
-.fb-qa-more { font-size: 10.5px; color: #6366F1; font-style: italic; }
+.fb-qa-more { font-size: 10.5px; color: var(--smax-primary, #16a34a); font-style: italic; }
 
 .fb-qa-tooltip {
   display: none;
@@ -1575,7 +1575,7 @@ function nickAvatarStyle(name: string): Record<string, string> {
 }
 .pag button:hover:not(:disabled) { background: #F4F5F8; }
 .pag button:disabled { opacity: 0.5; cursor: not-allowed; }
-.pag button.cur { background: #6366F1; color: white; border-color: #6366F1; }
+.pag button.cur { background: var(--smax-primary, #16a34a); color: white; border-color: var(--smax-primary, #16a34a); }
 
 .bulk-bar {
   position: fixed; left: 50%; bottom: 24px;

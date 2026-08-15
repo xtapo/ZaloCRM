@@ -2,7 +2,7 @@
   <div>
     <div class="d-flex align-center mb-4">
       <h1 class="text-h4">
-        <v-icon class="mr-2" style="color: #00F2FF;">mdi-connection</v-icon>
+        <v-icon class="mr-2" color="primary">mdi-connection</v-icon>
         Tích hợp
       </h1>
       <v-spacer />
@@ -16,7 +16,7 @@
     <!-- Integration cards -->
     <v-row>
       <v-col v-for="item in integrations" :key="item.id" cols="12" md="6" lg="4">
-        <v-card>
+        <v-card class="soft-card">
           <v-card-title class="d-flex align-center">
             <v-icon :color="typeColor(item.type)" class="mr-2">{{ typeIcon(item.type) }}</v-icon>
             {{ item.name || typeLabel(item.type) }}
@@ -61,7 +61,7 @@
       </v-col>
     </v-row>
 
-    <v-card v-if="!loading && integrations.length === 0" class="text-center pa-8">
+    <v-card v-if="!loading && integrations.length === 0" class="text-center pa-8 soft-card">
       <v-icon size="64" color="grey">mdi-connection</v-icon>
       <div class="text-h6 mt-4">Chưa có tích hợp nào</div>
       <div class="text-body-2 text-medium-emphasis mb-4">Kết nối Google Sheets, Telegram, Facebook hoặc Zapier</div>
@@ -189,6 +189,8 @@ function typeIcon(type: string) {
   return map[type] ?? 'mdi-connection';
 }
 
+// Màu brand của từng nền tảng — giữ nguyên để user nhận diện đúng dịch vụ.
+// Chỉ fallback theo token grey của design system.
 function typeColor(type: string) {
   const map: Record<string, string> = {
     google_sheets: '#0F9D58',
@@ -196,7 +198,7 @@ function typeColor(type: string) {
     facebook: '#1877F2',
     zapier: '#FF4A00',
   };
-  return map[type] ?? '#666';
+  return map[type] ?? '#6b7280';
 }
 
 function typeLabel(type: string) {

@@ -125,8 +125,8 @@ async function onSubmit() {
   background: white;
 }
 .form-row input:focus {
-  border-color: #5E6AD2;
-  box-shadow: 0 0 0 3px rgba(94, 106, 210, 0.12);
+  border-color: var(--smax-primary, #16a34a);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
 }
 
 .form-error {
@@ -166,11 +166,11 @@ async function onSubmit() {
   text-decoration: none;
 }
 .btn-primary {
-  background: #5E6AD2;
-  border-color: #5E6AD2;
+  background: var(--smax-primary, #16a34a);
+  border-color: var(--smax-primary, #16a34a);
   color: white;
 }
-.btn-primary:hover:not(:disabled) { background: #4E5AB8; }
+.btn-primary:hover:not(:disabled) { background: var(--smax-primary-hover, #15803d); border-color: var(--smax-primary-hover, #15803d); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-ghost:hover { background: #F4F4F7; }
 
@@ -178,14 +178,14 @@ async function onSubmit() {
   margin-top: 16px;
   padding: 12px 16px;
   background: #FAFAFC;
-  border-left: 3px solid #5E6AD2;
+  border-left: 3px solid var(--smax-primary, #16a34a);
   border-radius: 6px;
   font-size: 12.5px;
   color: #6B7785;
   line-height: 1.55;
 }
 .note a {
-  color: #5E6AD2;
+  color: var(--smax-primary, #16a34a);
   text-decoration: none;
   font-weight: 500;
 }

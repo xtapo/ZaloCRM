@@ -1,8 +1,8 @@
 <template>
   <v-row density="comfortable">
     <v-col v-for="card in cards" :key="card.title" cols="12" sm="6" md="4" lg="2">
-      <div class="kpi-card" :class="`kpi-${card.theme}`">
-        <div class="kpi-icon-wrap" :style="{ background: card.bgGradient, color: card.iconColor }">
+      <div class="kpi-card">
+        <div class="kpi-icon-wrap" :style="{ background: card.bg, color: card.iconColor }">
           <v-icon :icon="card.icon" size="22" />
         </div>
         <div class="kpi-content">
@@ -16,6 +16,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { BRAND } from '@/constants/chart-theme';
 
 interface KpiData {
   messagesToday: number;
@@ -30,54 +31,53 @@ const props = defineProps<{
   kpi: KpiData | null;
 }>();
 
+/** Nền icon: dùng chung 1 công thức tint mềm thay vì gradient mỗi thẻ một kiểu. */
+function tint(hex: string): string {
+  return `${hex}1f`;
+}
+
 const cards = computed(() => [
   {
     title: 'Tin nhắn hôm nay',
     value: props.kpi?.messagesToday ?? '—',
     icon: 'mdi-message-text-outline',
-    iconColor: '#2563eb',
-    bgGradient: 'linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(37, 99, 235, 0.04))',
-    theme: 'blue',
+    iconColor: BRAND.green,
+    bg: tint(BRAND.green),
   },
   {
-    title: 'Chưa trả lời',
+    title: 'Chưa trả lọi',
     value: props.kpi?.messagesUnreplied ?? '—',
     icon: 'mdi-clock-alert-outline',
-    iconColor: '#d97706',
-    bgGradient: 'linear-gradient(135deg, rgba(217, 119, 6, 0.12), rgba(217, 119, 6, 0.04))',
-    theme: 'amber',
+    iconColor: BRAND.amber,
+    bg: tint(BRAND.amber),
   },
   {
     title: 'Chưa đọc',
     value: props.kpi?.messagesUnread ?? '—',
     icon: 'mdi-email-mark-as-unread',
-    iconColor: '#ea580c',
-    bgGradient: 'linear-gradient(135deg, rgba(234, 88, 12, 0.12), rgba(234, 88, 12, 0.04))',
-    theme: 'orange',
+    iconColor: BRAND.orange,
+    bg: tint(BRAND.orange),
   },
   {
     title: 'Lịch hẹn hôm nay',
     value: props.kpi?.appointmentsToday ?? '—',
     icon: 'mdi-calendar-check-outline',
-    iconColor: '#059669',
-    bgGradient: 'linear-gradient(135deg, rgba(5, 150, 105, 0.12), rgba(5, 150, 105, 0.04))',
-    theme: 'emerald',
+    iconColor: BRAND.greenDark,
+    bg: tint(BRAND.greenDark),
   },
   {
     title: 'KH mới tuần này',
     value: props.kpi?.newContactsThisWeek ?? '—',
     icon: 'mdi-account-plus-outline',
-    iconColor: '#0284c7',
-    bgGradient: 'linear-gradient(135deg, rgba(2, 132, 199, 0.12), rgba(2, 132, 199, 0.04))',
-    theme: 'sky',
+    iconColor: BRAND.greenDeep,
+    bg: tint(BRAND.greenDeep),
   },
   {
     title: 'Tổng khách hàng',
     value: props.kpi?.totalContacts ?? '—',
     icon: 'mdi-account-group-outline',
-    iconColor: '#7c3aed',
-    bgGradient: 'linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(124, 58, 237, 0.04))',
-    theme: 'violet',
+    iconColor: BRAND.sky,
+    bg: tint(BRAND.sky),
   },
 ]);
 </script>
@@ -85,28 +85,28 @@ const cards = computed(() => [
 <style scoped>
 .kpi-card {
   background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 14px;
-  padding: 16px;
+  border: none;
+  border-radius: 24px;
+  padding: 18px;
   display: flex;
   align-items: center;
   gap: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
+  height: 100%;
 }
 
 .kpi-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.08);
-  border-color: rgba(203, 213, 225, 1);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08);
 }
 
 .kpi-icon-wrap {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -120,16 +120,17 @@ const cards = computed(() => [
 
 .kpi-value {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
-  color: #0f172a;
+  letter-spacing: -0.02em;
+  color: #111827;
   line-height: 1.2;
 }
 
 .kpi-title {
   font-size: 12.5px;
   font-weight: 500;
-  color: #64748b;
+  color: #6b7280;
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;

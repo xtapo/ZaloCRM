@@ -89,7 +89,7 @@ onMounted(() => {
   max-width: 960px;
   margin: 0 auto;
   padding: 24px;
-  font-family: -apple-system, "Segoe UI", "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans, -apple-system, "Segoe UI", "Inter", system-ui, sans-serif);
 }
 
 .cp-header {
@@ -103,7 +103,7 @@ onMounted(() => {
   font-weight: 700;
   margin: 0;
   flex: 1;
-  color: #111827;
+  color: var(--smax-text, #111827);
 }
 .badge-skeleton {
   display: inline-block;
@@ -111,7 +111,7 @@ onMounted(() => {
   color: #92400E;
   font-size: 10px;
   padding: 3px 8px;
-  border-radius: 8px;
+  border-radius: 999px;
   margin-left: 8px;
   vertical-align: middle;
   font-weight: 700;
@@ -119,37 +119,40 @@ onMounted(() => {
 }
 
 .back-btn {
-  background: white;
-  border: 1px solid #E5E7EB;
-  padding: 8px 14px;
-  border-radius: 8px;
+  background: var(--smax-surface, #fff);
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  padding: 8px 16px;
+  border-radius: 999px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  color: #4B5563;
+  color: var(--smax-text-muted, #6b7280);
   font-family: inherit;
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .back-btn:hover {
-  border-color: #6366F1;
-  color: #4338CA;
+  border-color: var(--smax-primary, #16a34a);
+  color: var(--smax-primary-hover, #15803d);
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.06);
 }
 
 .cp-id {
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--smax-text-subtle, #9ca3af);
   font-family: ui-monospace, monospace;
 }
 
 .cp-loading,
 .cp-error {
-  background: white;
-  border-radius: 12px;
+  background: var(--smax-surface, #fff);
+  border-radius: 24px;
   padding: 48px;
   text-align: center;
-  color: #6B7280;
+  color: var(--smax-text-muted, #6b7280);
+  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.06);
 }
 .cp-error {
-  color: #DC2626;
+  color: var(--smax-error, #ef4444);
 }
 
 .cp-content {
@@ -159,16 +162,16 @@ onMounted(() => {
 }
 
 .cp-card {
-  background: white;
-  border-radius: 12px;
+  background: var(--smax-surface, #fff);
+  border-radius: 24px;
   padding: 20px 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.06);
 }
 .cp-card h2 {
   font-size: 16px;
   font-weight: 700;
   margin: 0 0 12px;
-  color: #111827;
+  color: var(--smax-text, #111827);
 }
 
 .cp-info-grid {
@@ -185,25 +188,25 @@ onMounted(() => {
 }
 .cp-label {
   font-weight: 600;
-  color: #6B7280;
+  color: var(--smax-text-muted, #6b7280);
 }
 .cp-value {
-  color: #111827;
+  color: var(--smax-text, #111827);
 }
 .cp-value.score {
   display: inline-block;
   font-size: 16px;
   font-weight: 700;
-  color: #10B981;
-  background: #ECFDF5;
+  color: var(--smax-primary-hover, #15803d);
+  background: var(--smax-primary-light, #dcfce7);
   padding: 2px 12px;
-  border-radius: 8px;
+  border-radius: 999px;
   width: fit-content;
 }
 
 .cp-skeleton-note {
   background: linear-gradient(135deg, #FEF3C7, #FFFBEB);
-  border-left: 4px solid #F59E0B;
+  border-left: 4px solid var(--smax-warning, #f59e0b);
 }
 .cp-skeleton-note p {
   font-size: 13px;
@@ -228,7 +231,7 @@ onMounted(() => {
 .cp-hint {
   background: rgba(255, 255, 255, 0.5);
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 16px;
   font-size: 12px;
   color: #78350F;
   margin-top: 12px;

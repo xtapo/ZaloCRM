@@ -288,12 +288,12 @@ function shortName(name: string): string {
 }
 
 const GRADIENTS = [
-  ['#6366F1', '#A855F7'],
+  ['#4ADE80', '#16A34A'],
   ['#10B981', '#059669'],
+  ['#06B6D4', '#0D9488'],
   ['#F59E0B', '#D97706'],
   ['#EC4899', '#BE185D'],
-  ['#3B82F6', '#1D4ED8'],
-  ['#14B8A6', '#0F766E'],
+  ['#8B5CF6', '#6D28D9'],
 ];
 function hashIdx(s: string, mod: number) {
   let h = 0;
@@ -481,7 +481,7 @@ function maskPhone(p: string): string {
 }
 .d-section .link {
   font-size: 11px;
-  color: #4F46E5;
+  color: var(--smax-primary, #16a34a);
   text-transform: none;
   letter-spacing: 0;
   font-weight: 500;
@@ -580,7 +580,7 @@ function maskPhone(p: string): string {
   display: flex; align-items: center; justify-content: center;
   font-size: 14px; font-weight: 700; flex-shrink: 0;
 }
-.metric-icon.icon-friend   { background: #E0E7FF; color: #4338CA; }
+.metric-icon.icon-friend   { background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary-hover, #15803d); }
 .metric-icon.icon-stranger { background: #F3F4F6; color: #6B7280; }
 .metric-icon.icon-user     { background: #DCFCE7; color: #15803D; }
 .metric-icon.icon-bot      { background: #F5F3FF; color: #6D28D9; }

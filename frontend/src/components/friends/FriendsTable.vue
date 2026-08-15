@@ -649,16 +649,16 @@ function healthTooltip(f: DbFriend): string {
   transition: background 0.12s, color 0.12s;
 }
 .ftable thead th.sortable:hover {
-  background: #EEF2FF;
-  color: #4338CA;
+  background: var(--smax-primary-soft, #eaf7ef);
+  color: var(--smax-primary-hover, #15803d);
 }
 .ftable thead th.sort-active {
-  background: #E0E7FF;
-  color: #4F46E5;
+  background: var(--smax-primary-soft, #eaf7ef);
+  color: var(--smax-primary, #16a34a);
 }
 .ftable thead th .sort-arrow {
   font-size: 11px;
-  color: #6366F1;
+  color: var(--smax-primary, #16a34a);
   margin-left: 2px;
   font-weight: 700;
 }
@@ -684,7 +684,7 @@ function healthTooltip(f: DbFriend): string {
 .ftable tbody tr:hover td:nth-child(1),
 .ftable tbody tr:hover td:nth-child(2) { background: #f9fafc; }
 .ftable tbody tr.selected td:nth-child(1),
-.ftable tbody tr.selected td:nth-child(2) { background: #e8f0fe; }
+.ftable tbody tr.selected td:nth-child(2) { background: var(--smax-primary-soft, #eaf7ef); }
 .ftable thead th {
   position: sticky; top: 0;
   background: #fff; z-index: 2;
@@ -708,7 +708,7 @@ function healthTooltip(f: DbFriend): string {
 .ftable tbody td.cb-col { padding-right: 4px; }
 .ftable tbody tr { cursor: pointer; }
 .ftable tbody tr:hover { background: #f9fafc; }
-.ftable tbody tr.selected { background: #e8f0fe; }
+.ftable tbody tr.selected { background: var(--smax-primary-soft, #eaf7ef); }
 
 .ftable.compact tbody td { padding: 5px 10px; }
 .ftable.detailed tbody td { padding: 12px 10px; }
@@ -936,7 +936,7 @@ function healthTooltip(f: DbFriend): string {
   font-family: inherit;
 }
 .row-actions button:hover {
-  background: #2f6ee5; color: #fff; border-color: #2f6ee5;
+  background: var(--smax-primary, #16a34a); color: #fff; border-color: var(--smax-primary, #16a34a);
 }
 
 .nick-log {
@@ -960,7 +960,7 @@ function healthTooltip(f: DbFriend): string {
 .empty h3 { color: #1a2433; margin: 8px 0 4px; }
 
 /* Customer avatar palette — same hash as nick sidebar */
-.av-c1 { background: linear-gradient(135deg, #2f6ee5, #1d4ed8); }
+.av-c1 { background: linear-gradient(135deg, #4ade80, #16a34a); }
 .av-c2 { background: linear-gradient(135deg, #16a34a, #15803d); }
 .av-c3 { background: linear-gradient(135deg, #d97706, #b45309); }
 .av-c4 { background: linear-gradient(135deg, #7c3aed, #6d28d9); }

@@ -1,5 +1,5 @@
 <template>
-  <v-card class="pa-6" elevation="8">
+  <v-card class="pa-6 soft-card">
     <div class="text-center mb-6">
       <v-icon icon="mdi-cog" size="64" color="primary" />
       <h1 class="text-h5 mt-2">Thiết lập ban đầu</h1>

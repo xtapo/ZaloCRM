@@ -423,7 +423,7 @@ onMounted(load);
   cursor: pointer;
 }
 .btn-primary {
-  background: #6366F1;
+  background: var(--smax-primary, #16a34a);
   color: white;
 }
 .btn-primary:disabled {

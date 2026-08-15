@@ -1,12 +1,12 @@
 <template>
   <div style="max-width: 700px;">
     <h1 class="text-h5 mb-4">
-      <v-icon class="mr-2" style="color: #00F2FF;">mdi-api</v-icon>
+      <v-icon class="mr-2" color="primary">mdi-api</v-icon>
       API & Webhook
     </h1>
 
     <!-- API Key section -->
-    <v-card class="mb-4">
+    <v-card class="mb-4 soft-card">
       <v-card-title class="text-body-1">API Key</v-card-title>
       <v-card-text>
         <v-text-field
@@ -29,7 +29,7 @@
     </v-card>
 
     <!-- Webhook section -->
-    <v-card class="mb-4">
+    <v-card class="mb-4 soft-card">
       <v-card-title class="text-body-1">Webhook</v-card-title>
       <v-card-text>
         <v-text-field
@@ -51,7 +51,7 @@
       </v-card-text>
     </v-card>
 
-    <v-card class="mb-4">
+    <v-card class="mb-4 soft-card">
       <v-card-title class="text-body-1 d-flex align-center">
         AI Assistant
         <v-spacer />
@@ -66,7 +66,7 @@
     </v-card>
 
     <!-- API Docs -->
-    <v-card>
+    <v-card class="soft-card">
       <v-card-title class="text-body-1">API Documentation</v-card-title>
       <v-card-text>
         <pre style="font-size: 12px; overflow-x: auto; white-space: pre-wrap;">Header: X-API-Key: your-key

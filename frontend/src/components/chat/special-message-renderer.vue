@@ -738,7 +738,7 @@ const linkDescription = computed<string>(() => {
 }
 .rich-link {
   display: inline-flex; align-items: center;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   text-decoration: none;
   margin-top: 4px;
   font-size: 12.5px;
@@ -842,8 +842,8 @@ const linkDescription = computed<string>(() => {
 }
 .profile-btn:hover { background: var(--smax-grey-100, #f3f4f6); }
 .profile-btn.primary {
-  border-color: var(--smax-primary, #2962ff);
-  background: var(--smax-primary, #2962ff);
+  border-color: var(--smax-primary);
+  background: var(--smax-primary);
   color: white;
 }
 .profile-btn.primary:hover { filter: brightness(0.95); }
@@ -934,7 +934,7 @@ const linkDescription = computed<string>(() => {
   color: var(--smax-text);
 }
 .poll-option.is-selected {
-  color: var(--smax-primary, #2962ff); font-weight: 600;
+  color: var(--smax-primary); font-weight: 600;
 }
 .poll-option-text { flex: 1; }
 .poll-footer {
@@ -973,8 +973,8 @@ const linkDescription = computed<string>(() => {
   display: inline-flex; align-items: center; gap: 11px;
   padding: 9px 13px;
   border-radius: 9px;
-  background: rgba(33, 150, 243, 0.08);
-  border: 1px solid rgba(33, 150, 243, 0.25);
+  background: var(--smax-info-soft, rgba(14, 165, 233, 0.08));
+  border: 1px solid rgba(14, 165, 233, 0.25);
   min-width: 220px;
 }
 /* E17: KH gọi đến NHỠ — đỏ rõ, border đậm, sale phải thấy */
@@ -1005,7 +1005,7 @@ const linkDescription = computed<string>(() => {
   width: 36px; height: 36px;
   border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: var(--smax-primary, #2962ff);
+  background: var(--smax-primary);
   color: white;
   flex-shrink: 0;
 }
@@ -1032,16 +1032,16 @@ const linkDescription = computed<string>(() => {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 5px 10px;
   border-radius: 6px;
-  border: 1px solid var(--smax-primary, #2962ff);
+  border: 1px solid var(--smax-primary);
   background: white;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s ease, transform 0.15s ease;
 }
-.call-action:hover { background: var(--smax-primary-soft, #e3f2fd); }
+.call-action:hover { background: var(--smax-primary-soft); }
 .call-action:active { transform: scale(0.97); }
 .call-action-danger {
   border-color: #dc2626;
@@ -1063,9 +1063,9 @@ const linkDescription = computed<string>(() => {
 
 /* Mention highlight - styled across all rich/note/forwarded contents */
 :deep(.mention) {
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   font-weight: 500;
-  background: var(--smax-primary-soft, #e3f2fd);
+  background: var(--smax-primary-soft);
   padding: 0 4px;
   border-radius: 3px;
 }
@@ -1310,7 +1310,7 @@ const linkDescription = computed<string>(() => {
 }
 .link-domain {
   font-size: 10px;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   margin-top: 4px;
   display: flex; align-items: center; gap: 2px;
 }

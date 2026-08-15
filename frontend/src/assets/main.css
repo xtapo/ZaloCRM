@@ -1,18 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
-
-/* ════════════════════════════════════════════════════════════
-   Global app styles — Smax design language (mockup chat-smax-v3).
-   Theme-specific tokens live in tokens.css.
-   Legacy navy/cyan glass effects retained only behind .v-theme--legacy-dark.
-   ════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════
+   Global app styles — soft-UI xanh lá.
+   Token nằm ở style.css (palette chính) + tokens.css (token bổ sung).
+   File này CHỈ override component Vuetify; đừng khai báo màu hard-code mới.
+   Hiệu ứng navy/cyan cũ chỉ còn sau .v-theme--legacy-dark.
+   ═══════════════════════════════════════════════════════════ */
 
 html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Plus Jakarta Sans", Roboto, sans-serif;
+  font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", "Plus Jakarta Sans", Roboto, sans-serif);
   scroll-behavior: smooth;
-  background: var(--smax-grey-100);
+  /* Nền canvas xám nhạt của mockup (trước đây dùng --smax-grey-100 #f5f6fa) */
+  background: var(--smax-canvas, #eceef0);
   color: var(--smax-text);
   font-size: var(--smax-font-base);
   line-height: var(--smax-line-height);
@@ -20,10 +20,11 @@ html, body {
 
 #app { height: 100%; }
 
-/* ════════ Smax light theme — defaults for v-* components ════════ */
+/* ════════ Smax light theme — defaults cho v-* components ════════ */
 .v-theme--smax-light .v-card {
-  background: var(--smax-bg) !important;
-  border: 1px solid var(--smax-grey-200) !important;
+  background: var(--smax-surface, #ffffff) !important;
+  border: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.06)) !important;
+  box-shadow: var(--shadow-sm, 0 6px 18px rgba(17, 24, 39, 0.06));
   backdrop-filter: none;
 }
 
@@ -31,44 +32,61 @@ html, body {
 .v-theme--smax-light ::-webkit-scrollbar-track { background: transparent; }
 .v-theme--smax-light ::-webkit-scrollbar-thumb {
   background: var(--smax-grey-300);
-  border-radius: 4px;
+  border-radius: var(--radius-pill, 999px);
 }
-.v-theme--smax-light ::-webkit-scrollbar-thumb:hover { background: var(--smax-grey-700); }
+.v-theme--smax-light ::-webkit-scrollbar-thumb:hover { background: var(--smax-text-subtle, #9ca3af); }
 
+.v-theme--smax-light .v-list { border-radius: var(--radius-lg, 20px); }
+.v-theme--smax-light .v-list-item { border-radius: var(--radius-sm, 12px); }
 .v-theme--smax-light .v-list-item:hover {
-  background: var(--smax-grey-50) !important;
+  background: var(--smax-surface-muted, #f6f8f7) !important;
 }
 .v-theme--smax-light .v-list-item--active {
-  background: var(--smax-primary-soft) !important;
-  color: var(--smax-primary);
+  background: var(--smax-primary-light, #dcfce7) !important;
+  color: var(--smax-primary-hover, #15803d);
 }
 
-/* Form fields — light, square corners (mockup uses 7-9px radius) */
-.v-theme--smax-light .v-field { border-radius: 7px !important; }
+/* Form fields — bo tròn lớn, focus ring xanh lá
+   (trước đây radius 7px + ring rgba(33,150,243,.10) màu xanh dương) */
+.v-theme--smax-light .v-field { border-radius: var(--radius-sm, 12px) !important; }
 .v-theme--smax-light .v-field--focused {
   border-color: var(--smax-primary) !important;
-  box-shadow: 0 0 0 3px rgba(33,150,243,0.10);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
 }
 
-/* Buttons — flat, no animation */
-.v-theme--smax-light .v-btn--variant-flat {
-  border-radius: 7px !important;
+/* Buttons — pill, không uppercase */
+.v-theme--smax-light .v-btn {
+  border-radius: var(--radius-pill, 999px) !important;
   text-transform: none;
   letter-spacing: normal;
 }
+/* Icon button vẫn tròn đều */
+.v-theme--smax-light .v-btn--icon { border-radius: 50% !important; }
 
 /* Chips — pill */
 .v-theme--smax-light .v-chip {
-  border-radius: 12px !important;
+  border-radius: var(--radius-pill, 999px) !important;
   font-weight: 500;
 }
 
-/* Data table — flat surface */
+/* Data table — bề mặt trắng bo lớn, shadow mềm */
 .v-theme--smax-light .v-data-table { background: transparent !important; }
 .v-theme--smax-light .v-data-table .v-table__wrapper {
-  background: var(--smax-bg);
-  border-radius: 7px;
-  border: 1px solid var(--smax-grey-200);
+  background: var(--smax-surface, #ffffff);
+  border-radius: var(--radius-xl, 24px);
+  border: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.06));
+  box-shadow: var(--shadow-sm, 0 6px 18px rgba(17, 24, 39, 0.06));
+  overflow: hidden;
+}
+.v-theme--smax-light .v-data-table tbody tr:hover > td {
+  background: var(--smax-primary-soft, #eaf7ef);
+}
+
+/* Dialog / menu / tooltip — bo lớn theo mockup */
+.v-theme--smax-light .v-overlay__content > .v-card,
+.v-theme--smax-light .v-overlay__content > .v-sheet,
+.v-theme--smax-light .v-overlay__content > .v-list {
+  border-radius: var(--radius-xl, 24px) !important;
 }
 
 /* Status dot animation */
@@ -81,7 +99,7 @@ html, body {
 }
 .message-bubble { animation: fade-slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 
-/* ════════ Legacy dark theme (kept for fallback) ════════ */
+/* ════════ Legacy dark theme (giữ nguyên làm fallback) ════════ */
 .v-theme--legacy-dark {
   --navy-deep: #0A192F;
   --navy-light: #112240;

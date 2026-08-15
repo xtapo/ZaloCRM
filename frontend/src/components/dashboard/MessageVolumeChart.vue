@@ -1,9 +1,9 @@
 <template>
-  <v-card>
-    <v-card-title class="text-body-1">Tin nhắn theo ngày</v-card-title>
+  <v-card class="chart-card">
+    <v-card-title class="chart-title">Tin nhắn theo ngày</v-card-title>
     <v-card-text>
-      <Bar v-if="chartData" :data="chartData" :options="chartOptions" style="height: 250px;" />
-      <div v-else class="text-center pa-8 text-grey">Không có dữ liệu</div>
+      <Bar v-if="chartData" :data="chartData" :options="barChartOptions" style="height: 250px;" />
+      <div v-else class="chart-empty">Không có dữ liệu</div>
     </v-card-text>
   </v-card>
 </template>
@@ -20,6 +20,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import { BRAND, barChartOptions } from '@/constants/chart-theme';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -32,15 +33,30 @@ const chartData = computed(() => {
   return {
     labels: props.data.map(d => d.date.slice(5)), // MM-DD
     datasets: [
-      { label: 'Đã gửi', data: props.data.map(d => d.sent), backgroundColor: '#1565C0' },
-      { label: 'Đã nhận', data: props.data.map(d => d.received), backgroundColor: '#4CAF50' },
+      { label: 'Đã gửi', data: props.data.map(d => d.sent), backgroundColor: BRAND.green },
+      { label: 'Đã nhận', data: props.data.map(d => d.received), backgroundColor: BRAND.greenSoft },
     ],
   };
 });
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { position: 'top' as const } },
-};
 </script>
+
+<style scoped>
+.chart-card {
+  border-radius: 24px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+}
+.chart-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  padding-bottom: 0;
+}
+.chart-empty {
+  text-align: center;
+  padding: 32px 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
+</style>

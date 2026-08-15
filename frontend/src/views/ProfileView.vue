@@ -1,7 +1,7 @@
 <template>
   <div>
     <h1 class="text-h4 mb-4">
-      <v-icon class="mr-2" style="color: #00F2FF;">mdi-account-circle-outline</v-icon>
+      <v-icon class="mr-2" color="primary">mdi-account-circle-outline</v-icon>
       Hồ sơ tài khoản Zalo
     </h1>
 
@@ -32,7 +32,7 @@
         <!-- Left: avatar + status -->
         <v-col cols="12" md="4">
           <!-- Current avatar -->
-          <v-card class="mb-4">
+          <v-card class="mb-4 soft-card">
             <v-card-text class="d-flex flex-column align-center pa-4">
               <v-avatar size="96" class="mb-3">
                 <v-img v-if="profile?.avatarUrl" :src="profile.avatarUrl" alt="Avatar" />
@@ -126,7 +126,7 @@ import AvatarHistory from '@/components/profile/avatar-history.vue';
 import StatusToggle from '@/components/profile/status-toggle.vue';
 import CredentialManager from '@/components/zalo/credential-manager.vue';
 
-// ── Account list ──────────────────────────────────────────────────────────────
+// ── Account list ───────────────────────────────────────────────────
 const { accounts, fetchAccounts } = useZaloAccounts();
 fetchAccounts();
 
@@ -139,7 +139,7 @@ const accountItems = computed(() =>
   })),
 );
 
-// ── Profile composable (re-instantiated per selected account) ─────────────────
+// ── Profile composable (re-instantiated per selected account) ─────────────
 let profileOps = useProfile(selectedAccountId.value);
 
 const profile = ref(profileOps.profile.value);
@@ -185,7 +185,7 @@ async function fetchAvatars() {
 
 watch(selectedAccountId, (id) => { if (id) onAccountChange(id); });
 
-// ── Profile save ──────────────────────────────────────────────────────────────
+// ── Profile save ────────────────────────────────────────────────
 
 async function onSaveProfile(params: { name?: string; gender?: 0 | 1; dob?: string }) {
   saving.value = true;
@@ -200,7 +200,7 @@ async function onSaveProfile(params: { name?: string; gender?: 0 | 1; dob?: stri
   }
 }
 
-// ── Avatar ops ────────────────────────────────────────────────────────────────
+// ── Avatar ops ──────────────────────────────────────────────────
 
 async function onAvatarUpload(filePath: string) {
   saving.value = true;
@@ -242,7 +242,7 @@ async function onDeleteAvatar(avatarId: string) {
   }
 }
 
-// ── Status ────────────────────────────────────────────────────────────────────
+// ── Status ──────────────────────────────────────────────────────
 
 async function onStatusChange(online: boolean) {
   saving.value = true;
@@ -258,7 +258,7 @@ async function onStatusChange(online: boolean) {
   }
 }
 
-// ── Credentials ───────────────────────────────────────────────────────────────
+// ── Credentials ─────────────────────────────────────────────────
 
 async function onExportCredentials() {
   exporting.value = true;
@@ -280,7 +280,7 @@ async function onImportCredentials(content: string) {
   }
 }
 
-// ── Helper ────────────────────────────────────────────────────────────────────
+// ── Helper ──────────────────────────────────────────────────────
 
 function flash(msg: string) {
   successMsg.value = msg;

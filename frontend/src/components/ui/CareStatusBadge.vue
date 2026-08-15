@@ -10,11 +10,12 @@
         {{ current.label }}<span class="caret">▾</span>
       </span>
     </template>
-    <v-list density="compact" min-width="200">
+    <v-list density="compact" min-width="200" rounded="lg">
       <v-list-item
         v-for="opt in CARE_STATUSES"
         :key="opt.value"
         :title="opt.label"
+        rounded="lg"
         :class="{ 'is-selected': opt.value === current.value }"
         @click="select(opt.value)"
       />
@@ -51,24 +52,31 @@ function select(value: CareStatusValue) {
 <style scoped>
 .care-pill {
   display: inline-flex; align-items: center; gap: 3px;
-  padding: 2px 8px;
-  border-radius: 11px;
-  font-size: 11px; font-weight: 500;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill, 999px);
+  font-size: 11px; font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
+  transition: filter 0.2s ease;
 }
 .care-pill .caret { font-size: 9px; opacity: 0.65; margin-left: 2px; }
 .care-pill:hover { filter: brightness(0.97); }
 
-/* Chip color variants — mirror cross-page palette */
-.chip-grey    { background: rgba(90,100,120,0.12); color: var(--smax-grey-700); }
-.chip-cyan    { background: rgba(0,188,212,0.13);  color: #00838f; }
-.chip-info    { background: rgba(33,150,243,0.13); color: #1565c0; }
-.chip-purple  { background: rgba(156,39,176,0.13); color: #6a1b9a; }
-.chip-warning { background: rgba(255,145,0,0.18);  color: #ef6c00; }
-.chip-error   { background: rgba(255,82,82,0.13);  color: #c62828; }
-.chip-success { background: rgba(0,200,83,0.13);   color: #00897b; }
+/* Chip color variants — khớp utility global trong style.css,
+   khai báo lại ở đây vì style scoped không nhìn thấy class global
+   khi component được render trong teleport/menu. */
+.chip-grey    { background: rgba(17, 24, 39, 0.06);   color: var(--smax-grey-700, #374151); }
+.chip-cyan    { background: rgba(14, 165, 233, 0.12); color: #0369a1; }
+.chip-info    { background: rgba(14, 165, 233, 0.14); color: #0369a1; }
+.chip-purple  { background: rgba(139, 92, 246, 0.12); color: #6d28d9; }
+.chip-warning { background: rgba(245, 158, 11, 0.16); color: #b45309; }
+.chip-error   { background: rgba(239, 68, 68, 0.12);  color: #b91c1c; }
+.chip-success { background: rgba(22, 163, 74, 0.14);  color: var(--smax-primary-hover, #15803d); }
 
-.is-selected { background: var(--smax-primary-soft) !important; color: var(--smax-primary); }
+.is-selected {
+  background: var(--smax-primary-soft, #eaf7ef) !important;
+  color: var(--smax-primary, #16a34a);
+  font-weight: 600;
+}
 </style>

@@ -233,7 +233,7 @@ function formatRelative(iso: string): string {
 }
 .side-panel {
   position: fixed;
-  top: var(--smax-topnav-h, 52px);
+  top: var(--smax-topnav-h, 76px);
   right: 0; bottom: 0;
   width: 380px; max-width: 100vw;
   background: #fff;
@@ -326,10 +326,10 @@ function formatRelative(iso: string): string {
   cursor: pointer; font-family: inherit;
 }
 .panel-foot .btn:hover { background: #f5f7fb; }
-.panel-foot .btn.primary { background: #2f6ee5; color: #fff; border-color: #2f6ee5; }
-.panel-foot .btn.primary:hover { background: #2356b8; }
+.panel-foot .btn.primary { background: var(--smax-primary, #16a34a); color: #fff; border-color: var(--smax-primary, #16a34a); }
+.panel-foot .btn.primary:hover { background: var(--smax-primary-hover, #15803d); }
 
-.av-c1 { background: linear-gradient(135deg, #2f6ee5, #1d4ed8); }
+.av-c1 { background: linear-gradient(135deg, #4ade80, #16a34a); }
 .av-c2 { background: linear-gradient(135deg, #16a34a, #15803d); }
 .av-c3 { background: linear-gradient(135deg, #d97706, #b45309); }
 .av-c4 { background: linear-gradient(135deg, #7c3aed, #6d28d9); }

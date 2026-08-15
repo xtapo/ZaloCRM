@@ -549,8 +549,8 @@ onBeforeUnmount(() => { editor.value?.destroy(); });
 }
 .rich-text-editor.focused,
 .rich-text-editor:focus-within {
-  border-color: var(--smax-primary, #2962ff);
-  box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.10);
+  border-color: var(--smax-primary);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
 }
 
 .editor-toolbar {
@@ -623,8 +623,8 @@ onBeforeUnmount(() => { editor.value?.destroy(); });
   box-shadow: 0 2px 6px rgba(0,0,0,0.12);
 }
 .color-swatch-v2.active {
-  border-color: var(--smax-primary, #2962ff);
-  box-shadow: 0 0 0 2px var(--smax-primary-soft, #e3f2fd);
+  border-color: var(--smax-primary);
+  box-shadow: 0 0 0 2px var(--smax-primary-soft);
 }
 .swatch-default-mark { color: var(--smax-text); font-size: 13px; }
 .swatch-check { color: white; font-size: 13px; font-weight: 700; text-shadow: 0 0 2px rgba(0,0,0,0.4); }
@@ -666,11 +666,11 @@ onBeforeUnmount(() => { editor.value?.destroy(); });
 }
 .size-item:hover { background: var(--smax-grey-100, #f3f4f6); }
 .size-item.active {
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
   font-weight: 600;
 }
-.size-check { color: var(--smax-primary, #2962ff); font-weight: 700; }
+.size-check { color: var(--smax-primary); font-weight: 700; }
 
 /* AI Format button — gradient tím-xanh kiểu "magic" */
 .ai-format-btn {
@@ -679,7 +679,7 @@ onBeforeUnmount(() => { editor.value?.destroy(); });
   padding: 0 10px;
   border-radius: 13px;
   border: 0;
-  background: linear-gradient(135deg, #7c3aed 0%, #2962ff 100%);
+  background: linear-gradient(135deg, #7c3aed 0%, var(--smax-primary) 100%);
   color: white;
   font-size: 11px; font-weight: 600;
   cursor: pointer;
@@ -727,8 +727,8 @@ onBeforeUnmount(() => { editor.value?.destroy(); });
   height: 0;
 }
 .editor-content :deep(.tiptap-input code) {
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
   padding: 2px 5px;
   border-radius: 4px;
   font-size: 0.9em;

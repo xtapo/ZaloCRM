@@ -238,8 +238,8 @@ function formatFull(iso: string | null): string {
 }
 .shm-pill:hover { background: var(--smax-grey-200, #e1e4eb); }
 .shm-pill.active {
-  background: var(--smax-primary-soft, #e8efff);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
   font-weight: 600;
 }
 

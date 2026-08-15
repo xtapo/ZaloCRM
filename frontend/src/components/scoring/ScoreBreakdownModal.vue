@@ -364,7 +364,7 @@ watch(
   transition: width 0.3s;
 }
 .dim-engagement {
-  background: linear-gradient(90deg, #6366F1, #8B5CF6);
+  background: linear-gradient(90deg, #4ADE80, #16A34A);
 }
 .dim-intent {
   background: linear-gradient(90deg, #10B981, #34D399);
@@ -434,7 +434,7 @@ watch(
   border-radius: 50%;
   color: white;
 }
-.dim-mini-engagement { background: #6366F1; }
+.dim-mini-engagement { background: #16A34A; }
 .dim-mini-intent { background: #10B981; }
 .dim-mini-fit { background: #F59E0B; }
 .dim-mini-velocity { background: #EC4899; }
@@ -497,7 +497,7 @@ watch(
   cursor: pointer;
 }
 .btn-primary {
-  background: #6366F1;
+  background: var(--smax-primary, #16a34a);
   color: white;
 }
 .btn-secondary {

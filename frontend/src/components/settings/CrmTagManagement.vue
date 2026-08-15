@@ -295,7 +295,7 @@ const editingDescId = ref<string | null>(null);
 
 const createDialog = ref(false);
 const creating = ref(false);
-const newTag = ref({ name: '', color: '#1E88E5', emoji: '', category: '', description: '' });
+const newTag = ref({ name: '', color: '#16a34a', emoji: '', category: '', description: '' });
 
 const deleteTarget = ref<CrmTag | null>(null);
 const removeFromContacts = ref(true);
@@ -450,7 +450,7 @@ async function recount() {
 }
 
 function openCreate() {
-  newTag.value = { name: '', color: '#1E88E5', emoji: '', category: '', description: '' };
+  newTag.value = { name: '', color: '#16a34a', emoji: '', category: '', description: '' };
   createDialog.value = true;
 }
 
@@ -566,7 +566,7 @@ onMounted(() => { void fetchTags(); });
 .toolbar-btn:hover:not(:disabled) { background: var(--smax-primary-soft); color: var(--smax-primary); }
 .toolbar-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .toolbar-btn.primary { background: var(--smax-primary); color: #fff; border-color: var(--smax-primary); }
-.toolbar-btn.primary:hover { background: #1e4cc7; color: #fff; }
+.toolbar-btn.primary:hover { background: var(--smax-primary-hover, #15803d); color: #fff; }
 .toolbar-btn.danger {
   background: #ffebee; color: #c62828; border-color: #ef9a9a;
 }

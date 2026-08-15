@@ -2060,7 +2060,7 @@ watch(() => props.editingMessage?.id, async (id) => {
   align-items: center;
   justify-content: center;
   background: rgba(248, 250, 252, 0.72);
-  border: 2px dashed var(--smax-primary, #2962ff);
+  border: 2px dashed var(--smax-primary);
   pointer-events: none;
 }
 .drop-card {
@@ -2240,12 +2240,12 @@ watch(() => props.editingMessage?.id, async (id) => {
   flex-shrink: 0;
 }
 .gender-female {
-  background: rgba(233, 30, 99, 0.10);
-  color: var(--smax-female, #e91e63);
+  background: rgba(236, 72, 153, 0.10);
+  color: var(--smax-female, #ec4899);
 }
 .gender-male {
-  background: rgba(30, 136, 229, 0.10);
-  color: var(--smax-male, #1e88e5);
+  background: rgba(14, 165, 233, 0.10);
+  color: var(--smax-male, #0ea5e9);
 }
 .gender-unknown {
   background: var(--smax-grey-100);
@@ -2253,8 +2253,8 @@ watch(() => props.editingMessage?.id, async (id) => {
 }
 .gender-unknown .gender-q { background: var(--smax-grey-700); }
 .gender-group {
-  background: rgba(13, 71, 161, 0.10);
-  color: #0D47A1;
+  background: var(--smax-primary-soft, rgba(22, 163, 74, 0.10));
+  color: var(--smax-primary-dark, #0f6b34);
 }
 
 /* Row 2: nick avatar + nick name | in/out | last online */
@@ -2645,12 +2645,12 @@ watch(() => props.editingMessage?.id, async (id) => {
 .icon-tool:hover { background: var(--smax-grey-100); color: var(--smax-primary); }
 .icon-tool:focus { outline: none; }
 .icon-tool:focus-visible {
-  outline: 2px solid var(--smax-primary-soft, #bbdefb);
+  outline: 2px solid var(--smax-primary-glow, rgba(22, 163, 74, 0.18));
   outline-offset: -1px;
 }
 .icon-tool.active {
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
 }
 .icon-tool.spacer-after {
   border-right: 1px solid var(--smax-grey-200);
@@ -2766,8 +2766,8 @@ watch(() => props.editingMessage?.id, async (id) => {
   max-width: 180px;
 }
 .zlbl-trigger:hover {
-  background: var(--smax-primary-soft, #e3f2fd);
-  border-color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  border-color: var(--smax-primary);
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 .zlbl-icon { font-size: 12px; flex-shrink: 0; }
@@ -2801,8 +2801,8 @@ watch(() => props.editingMessage?.id, async (id) => {
 .zlbl-empty-state { font-style: italic; }
 .zlbl-inline-sync {
   margin-top: 8px;
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
   border: none;
   font-size: 12px;
   font-weight: 600;
@@ -2831,7 +2831,7 @@ watch(() => props.editingMessage?.id, async (id) => {
   transition: background 0.1s;
 }
 .zlbl-option:hover { background: var(--smax-grey-50, #f5f6fa); }
-.zlbl-option.active { background: rgba(33, 150, 243, 0.06); }
+.zlbl-option.active { background: var(--smax-primary-soft, rgba(22, 163, 74, 0.08)); }
 .zlbl-option.busy { opacity: 0.5; cursor: progress; }
 .zlbl-option:disabled { cursor: not-allowed; }
 .zlbl-flag {
@@ -2849,7 +2849,7 @@ watch(() => props.editingMessage?.id, async (id) => {
 }
 .zlbl-option.active .zlbl-name { font-weight: 600; }
 .zlbl-check {
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   font-size: 14px;
   font-weight: 700;
   flex-shrink: 0;

@@ -507,7 +507,7 @@ onMounted(() => {
   padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
-  min-height: calc(100vh - 60px);
+  min-height: calc(100vh - var(--smax-topnav-h, 76px));
 }
 
 /* ── Page Header ──────────────────────────────────────────────────────── */
@@ -656,7 +656,7 @@ onMounted(() => {
 .link-btn {
   background: none;
   border: none;
-  color: #2563eb;
+  color: var(--smax-primary, #16a34a);
   cursor: pointer;
   padding: 0;
   font-size: 12px;
@@ -687,9 +687,9 @@ onMounted(() => {
 }
 
 .preset-chip.active {
-  background: #2563eb;
+  background: var(--smax-primary, #16a34a);
   color: #ffffff;
-  border-color: #2563eb;
+  border-color: var(--smax-primary, #16a34a);
   font-weight: 500;
 }
 
@@ -758,8 +758,8 @@ onMounted(() => {
 
 .search-box input:focus {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  border-color: var(--smax-primary, #16a34a);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
 }
 
 .clear-btn {
@@ -932,7 +932,7 @@ onMounted(() => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #2563eb;
+  background: var(--smax-primary, #16a34a);
   color: white;
   display: flex;
   align-items: center;
@@ -1001,7 +1001,7 @@ onMounted(() => {
   width: 32px;
   height: 32px;
   border: 3px solid #e2e8f0;
-  border-top-color: #2563eb;
+  border-top-color: var(--smax-primary, #16a34a);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   margin: 0 auto 12px;

@@ -9,7 +9,7 @@
       density="compact"
       hide-details
       clearable
-      rounded="xl"
+      rounded="pill"
       class="mb-3"
       @update:model-value="onSearch"
     />
@@ -38,13 +38,12 @@
       <v-card
         v-for="contact in contacts"
         :key="contact.id"
-        variant="tonal"
         rounded="xl"
-        class="pa-3"
+        class="pa-3 soft-card"
         @click="openContact(contact)"
       >
         <div class="d-flex align-center">
-          <v-avatar size="40" color="grey-lighten-2" class="mr-3">
+          <v-avatar size="40" color="grey-lighten-3" class="mr-3">
             <v-img v-if="contact.avatarUrl" :src="contact.avatarUrl" />
             <v-icon v-else size="20">mdi-account</v-icon>
           </v-avatar>
@@ -95,9 +94,11 @@ const { contacts, loading, filters, fetchContacts } = useContacts();
 const showDialog = ref(false);
 const selectedContact = ref<Contact | null>(null);
 
+// Dùng màu semantic của theme (info/warning/success/error) thay cho palette
+// Vuetify mặc định (blue/orange) để đồng bộ với design token xanh lá.
 function statusColor(status: string) {
   const map: Record<string, string> = {
-    new: 'grey', contacted: 'blue', interested: 'orange',
+    new: 'grey', contacted: 'info', interested: 'warning',
     converted: 'success', lost: 'error',
   };
   return map[status] ?? 'grey';

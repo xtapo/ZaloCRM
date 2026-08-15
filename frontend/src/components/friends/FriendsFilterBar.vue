@@ -111,8 +111,8 @@ function careLabel(v: string): string {
 }
 .kind-tab:hover { background: #fff; }
 .kind-tab.active {
-  background: #2f6ee5; color: #fff;
-  border-color: #2f6ee5; font-weight: 600;
+  background: var(--smax-primary, #16a34a); color: #fff;
+  border-color: var(--smax-primary, #16a34a); font-weight: 600;
 }
 .kind-tab .dot { width: 6px; height: 6px; border-radius: 50%; }
 .kind-tab .num {
@@ -132,7 +132,7 @@ function careLabel(v: string): string {
   font-family: inherit;
 }
 .chip:hover { background: #f9fafc; }
-.chip.on { background: #2f6ee5; color: #fff; border-color: #2f6ee5; font-weight: 600; }
+.chip.on { background: var(--smax-primary, #16a34a); color: #fff; border-color: var(--smax-primary, #16a34a); font-weight: 600; }
 .chip .caret { opacity: .5; font-size: 9px; }
 
 .saved-view {
@@ -165,5 +165,5 @@ function careLabel(v: string): string {
   color: #1a2433;
 }
 .dropdown.care-dd button:hover { background: #f9fafc; }
-.dropdown.care-dd button.active { background: #e8f0fe; color: #2f6ee5; font-weight: 600; }
+.dropdown.care-dd button.active { background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary, #16a34a); font-weight: 600; }
 </style>

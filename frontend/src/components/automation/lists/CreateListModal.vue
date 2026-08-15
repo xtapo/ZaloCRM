@@ -499,7 +499,7 @@ watch(activeTab, (newTab, oldTab) => {
   font-size: 13px; outline: none;
   font-family: inherit; background: #fff; color: #111827;
 }
-.field input:focus, .field textarea:focus, .field select:focus { border-color: #6366F1; }
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--smax-primary, #16a34a); box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15); }
 .field textarea {
   font-family: "JetBrains Mono", Menlo, Consolas, monospace;
   font-size: 12px; min-height: 140px; resize: vertical;
@@ -527,7 +527,7 @@ watch(activeTab, (newTab, oldTab) => {
   display: flex; align-items: center; justify-content: center;
 }
 .icon-btn:hover { background: #F4F5F8; }
-.icon-btn.active { background: #EEF2FF; border-color: #6366F1; }
+.icon-btn.active { background: var(--smax-primary-soft, #eaf7ef); border-color: var(--smax-primary, #16a34a); }
 
 /* Tab nav */
 .tab-nav {
@@ -546,8 +546,8 @@ watch(activeTab, (newTab, oldTab) => {
 }
 .tab-btn:hover { color: #111827; }
 .tab-btn.active {
-  color: #6366F1;
-  border-bottom-color: #6366F1;
+  color: var(--smax-primary, #16a34a);
+  border-bottom-color: var(--smax-primary, #16a34a);
 }
 
 /* Dropzone */
@@ -561,7 +561,7 @@ watch(activeTab, (newTab, oldTab) => {
   transition: background .15s, border-color .15s;
 }
 .dropzone:hover, .dropzone.dragover {
-  background: #EEF2FF; border-color: #6366F1;
+  background: var(--smax-primary-soft, #eaf7ef); border-color: var(--smax-primary, #16a34a);
 }
 .dz-icon { font-size: 36px; margin-bottom: 8px; }
 .dz-title { font-size: 14px; color: #111827; margin-bottom: 4px; }
@@ -580,7 +580,7 @@ watch(activeTab, (newTab, oldTab) => {
 .file-meta .dot { color: #9CA3AF; }
 .link-btn {
   background: transparent; border: none;
-  color: #6366F1; cursor: pointer;
+  color: var(--smax-primary, #16a34a); cursor: pointer;
   font-size: 13px; padding: 0;
   font-family: inherit;
   text-decoration: underline;
@@ -667,10 +667,10 @@ watch(activeTab, (newTab, oldTab) => {
 }
 .btn:hover { background: #F4F5F8; border-color: #D1D5DB; }
 .btn.primary {
-  background: #6366F1; border-color: #6366F1; color: white;
+  background: var(--smax-primary, #16a34a); border-color: var(--smax-primary, #16a34a); color: white;
 }
 .btn.primary:hover:not(:disabled) {
-  background: #4F46E5; border-color: #4F46E5;
+  background: var(--smax-primary-hover, #15803d); border-color: var(--smax-primary-hover, #15803d);
 }
 .btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn.ghost {

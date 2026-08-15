@@ -113,7 +113,7 @@ function mediaFallback(msgType?: string | null): string {
   border-radius: 7px;
   margin-bottom: 7px;
 }
-.bar--reply { border-left-color: var(--smax-primary, #2962ff); }
+.bar--reply { border-left-color: var(--smax-primary); }
 .bar--edit  { border-left-color: var(--smax-warning, #ff9100); }
 
 .reply-icon { flex-shrink: 0; }
@@ -124,7 +124,7 @@ function mediaFallback(msgType?: string | null): string {
 }
 .reply-sender {
   font-size: 11.5px; font-weight: 600;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
 }
 .bar--edit .reply-sender { color: var(--smax-warning, #ff9100); }
 .reply-content {

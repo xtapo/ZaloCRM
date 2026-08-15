@@ -169,7 +169,7 @@ const lockTitle = computed(() => 'Nội dung riêng tư — chỉ chính chủ u
 }
 
 .private-blur:focus {
-  outline: 2px solid #5E6AD2;
+  outline: 2px solid var(--smax-primary, #16a34a);
   outline-offset: 2px;
   border-radius: 6px;
 }

@@ -150,8 +150,8 @@ function onNickAvatarError(e: Event): void {
   align-items: center;
 }
 .head .title .total {
-  background: #e8f0fe;
-  color: #2f6ee5;
+  background: var(--smax-primary-soft, #eaf7ef);
+  color: var(--smax-primary, #16a34a);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 11px;
@@ -166,7 +166,7 @@ function onNickAvatarError(e: Event): void {
   font-family: inherit;
   box-sizing: border-box;
 }
-.head .search:focus { outline: none; background: #fff; border-color: #2f6ee5; }
+.head .search:focus { outline: none; background: #fff; border-color: var(--smax-primary, #16a34a); }
 
 .all-row {
   display: flex; align-items: center; gap: 8px;
@@ -175,8 +175,8 @@ function onNickAvatarError(e: Event): void {
   margin: 8px;
   font-weight: 600; font-size: 13px; color: #5b6573;
 }
-.all-row:hover { background: #e8f0fe; color: #2f6ee5; border-color: #2f6ee5; }
-.all-row.active { background: #2f6ee5; color: #fff; border-color: #2f6ee5; border-style: solid; }
+.all-row:hover { background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary, #16a34a); border-color: var(--smax-primary, #16a34a); }
+.all-row.active { background: var(--smax-primary, #16a34a); color: #fff; border-color: var(--smax-primary, #16a34a); border-style: solid; }
 .all-row .av {
   width: 28px; height: 28px; border-radius: 6px;
   background: linear-gradient(135deg, #94a3b8, #64748b);
@@ -203,9 +203,9 @@ function onNickAvatarError(e: Event): void {
 }
 .nick-pill:hover { background: #f9fafc; }
 .nick-pill.active {
-  background: #e8f0fe;
-  border-color: #2f6ee5;
-  box-shadow: 0 1px 2px rgba(47,110,229,.1);
+  background: var(--smax-primary-soft, #eaf7ef);
+  border-color: var(--smax-primary, #16a34a);
+  box-shadow: 0 1px 2px rgba(22,163,74,.15);
 }
 .nick-pill .av {
   width: 32px; height: 32px; border-radius: 50%;
@@ -237,7 +237,7 @@ function onNickAvatarError(e: Event): void {
   background: #f9fafc; color: #5b6573;
   padding: 2px 8px; border-radius: 10px;
 }
-.nick-pill.active .count { background: #2f6ee5; color: #fff; }
+.nick-pill.active .count { background: var(--smax-primary, #16a34a); color: #fff; }
 
 .empty-nick {
   text-align: center;
@@ -256,7 +256,7 @@ function onNickAvatarError(e: Event): void {
 .footer .dot { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; }
 
 /* Sale color palette — đồng nhất qua hash account.id */
-.av-c1 { background: linear-gradient(135deg, #2f6ee5, #1d4ed8); }
+.av-c1 { background: linear-gradient(135deg, #4ade80, #16a34a); }
 .av-c2 { background: linear-gradient(135deg, #16a34a, #15803d); }
 .av-c3 { background: linear-gradient(135deg, #d97706, #b45309); }
 .av-c4 { background: linear-gradient(135deg, #7c3aed, #6d28d9); }

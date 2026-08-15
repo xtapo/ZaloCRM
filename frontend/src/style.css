@@ -1,27 +1,83 @@
 /* ════════════════════════════════════════════════════════════
    Global Base & Design System Styles for ZaloCRM
+   Style: soft-UI xanh lá (nền xám nhạt + card trắng bo tròn lớn)
    ════════════════════════════════════════════════════════════ */
 
 :root {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-heading: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  --smax-primary: #2563eb;
-  --smax-primary-hover: #1d4ed8;
-  --smax-primary-light: #dbeafe;
-  --smax-primary-glow: rgba(37, 99, 235, 0.15);
+  /* Brand green */
+  --smax-primary: #16a34a;
+  --smax-primary-hover: #15803d;
+  --smax-primary-dark: #0f6b34;
+  --smax-primary-light: #dcfce7;
+  --smax-primary-soft: #eaf7ef;
+  --smax-primary-glow: rgba(22, 163, 74, 0.18);
 
-  --smax-header-bg: #111827;
-  --smax-header-border: rgba(255, 255, 255, 0.08);
+  /* Canvas & surfaces */
+  --smax-canvas: #eceef0;
+  --smax-canvas-2: #e4e7ea;
+  --smax-surface: #ffffff;
+  --smax-surface-muted: #f6f8f7;
+  /* Alias legacy: nhiều component dùng var(--smax-bg) làm màu viền/nền tách lớp */
+  --smax-bg: #ffffff;
 
-  --smax-surface-glass: rgba(255, 255, 255, 0.85);
-  --smax-surface-border: rgba(226, 232, 240, 0.8);
+  /* Header giờ là light pill nổi trên canvas */
+  --smax-header-bg: #ffffff;
+  --smax-header-border: rgba(17, 24, 39, 0.06);
+  /* Chiều cao top nav — ChatView & các layout full-height dùng biến này để
+     tính calc(100vh - ...). Phải khớp .smax-topnav trong DefaultLayout.vue. */
+  --smax-topnav-h: 76px;
 
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-  --shadow-glow: 0 0 20px -3px var(--smax-primary-glow);
+  --smax-text: #111827;
+  --smax-text-muted: #6b7280;
+  --smax-text-subtle: #9ca3af;
+
+  --smax-surface-glass: rgba(255, 255, 255, 0.88);
+  --smax-surface-border: rgba(17, 24, 39, 0.06);
+
+  /* ── Thang grey (giữ tên legacy --smax-grey-*) ─────────────
+     Các biến này được dùng rải rác trong TagChipList, CareStatusBadge,
+     ToastContainer, ChatView, các view chat/contacts… nên bắt buộc phải tồn tại. */
+  --smax-grey-50: #f9fafb;
+  --smax-grey-100: #f3f4f6;
+  --smax-grey-200: #e5e7eb;
+  --smax-grey-300: #d1d5db;
+  --smax-grey-400: #9ca3af;
+  --smax-grey-500: #6b7280;
+  --smax-grey-600: #4b5563;
+  --smax-grey-700: #374151;
+  --smax-grey-800: #1f2937;
+  --smax-grey-900: #111827;
+
+  /* ── Màu semantic ─────────────────────────────────────────── */
+  --smax-success: #16a34a;
+  --smax-success-soft: #dcfce7;
+  --smax-warning: #f59e0b;
+  --smax-warning-soft: #fef3c7;
+  --smax-error: #ef4444;
+  --smax-error-soft: #fee2e2;
+  --smax-info: #0ea5e9;
+  --smax-info-soft: #e0f2fe;
+
+  /* Badge giới tính trên Avatar */
+  --smax-female: #ec4899;
+  --smax-male: #0ea5e9;
+
+  /* Bo góc lớn kiểu mockup */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* Shadow mềm, khuếch tán rộng */
+  --shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.04);
+  --shadow-sm: 0 2px 8px rgba(17, 24, 39, 0.04);
+  --shadow-md: 0 6px 18px rgba(17, 24, 39, 0.06);
+  --shadow-lg: 0 14px 34px rgba(17, 24, 39, 0.08);
+  --shadow-glow: 0 10px 24px -8px var(--smax-primary-glow);
 }
 
 *, *::before, *::after {
@@ -36,8 +92,8 @@ html, body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--smax-grey-100, #f8fafc);
-  color: #1e293b;
+  background-color: var(--smax-canvas);
+  color: var(--smax-text);
 }
 
 #app {
@@ -47,10 +103,48 @@ html, body {
   padding: 0;
 }
 
+h1, h2, h3, h4, .text-h1, .text-h2, .text-h3, .text-h4 {
+  font-family: var(--font-heading);
+  letter-spacing: -0.02em;
+}
+
+/* Vuetify surface overrides để khớp canvas xám nhạt */
+.v-application,
+.v-application .v-main {
+  background-color: var(--smax-canvas) !important;
+}
+
+/* ── Cards: trắng, bo lớn, không viền cứng ─────────────────── */
+.v-card.soft-card,
+.soft-card {
+  background: var(--smax-surface);
+  border: none !important;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.v-card.soft-card:hover,
+.soft-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* Card nhấn (kiểu thẻ VISA xanh trong mockup) */
+.soft-card--accent {
+  background: linear-gradient(150deg, var(--smax-primary) 0%, var(--smax-primary-dark) 100%);
+  color: #ffffff;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-glow);
+}
+.soft-card--accent .text-medium-emphasis,
+.soft-card--accent .v-card-subtitle {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -58,41 +152,166 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.4);
-  border-radius: 9999px;
+  background: rgba(17, 24, 39, 0.16);
+  border-radius: var(--radius-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.6);
+  background: rgba(17, 24, 39, 0.28);
 }
 
-/* Glassmorphism Utilities */
+/* Glassmorphism / panel utilities (giữ tên class cũ để không phá view) */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--smax-surface-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--smax-surface-border);
+  border-radius: var(--radius-lg);
 }
 
 .glass-card {
-  background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: var(--smax-surface);
+  border: none;
   box-shadow: var(--shadow-sm);
-  border-radius: 12px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: var(--radius-xl);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
   box-shadow: var(--shadow-md);
-  border-color: rgba(203, 213, 225, 0.9);
 }
+
+/* Pill / segmented control (Monthly · Annually trong mockup) */
+.soft-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--smax-surface-muted);
+  border-radius: var(--radius-pill);
+}
+.soft-segment > button {
+  border: none;
+  background: transparent;
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--smax-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.soft-segment > button.active {
+  background: var(--smax-primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-glow);
+}
+
+/* Icon rail bên trái (nút tròn/vuông mềm) */
+.soft-icon-btn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--smax-surface);
+  color: var(--smax-text-muted);
+  box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.soft-icon-btn:hover {
+  color: var(--smax-primary);
+  box-shadow: var(--shadow-sm);
+}
+.soft-icon-btn.active {
+  background: var(--smax-primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-glow);
+}
+
+/* ── Chip utilities dùng chung toàn app ─────────────────────
+   care-status.ts / TagCrmBar / ActivityItem… tham chiếu các class này,
+   nên định nghĩa 1 lần ở global để mọi nơi hiện cùng màu. */
+.chip-grey    { background: rgba(17, 24, 39, 0.06);  color: var(--smax-grey-700); }
+.chip-info    { background: var(--smax-info-soft);   color: #0369a1; }
+.chip-cyan    { background: rgba(14, 165, 233, 0.12); color: #0369a1; }
+.chip-success { background: var(--smax-success-soft); color: var(--smax-primary-hover); }
+.chip-warning { background: var(--smax-warning-soft); color: #b45309; }
+.chip-error   { background: var(--smax-error-soft);   color: #b91c1c; }
+.chip-purple  { background: rgba(139, 92, 246, 0.12); color: #6d28d9; }
+.chip-zalo    { background: rgba(245, 158, 11, 0.16); color: #b45309; }
 
 /* Badge & Chip Micro Animations */
 .chip-score {
   font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 9999px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
+}
+
+/* Chip delta kiểu "+12.8%" nền xanh nhạt */
+.chip-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--smax-primary-light);
+  color: var(--smax-primary-hover);
+}
+
+/* Số liệu lớn kiểu $32,678.90 */
+.stat-value {
+  font-family: var(--font-heading);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.stat-value .decimals {
+  color: var(--smax-text-subtle);
+  font-weight: 600;
+}
+.stat-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--smax-text);
+}
+.stat-caption {
+  font-size: 12px;
+  color: var(--smax-text-subtle);
+}
+
+/* Bảng kiểu "Payment History": không kẻ dọc, hover pill nhẹ */
+.v-data-table.soft-table,
+.soft-table {
+  background: transparent;
+}
+.soft-table :deep(thead th),
+.soft-table thead th {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--smax-text-subtle) !important;
+  border-bottom: none !important;
+}
+.soft-table tbody td {
+  border-bottom: none !important;
+  font-size: 13px;
+}
+.soft-table tbody tr:hover td {
+  background: var(--smax-primary-soft);
+}
+
+/* Buttons: bỏ uppercase, dùng pill */
+.v-btn {
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  font-weight: 600;
 }
 
 /* Smooth Focus Ring */

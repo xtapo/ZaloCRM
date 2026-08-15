@@ -1228,7 +1228,7 @@ function close() {
 }
 .friend-alias-input:focus {
   outline: none;
-  border-color: var(--smax-primary, #2962ff);
+  border-color: var(--smax-primary);
   background: white;
 }
 .friend-alias-input::placeholder {
@@ -1245,7 +1245,7 @@ function close() {
   background: transparent;
 }
 .friend-score-input:focus {
-  outline: 1.5px solid var(--smax-primary, #2962ff);
+  outline: 1.5px solid var(--smax-primary);
   background: white;
 }
 </style>

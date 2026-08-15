@@ -148,10 +148,10 @@ watch(open, watchOpen);
   -webkit-tap-highlight-color: transparent;
   transition: background 0.12s, color 0.12s;
 }
-.icon-tool:hover { background: var(--smax-grey-100, #f5f6fa); color: var(--smax-primary, #2962ff); }
+.icon-tool:hover { background: var(--smax-grey-100, #f5f6fa); color: var(--smax-primary); }
 .icon-tool:focus { outline: none; }
 .icon-tool:focus-visible {
-  outline: 2px solid var(--smax-primary-soft, #bbdefb);
+  outline: 2px solid var(--smax-primary-glow, rgba(22, 163, 74, 0.18));
   outline-offset: -1px;
 }
 
@@ -201,11 +201,11 @@ watch(open, watchOpen);
   cursor: pointer;
   transition: all 0.15s ease;
 }
-.sp-chip:hover { background: #e3f2fd; }
+.sp-chip:hover { background: var(--smax-primary-soft, #eaf7ef); }
 .sp-chip.active {
-  background: var(--smax-primary, #2962ff);
+  background: var(--smax-primary);
   color: white;
-  border-color: var(--smax-primary, #2962ff);
+  border-color: var(--smax-primary);
 }
 .sp-grid {
   display: grid;
@@ -227,8 +227,8 @@ watch(open, watchOpen);
   transition: all 0.15s ease;
 }
 .sp-item:hover {
-  background: #e3f2fd;
-  border-color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft, #eaf7ef);
+  border-color: var(--smax-primary);
   transform: scale(1.05);
 }
 .sp-item img {

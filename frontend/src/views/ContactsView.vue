@@ -1180,7 +1180,7 @@ onMounted(() => {
      space + own scroll (V + H) → toolbar/stats stay above khi scroll bảng. */
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--smax-topnav-h, 52px));
+  height: calc(100vh - var(--smax-topnav-h, 76px));
   overflow: hidden;
 }
 .smax-contacts-page > .page-header,
@@ -1323,16 +1323,16 @@ onMounted(() => {
 .status-edit-chip { cursor: pointer; }
 .status-edit-chip:hover { filter: brightness(1.1); }
 .score-input { width: 50px; padding: 2px 4px; font-size: 11.5px; text-align: center; border: 1px solid var(--smax-grey-300); border-radius: 4px; }
-.score-input:focus { outline: 2px solid var(--smax-primary, #00f2ff); }
+.score-input:focus { outline: 2px solid var(--smax-primary); }
 .alias-input { width: 100%; min-width: 140px; padding: 3px 6px; font-size: 12px; border: 1px solid var(--smax-grey-300); border-radius: 4px; background: transparent; }
-.alias-input:focus { outline: 1.5px solid var(--smax-primary, #00f2ff); background: white; }
+.alias-input:focus { outline: 1.5px solid var(--smax-primary); background: white; }
 .alias-input::placeholder { color: var(--smax-grey-400); font-style: italic; }
 .status-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1100; display: flex; align-items: center; justify-content: center; }
 .status-picker { background: var(--smax-bg); border-radius: 10px; padding: 16px 20px; min-width: 320px; max-width: 480px; }
 .status-picker h4 { margin: 0 0 12px; font-size: 14px; }
 .status-picker-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .status-picker-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border: 1px solid transparent; border-radius: 6px; cursor: pointer; font-weight: 500; text-align: left; }
-.status-picker-item.active { border-color: var(--smax-primary, #00f2ff); }
+.status-picker-item.active { border-color: var(--smax-primary); }
 .status-picker-item:hover { filter: brightness(1.05); }
 .order-num { font-size: 10px; opacity: 0.5; font-family: monospace; }
 .btn-close { width: 100%; padding: 8px; background: var(--smax-grey-100); border: 1px solid var(--smax-grey-200); border-radius: 6px; cursor: pointer; }
@@ -1477,12 +1477,12 @@ onMounted(() => {
 .avatar.avatar-customer {
   width: 32px; height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #90caf9, #1976d2);
+  background: linear-gradient(135deg, #38bdf8, var(--smax-male, #0ea5e9));
   display: flex; align-items: center; justify-content: center;
   color: white; font-weight: 600; font-size: 13px;
 }
 .avatar.avatar-customer.is-female {
-  background: linear-gradient(135deg, #f48fb1, #c2185b);
+  background: linear-gradient(135deg, #f472b6, var(--smax-female, #ec4899));
 }
 
 .name-text { font-weight: 500; color: var(--smax-text); }
@@ -1502,11 +1502,11 @@ onMounted(() => {
   font-size: 10.5px; font-weight: 500;
   white-space: nowrap;
 }
-.chip-success { background: rgba(0,200,83,0.12); color: #00897b; }
-.chip-warning { background: rgba(255,145,0,0.15); color: #ef6c00; }
-.chip-info    { background: rgba(33,150,243,0.12); color: #1565c0; }
+.chip-success { background: var(--smax-success-soft); color: var(--smax-primary-hover); }
+.chip-warning { background: var(--smax-warning-soft); color: #b45309; }
+.chip-info    { background: var(--smax-info-soft); color: var(--smax-info); }
 .chip-grey    { background: rgba(90,100,120,0.10); color: var(--smax-grey-700); }
-.chip-error   { background: rgba(255,82,82,0.12); color: #c62828; }
+.chip-error   { background: var(--smax-error-soft); color: #b91c1c; }
 .chip-multi-nick {
   background: linear-gradient(135deg, rgba(124,77,255,0.14), rgba(33,150,243,0.10));
   color: #4527a0;
@@ -1640,7 +1640,7 @@ onMounted(() => {
   text-transform: uppercase;
   white-space: nowrap;
 }
-.chip-conv--on  { background: rgba(0,200,83,0.12);  color: #00897b; }
+.chip-conv--on  { background: var(--smax-success-soft);  color: var(--smax-primary-hover); }
 .chip-conv--off { background: rgba(0,0,0,0.06);     color: #888;    }
 
 /* Zalo identity columns (optional, toggle via ⚙ Cột) */
@@ -1654,8 +1654,8 @@ onMounted(() => {
   word-break: break-all;
 }
 .chip-multi {
-  background: rgba(13, 71, 161, 0.10);
-  color: #0d47a1;
+  background: var(--smax-primary-soft, rgba(22, 163, 74, 0.12));
+  color: var(--smax-primary-dark, #0f6b34);
   font-size: 10.5px;
   padding: 1px 7px;
   border-radius: 9px;

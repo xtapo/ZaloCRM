@@ -1,11 +1,11 @@
 <template>
-  <v-card>
-    <v-card-title class="text-body-1">{{ title }}</v-card-title>
+  <v-card class="chart-card">
+    <v-card-title class="chart-title">{{ title }}</v-card-title>
     <v-card-text>
       <div v-if="chartData" class="chart-wrap">
-        <Line :data="chartData" :options="chartOptions" />
+        <Line :data="chartData" :options="lineChartOptions" />
       </div>
-      <div v-else class="text-center pa-8 text-grey">Không có dữ liệu</div>
+      <div v-else class="chart-empty">Không có dữ liệu</div>
     </v-card-text>
   </v-card>
 </template>
@@ -23,6 +23,7 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import { BRAND, lineChartOptions } from '@/constants/chart-theme';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
@@ -45,29 +46,39 @@ const chartData = computed(() => {
       {
         label: 'Tuần này',
         data: props.currentWeek?.map((d) => d.value) ?? [],
-        borderColor: '#00BCD4',
-        backgroundColor: '#00BCD4',
-        tension: 0.3,
+        borderColor: BRAND.green,
+        backgroundColor: BRAND.green,
       },
       {
         label: 'Tuần trước',
         data: props.previousWeek?.map((d) => d.value) ?? [],
-        borderColor: '#9E9E9E',
-        backgroundColor: '#9E9E9E',
+        borderColor: BRAND.greyLight,
+        backgroundColor: BRAND.greyLight,
         borderDash: [5, 5],
-        tension: 0.3,
       },
     ],
   };
 });
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { position: 'top' as const } },
-};
 </script>
 
 <style scoped>
+.chart-card {
+  border-radius: 24px;
+  border: none;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+}
+.chart-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  padding-bottom: 0;
+}
 .chart-wrap { position: relative; height: 240px; width: 100%; }
+.chart-empty {
+  text-align: center;
+  padding: 32px 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
 </style>

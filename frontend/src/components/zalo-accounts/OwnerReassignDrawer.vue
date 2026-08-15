@@ -210,15 +210,15 @@ function shortName(name: string): string {
   return (parts[parts.length - 1][0] || '?').toUpperCase();
 }
 function avatarColor(name: string): string {
-  const palettes = [
-    'linear-gradient(135deg,#f59e0b,#ef4444)',
-    'linear-gradient(135deg,#3b82f6,#1e40af)',
+  const AVATAR_COLORS = [
+    'linear-gradient(135deg,#4ade80,#16a34a)',
     'linear-gradient(135deg,#10b981,#059669)',
+    'linear-gradient(135deg,#f59e0b,#d97706)',
     'linear-gradient(135deg,#8b5cf6,#6d28d9)',
     'linear-gradient(135deg,#ec4899,#be185d)',
   ];
   const h = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  return palettes[h % palettes.length];
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 </script>
 
@@ -298,7 +298,7 @@ function avatarColor(name: string): string {
   border-radius: 8px; font-size: 13px; font-family: inherit;
   margin-bottom: 4px;
 }
-.orad-search:focus { outline: none; border-color: #5E6AD2; box-shadow: 0 0 0 2px rgba(94,106,210,0.15); }
+.orad-search:focus { outline: none; border-color: var(--smax-primary, #16a34a); box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15); }
 
 .orad-user-list {
   max-height: 280px; overflow-y: auto;
@@ -315,7 +315,7 @@ function avatarColor(name: string): string {
 }
 .orad-user-item:last-child { border-bottom: none; }
 .orad-user-item:hover:not(:disabled) { background: #F9FAFB; }
-.orad-user-item.selected { background: #EEF0FF; }
+.orad-user-item.selected { background: var(--smax-primary-soft, #eaf7ef); }
 .orad-user-item.current { opacity: 0.55; cursor: not-allowed; }
 .orad-user-info { flex: 1; min-width: 0; }
 .orad-user-name { font-size: 13px; font-weight: 600; color: #0F172A; }
@@ -348,9 +348,9 @@ function avatarColor(name: string): string {
 }
 .orad-btn-ghost:hover { background: #F9FAFB; }
 .orad-btn-primary {
-  background: linear-gradient(135deg, #5E6AD2, #4C57B8); color: white;
+  background: var(--smax-primary, #16a34a); color: white;
   border: none; padding: 9px 18px; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 13px;
 }
-.orad-btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #4C57B8, #3F4AA0); }
+.orad-btn-primary:hover:not(:disabled) { background: var(--smax-primary-hover, #15803d); }
 .orad-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
 </style>

@@ -5,9 +5,12 @@ import * as components from 'vuetify/components';
 import * as directives from 'vuetify/directives';
 
 /**
- * Vuetify theme — palette từ design tokens Smax (mockup chat-smax-v3.html).
- * `smax-light` (default) khớp mockup. `legacy-dark` giữ lại để fallback nếu
- * có view nào còn phụ thuộc bảng màu cũ; sẽ rút khi mọi view đã migrate.
+ * Vuetify theme — palette "soft green" theo mockup dashboard tham khảo:
+ * nền xám nhạt, card trắng bo tròn lớn, accent xanh lá đậm.
+ *
+ * Tên theme `smax-light` được giữ nguyên để không phá vỡ giá trị đã lưu trong
+ * localStorage('theme') và các view đang tham chiếu. `legacy-dark` vẫn giữ để
+ * fallback.
  */
 export const vuetify = createVuetify({
   components,
@@ -18,18 +21,18 @@ export const vuetify = createVuetify({
       'smax-light': {
         dark: false,
         colors: {
-          background: '#f5f6fa',
+          background: '#eceef0',
           surface: '#ffffff',
-          'surface-variant': '#fafbfc',
-          primary: '#2962ff',
-          secondary: '#1f2330',
-          accent: '#2962ff',
-          error: '#ff3d00',
-          warning: '#ff9100',
-          success: '#00c853',
-          info: '#2196f3',
-          'on-background': '#212121',
-          'on-surface': '#212121',
+          'surface-variant': '#f6f8f7',
+          primary: '#16a34a',
+          secondary: '#0f2f21',
+          accent: '#22c55e',
+          error: '#ef4444',
+          warning: '#f59e0b',
+          success: '#16a34a',
+          info: '#0ea5e9',
+          'on-background': '#111827',
+          'on-surface': '#111827',
           'on-primary': '#ffffff',
           'on-secondary': '#ffffff',
         },
@@ -37,31 +40,33 @@ export const vuetify = createVuetify({
       'legacy-dark': {
         dark: true,
         colors: {
-          background: '#0A192F',
-          surface: '#112240',
-          'surface-variant': '#1D2D50',
-          primary: '#00F2FF',
-          secondary: '#E6F1FF',
-          accent: '#00F2FF',
-          error: '#FF5252',
-          warning: '#FFB74D',
-          success: '#4CAF50',
-          info: '#00F2FF',
-          'on-background': '#E6F1FF',
-          'on-surface': '#E6F1FF',
-          'on-primary': '#0A192F',
+          background: '#0b1a12',
+          surface: '#12241a',
+          'surface-variant': '#17301f',
+          primary: '#22c55e',
+          secondary: '#e6f4ec',
+          accent: '#22c55e',
+          error: '#ff5252',
+          warning: '#ffb74d',
+          success: '#4caf50',
+          info: '#38bdf8',
+          'on-background': '#e6f4ec',
+          'on-surface': '#e6f4ec',
+          'on-primary': '#06170e',
         },
       },
     },
   },
   defaults: {
-    VBtn: { variant: 'flat' },
-    VTextField: { variant: 'outlined', density: 'compact' },
-    VSelect: { variant: 'outlined', density: 'compact' },
-    VAutocomplete: { variant: 'outlined', density: 'compact' },
-    VTextarea: { variant: 'outlined', density: 'compact' },
-    VCard: { rounded: 'md', variant: 'flat' },
-    VChip: { rounded: 'lg', size: 'small' },
+    VBtn: { variant: 'flat', rounded: 'pill', class: 'text-none' },
+    VTextField: { variant: 'solo-filled', flat: true, density: 'comfortable', rounded: 'lg', hideDetails: 'auto' },
+    VSelect: { variant: 'solo-filled', flat: true, density: 'comfortable', rounded: 'lg', hideDetails: 'auto' },
+    VAutocomplete: { variant: 'solo-filled', flat: true, density: 'comfortable', rounded: 'lg', hideDetails: 'auto' },
+    VTextarea: { variant: 'solo-filled', flat: true, density: 'comfortable', rounded: 'lg', hideDetails: 'auto' },
+    VCard: { rounded: 'xl', variant: 'flat', class: 'soft-card' },
+    VSheet: { rounded: 'xl' },
+    VChip: { rounded: 'pill', size: 'small' },
     VDialog: { maxWidth: 600 },
+    VDataTable: { hover: true },
   },
 });
