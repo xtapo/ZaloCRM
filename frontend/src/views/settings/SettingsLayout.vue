@@ -146,7 +146,7 @@ onMounted(() => {
 .settings-layout {
   display: grid;
   grid-template-columns: 260px 1fr;
-  height: calc(100vh - 56px);
+  height: calc(100vh - var(--smax-topnav-h, 76px));
   background: #FAFAFC;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   font-size: 13.5px;
@@ -206,8 +206,8 @@ onMounted(() => {
 }
 .sl-search input:focus {
   background: white;
-  border-color: #5E6AD2;
-  box-shadow: 0 0 0 2px rgba(94, 106, 210, 0.12);
+  border-color: var(--smax-primary, #16a34a);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.15);
 }
 .sl-search .ic {
   color: #97A0AC;
@@ -301,10 +301,10 @@ onMounted(() => {
 }
 .sl-item.active,
 .sl-item.router-link-exact-active {
-  background: #EEF0FF;
-  color: #5E6AD2;
+  background: var(--smax-primary-soft, #eaf7ef);
+  color: var(--smax-primary, #16a34a);
   font-weight: 600;
-  box-shadow: inset 3px 0 0 #5E6AD2;
+  box-shadow: inset 3px 0 0 var(--smax-primary, #16a34a);
 }
 .sl-item-icon {
   font-size: 14px;
@@ -348,7 +348,7 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .bc-root {
-  color: #5E6AD2;
+  color: var(--smax-primary, #16a34a);
   text-decoration: none;
   font-weight: 500;
 }
