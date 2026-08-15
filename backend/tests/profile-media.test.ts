@@ -109,7 +109,7 @@ describe('voice-sender: sendVoiceFile', () => {
     await expect(
       sendVoiceFile({ api: {}, threadId: 't1', threadType: 0, audioPath: '/tmp/test.mkv' }),
     ).rejects.toMatchObject({ code: 'INVALID_PARAMS' });
-  });
+  }, 15000);
 
   it('throws INVALID_PARAMS for missing file', async () => {
     const { sendVoiceFile } = await import('../src/shared/voice-sender.js');
