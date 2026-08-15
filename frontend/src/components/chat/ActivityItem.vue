@@ -85,12 +85,12 @@ void loadTagDefs();
 /* Care status meta map: code → { label VN, color hex từ chip class } */
 const CHIP_TO_HEX: Record<string, string> = {
   'chip-grey':    '#6B7280',
-  'chip-cyan':    '#00838F',
-  'chip-info':    '#1976D2',
-  'chip-purple':  '#7B1FA2',
-  'chip-warning': '#F57C00',
-  'chip-error':   '#C62828',
-  'chip-success': '#2E7D32',
+  'chip-cyan':    '#0284c7',
+  'chip-info':    '#0ea5e9',
+  'chip-purple':  '#7c3aed',
+  'chip-warning': '#f59e0b',
+  'chip-error':   '#ef4444',
+  'chip-success': '#16a34a',
 };
 function statusMeta(code: string): { label: string; color: string } | null {
   const s = CARE_STATUSES.find(x => x.value === code);
@@ -332,8 +332,8 @@ const autoTagContext = computed<string>(() => {
   transition: background 0.12s;
 }
 .act-actor:hover {
-  background: var(--smax-primary-soft, #e3f2fd);
-  color: var(--smax-primary, #2962ff);
+  background: var(--smax-primary-soft);
+  color: var(--smax-primary);
 }
 
 /* Diff block 2-line cho customer_update */
@@ -396,7 +396,7 @@ const autoTagContext = computed<string>(() => {
 }
 .act-details :deep(.diff-new) {
   font-weight: 600;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
 }
 .act-details :deep(.diff-green) {
   color: #00897b;
