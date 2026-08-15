@@ -108,19 +108,19 @@ async function onClick() {
   border-color: #E4E5E9;
 }
 .lock-badge.locked:hover {
-  background: #EEF0FF;
-  border-color: #C7CCEB;
-  color: #4F5BC4;
+  background: var(--smax-primary-soft, #eaf7ef);
+  border-color: var(--smax-primary-light, #dcfce7);
+  color: var(--smax-primary-hover, #15803d);
 }
 .lock-badge.unlocked {
-  background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, var(--smax-primary-hover, #15803d) 0%, var(--smax-primary, #16a34a) 100%);
   color: white;
-  border-color: #1e40af;
-  box-shadow: 0 1px 3px rgba(30, 64, 175, 0.25);
+  border-color: var(--smax-primary-hover, #15803d);
+  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.25);
 }
 .lock-badge.unlocked:hover {
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
-  box-shadow: 0 2px 6px rgba(30, 64, 175, 0.35);
+  background: linear-gradient(135deg, var(--smax-primary-dark, #0f6b34) 0%, var(--smax-primary-hover, #15803d) 100%);
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.35);
 }
 .lb-icon {
   font-size: 12px;
@@ -137,7 +137,7 @@ async function onClick() {
   font-variant-numeric: tabular-nums;
 }
 .lock-badge:focus-visible {
-  outline: 2px solid #5E6AD2;
+  outline: 2px solid var(--smax-primary, #16a34a);
   outline-offset: 2px;
 }
 </style>
