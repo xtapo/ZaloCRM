@@ -206,7 +206,7 @@ onMounted(() => fetchAll());
   margin: 0 0 16px auto;
   padding: 6px 14px;
   background: var(--smax-primary-light, #dcfce7);
-  border: none;
+  border: 1px solid var(--smax-surface-border, transparent);
   border-radius: 9999px;
   color: var(--smax-primary-hover, #15803d);
   font-size: 12.5px;
@@ -229,5 +229,20 @@ onMounted(() => fetchAll());
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
+}
+
+@media (max-width: 768px) {
+  .dashboard-page {
+    padding: 16px !important;
+  }
+  .contact-marquee {
+    max-width: 100%;
+    margin: 0 0 14px 0;
+  }
+  .dash-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
 }
 </style>
