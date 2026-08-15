@@ -180,13 +180,13 @@ async function setupPin() {
 .modal h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
 .muted { color: #6B7280; font-size: 12px; margin: 0 0 18px; }
 .pin-input { width: 100%; padding: 14px; font-size: 28px; letter-spacing: 18px; text-align: center; border: 2px solid #E4E5E9; border-radius: 8px; margin-bottom: 12px; font-family: monospace; }
-.pin-input:focus { outline: none; border-color: #5E6AD2; }
+.pin-input:focus { outline: none; border-color: var(--smax-primary, #16a34a); box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15); }
 .duration-picker { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .duration-picker label { font-size: 12px; color: #6B7280; }
 .duration-picker button { background: #F4F4F7; border: 1px solid transparent; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-.duration-picker button.active { background: #EFF6FF; border-color: #5E6AD2; color: #1D4ED8; font-weight: 600; }
+.duration-picker button.active { background: var(--smax-primary-soft, #eaf7ef); border-color: var(--smax-primary, #16a34a); color: var(--smax-primary-hover, #15803d); font-weight: 600; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; }
-.btn-primary { background: #5E6AD2; color: white; border: 0; padding: 9px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+.btn-primary { background: var(--smax-primary, #16a34a); color: white; border: 0; padding: 9px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-ghost { background: white; border: 1px solid #E4E5E9; padding: 9px 16px; border-radius: 6px; cursor: pointer; }
 .setup-first input { width: 100%; padding: 10px; border: 1px solid #E4E5E9; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
