@@ -846,7 +846,7 @@ function relativeTime(dateStr: string) {
 }
 .lead-score-badge.tier-hot   { background: #ffebee; color: #c62828; border-color: #ffcdd2; }
 .lead-score-badge.tier-warm  { background: #fff3e0; color: #ef6c00; border-color: #ffe0b2; }
-.lead-score-badge.tier-cool  { background: #e3f2fd; color: #1565c0; border-color: #bbdefb; }
+.lead-score-badge.tier-cool  { background: var(--smax-info-soft); color: var(--smax-info); border-color: rgba(14, 165, 233, 0.2); }
 .lead-score-badge.tier-cold  { background: #f5f6fa; color: var(--smax-grey-600); border-color: #e0e0e0; }
 
 .ip-name-line {
@@ -1014,13 +1014,13 @@ function relativeTime(dateStr: string) {
   cursor: pointer;
   font-family: inherit;
   font-size: 11px;
-  color: var(--smax-primary, #2962ff);
+  color: var(--smax-primary);
   font-weight: 500;
   padding: 6px 13px;
   text-align: left;
   transition: background 0.12s;
 }
-.info-expand-toggle:hover { background: var(--smax-primary-soft, #e3f2fd); }
+.info-expand-toggle:hover { background: var(--smax-primary-soft); }
 .info-expand-toggle.is-sticky {
   background: linear-gradient(135deg, #FEF3C7, #FDE68A);
   color: #92400E;
@@ -1042,17 +1042,17 @@ function relativeTime(dateStr: string) {
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 600;
-  color: #6366F1;
-  background: #EEF2FF;
-  border: 1px dashed #C7D2FE;
+  color: var(--smax-primary);
+  background: var(--smax-primary-soft, #eaf7ef);
+  border: 1px dashed var(--smax-primary-light, #dcfce7);
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
   font-family: inherit;
 }
 .info-fullprofile-link:hover {
-  background: #E0E7FF;
-  border-color: #818CF8;
+  background: var(--smax-primary-light, #dcfce7);
+  border-color: var(--smax-primary);
   border-style: solid;
 }
 .ip-form-row {
@@ -1240,9 +1240,9 @@ function relativeTime(dateStr: string) {
   padding: 2px 7px; border-radius: 9px;
   font-size: 10px; font-weight: 500;
 }
-.pill-success { background: rgba(0,200,83,0.12); color: #00897b; }
-.pill-warning { background: rgba(255,145,0,0.12); color: #ef6c00; }
-.pill-info    { background: rgba(33,150,243,0.12); color: #1565c0; }
+.pill-success { background: var(--smax-success-soft, rgba(22, 163, 74, 0.12)); color: var(--smax-primary-hover); }
+.pill-warning { background: var(--smax-warning-soft, rgba(245, 158, 11, 0.12)); color: #b45309; }
+.pill-info    { background: var(--smax-info-soft); color: var(--smax-info); }
 
 .empty-section {
   font-size: 11px; color: var(--smax-grey-700);
