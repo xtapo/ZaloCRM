@@ -25,20 +25,51 @@ Một dữ kiện sai mà tự tin còn tệ hơn một ô trống. Ô trống t
 | Mã nguồn | Độ mạnh | Nghĩa là |
 | --- | --- | --- |
 | `zalo.self-stated` | Mạnh | Khách tự gõ ra trong tin nhắn |
-| `facebook.lead-form` | Mạnh | Khách tự điền vào form |
+| `facebook.lead-form` | Mạnh | Khách tự điền vào form — xem cảnh báo về `fieldMap` bên dưới |
 | `zalo.bank-card` | Mạnh | Khách gửi card chuyển khoản / QR |
 | `crm.phone-match` | Mạnh | Hai bản ghi trùng số sau khi chuẩn hoá |
-| `zalo.friend-sync` | Trung bình | Dữ liệu profile khách đồng bộ về qua `Friend` |
+| `zalo.friend-sync` | Trung bình | **Chỉ 4 trường:** tên hiển thị, avatar, `globalId`, `username` |
 | `zalo.alias` | Trung bình | Sale tự đặt, pull định kỳ nên có thể cũ |
 | `zalo.label` | Trung bình | Sale tự gắn, phản ánh quy ước nội bộ |
 | `llm.inference` | **Yếu** | Chính bạn suy ra từ ngữ cảnh |
 
-> [!WARNING]
-> **`zalo.friend-sync` cần xác minh lại trước khi viết tool.**
-> Bản thảo đầu của spec gọi nguồn này là `zalo.profile-sdk` và trỏ vào `profile-operations.ts`. Đó là nhầm: file đó quản lý profile của **chính tài khoản Zalo của doanh nghiệp** (đổi tên, giới tính, ngày sinh, avatar của nick sale), không phải lấy thông tin khách.
-> Nguồn thật nhiều khả năng là `friend-sync-service.ts` / `friend-event-handler.ts`. Phải đọc hai file đó và chốt độ mạnh trước khi cho phép ghi từ nguồn này.
-
 Quy tắc đọc bảng: **độ mạnh thuộc về nguồn, không thuộc về cảm giác của bạn về nguồn đó.** Một câu khách tự nói vẫn là `Mạnh` kể cả khi bạn thấy nó khó tin. Một suy luận của bạn vẫn là `Yếu` kể cả khi bạn thấy nó hiển nhiên.
+
+### `zalo.friend-sync` không chứa thông tin cá nhân
+
+Đã đối chiếu `friend-sync-service.ts`. Đồng bộ Friend mang về **đúng bốn trường** (hằng `DIFFABLE_FIELDS`):
+
+```text
+zaloDisplayName   — tên khách tự đặt trên Zalo
+zaloAvatarUrl     — ảnh đại diện
+zaloGlobalId      — định danh xuyên nick
+zaloUsername      — handle @abc
+```
+
+**Không có số điện thoại. Không có giới tính. Không có ngày sinh.** Nếu bạn cần ba thứ đó, nguồn duy nhất hợp lệ là khách tự nói ra trong chat hoặc tự điền vào lead form.
+
+Dữ liệu này do cron chạy **mỗi 15 phút**, nên có thể cũ tới 15 phút. Đừng kết luận "khách chưa đổi tên" chỉ vì bản ghi bạn đọc chưa đổi.
+
+### `facebook.lead-form` — nhãn trường do admin cấu hình
+
+Giá trị thì mạnh: khách tự tay điền. Nhưng *nhãn* của giá trị lại không tự động đúng. `applyFieldMap()` chỉ hiểu ba đích: `name`, `phone`, `email`. Mọi trường khác rơi vào `customFields` với **khoá là tên trường tiếng Việt thô** mà admin đặt trên Facebook, ví dụ `tên_đầy_đủ`, `số_điện_thoại`.
+
+Hai hệ quả:
+
+- Đừng giả định khoá `customFields` là tiếng Anh. Đọc đúng khoá có trong dữ liệu.
+- `fieldMap` do admin cấu hình tay. Admin map sai thì một trường bất kỳ có thể nằm ở ô `phone`. Nếu giá trị ở ô `phone` không chuẩn hoá được thành số Việt Nam hợp lệ → **không ghi**, tạo `suggest_fact` để người xem lại cấu hình.
+- Chỉ `values[0]` được lấy. Trường nhiều giá trị bị bỏ lặng lẽ các giá trị sau.
+
+## Bạn không phải người duy nhất ghi vào Contact
+
+Đây là điều dễ gây hại nhất trong toàn bộ file này.
+
+`syncAccountFully()` chạy một lệnh SQL gọi là **B8 backfill sweep**, mỗi 15 phút, ghi trực tiếp vào bảng `contacts` bốn cột: `full_name`, `zalo_global_id`, `zalo_username`, `avatar_url`. Nó chỉ ghi khi ô đang trống hoặc bằng đúng chuỗi `'Unknown'` — nó không đụng dữ liệu sale đã sửa tay.
+
+Nhưng nó **không tạo `Fact` nào**. Nên:
+
+- **Không `record_fact(attribute='full_name')` khi tên hiện tại là `'Unknown'`.** Trong vòng 15 phút nữa, sweep sẽ tự lấp bằng tên khách tự đặt trên Zalo — một nguồn mạnh hơn suy luận của bạn. Ghi vào đó chỉ tạo ra một `Fact` sẽ bị ghi đè ngay.
+- **Ledger không đầy đủ.** Một ô có giá trị mà không có `Fact` nào **không** nghĩa là chưa ai ghi. Có thể sweep đã ghi. Đừng suy "không có Fact" thành "chưa có ai xác minh".
 
 ## Quy tắc ghi
 
