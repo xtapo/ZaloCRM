@@ -1,7 +1,7 @@
 <template>
   <div>
     <h1 class="text-h4 mb-4">
-      <v-icon class="mr-2" style="color: #00F2FF;">mdi-cog-outline</v-icon>
+      <v-icon class="mr-2" color="primary">mdi-cog-outline</v-icon>
       Cài đặt
     </h1>
 
@@ -27,8 +27,8 @@
           {{ error }}
         </v-alert>
 
-        <v-card>
-          <v-data-table :headers="headers" :items="users" :loading="loading" no-data-text="Chưa có nhân viên nào">
+        <v-card class="soft-card">
+          <v-data-table class="soft-table" :headers="headers" :items="users" :loading="loading" no-data-text="Chưa có nhân viên nào">
             <template #item.role="{ item }">
               <v-chip :color="roleColor(item.role)" size="small" variant="flat">{{ roleLabel(item.role) }}</v-chip>
             </template>
@@ -200,7 +200,7 @@ function roleColor(role: string) {
 }
 
 function roleLabel(role: string) {
-  if (role === 'owner') return 'Chủ sở hữu';
+  if (role === 'owner') return 'Chủ sở hứu';
   if (role === 'admin') return 'Quản trị viên';
   return 'Nhân viên';
 }
