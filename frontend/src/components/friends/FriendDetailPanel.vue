@@ -233,7 +233,7 @@ function formatRelative(iso: string): string {
 }
 .side-panel {
   position: fixed;
-  top: var(--smax-topnav-h, 52px);
+  top: var(--smax-topnav-h, 76px);
   right: 0; bottom: 0;
   width: 380px; max-width: 100vw;
   background: #fff;
