@@ -92,16 +92,17 @@ const initials = computed(() => {
     + (parts.length > 1 ? (parts[parts.length - 2]?.[0] || '').toUpperCase() : ''));
 });
 
-// 6 gradient palettes — pick by hash of seed
+// 6 gradient palettes — xoay quanh tone xanh lá của design system,
+// pha thêm teal / amber / violet để vẫn phân biệt được người với người.
 const GRADIENTS = [
-  'linear-gradient(135deg,#90caf9,#1976d2)',
-  'linear-gradient(135deg,#ff7043,#bf360c)',
-  'linear-gradient(135deg,#ce93d8,#7b1fa2)',
-  'linear-gradient(135deg,#80cbc4,#00695c)',
-  'linear-gradient(135deg,#fbc02d,#f57c00)',
-  'linear-gradient(135deg,#f48fb1,#c2185b)',
+  'linear-gradient(135deg,#4ade80,#15803d)',
+  'linear-gradient(135deg,#86efac,#0f6b34)',
+  'linear-gradient(135deg,#5eead4,#0f766e)',
+  'linear-gradient(135deg,#fcd34d,#b45309)',
+  'linear-gradient(135deg,#c4b5fd,#6d28d9)',
+  'linear-gradient(135deg,#fda4af,#be123c)',
 ];
-const GROUP_GRADIENT = 'linear-gradient(135deg,#ff7043,#d84315)';
+const GROUP_GRADIENT = 'linear-gradient(135deg,#22c55e,#0f6b34)';
 
 const gradient = computed(() => {
   if (props.isGroup) return GROUP_GRADIENT;
@@ -179,23 +180,23 @@ const platformBadgeStyle = computed(() => {
   display: flex; align-items: center; justify-content: center;
   color: white; font-weight: 600;
   letter-spacing: 0.3px;
-  background: linear-gradient(135deg, #90caf9, #1976d2);
+  background: linear-gradient(135deg, #4ade80, #15803d);
 }
 
 /* ════════ Group treatment ════════ */
 .smax-av.is-group .av-img,
 .smax-av.is-group .av-initials {
-  /* Vòng viền xanh đậm — đặc trưng cho group */
-  outline: 2px solid #0D47A1;
+  /* Vòng viền xanh lá đậm — đặc trưng cho group */
+  outline: 2px solid var(--smax-primary-dark, #0f6b34);
   outline-offset: -1px;
   box-shadow: 0 0 0 1px var(--smax-bg, white);
 }
 
-/* Group sticker (góc phải trên) — Material group icon, nền xanh đậm.
+/* Group sticker (góc phải trên) — Material group icon, nền xanh lá đậm.
    Position: 2/3 outside avatar circle, 1/3 overlapping — set inline qua stickerStyle. */
 .av-group-sticker {
   position: absolute;
-  background: #0D47A1;
+  background: var(--smax-primary-dark, #0f6b34);
   border-radius: 50%;
   border: 1.5px solid var(--smax-bg, white);
   box-sizing: border-box;
@@ -214,7 +215,7 @@ const platformBadgeStyle = computed(() => {
 .av-members {
   position: absolute;
   bottom: -3px; right: -3px;
-  background: var(--smax-primary, #2962ff);
+  background: var(--smax-primary, #16a34a);
   color: white;
   border-radius: 999px;
   font-weight: 700;
@@ -236,10 +237,10 @@ const platformBadgeStyle = computed(() => {
   color: white; font-weight: 700;
   z-index: 2;
 }
-.gender-female { background: var(--smax-female, #e91e63); }
-.gender-male   { background: var(--smax-male, #1e88e5); }
+.gender-female { background: var(--smax-female, #ec4899); }
+.gender-male   { background: var(--smax-male, #0ea5e9); }
 
-/* Platform mark Z (Zalo) — chỉ user thread khi không có gender */
+/* Platform mark Z (Zalo) — giữ xanh Zalo vì đây là màu brand của nền tảng */
 .av-platform {
   position: absolute;
   bottom: -2px; right: -2px;

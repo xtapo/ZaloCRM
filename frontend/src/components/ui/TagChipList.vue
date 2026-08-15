@@ -75,48 +75,51 @@ function remove(tag: string) {
   align-items: center;
 }
 .tag-chip {
-  padding: 3px 7px;
-  border-radius: 7px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill, 999px);
   font-size: 11px;
+  font-weight: 600;
   display: inline-flex; align-items: center; gap: 4px;
 }
-.chip-grey    { background: rgba(90,100,120,0.10); color: var(--smax-grey-700); }
-.chip-info    { background: rgba(33,150,243,0.12); color: #1565c0; }
-.chip-zalo    { background: rgba(255,167,38,0.18); color: #ef6c00; }
-.chip-success { background: rgba(0,200,83,0.12);   color: #00897b; }
+.chip-grey    { background: rgba(17, 24, 39, 0.06);   color: var(--smax-grey-700, #374151); }
+.chip-info    { background: rgba(14, 165, 233, 0.12); color: #0369a1; }
+.chip-zalo    { background: rgba(245, 158, 11, 0.16); color: #b45309; }
+.chip-success { background: rgba(22, 163, 74, 0.14);  color: var(--smax-primary-hover, #15803d); }
 
 .tag-chip .x {
   cursor: pointer;
   opacity: 0.55;
   font-weight: 700;
 }
-.tag-chip .x:hover { opacity: 1; color: var(--smax-error); }
+.tag-chip .x:hover { opacity: 1; color: var(--smax-error, #ef4444); }
 
 .tag-chip.add {
   background: transparent;
-  border: 1px dashed var(--smax-grey-300);
-  color: var(--smax-grey-700);
+  border: 1px dashed var(--smax-grey-300, #d1d5db);
+  color: var(--smax-grey-700, #374151);
   cursor: pointer;
-  padding: 2px 7px;
-  border-radius: 7px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill, 999px);
   font-family: inherit;
   font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s ease;
 }
 .tag-chip.add:hover {
-  background: var(--smax-grey-50);
-  border-color: var(--smax-primary);
-  color: var(--smax-primary);
+  background: var(--smax-primary-soft, #eaf7ef);
+  border-color: var(--smax-primary, #16a34a);
+  color: var(--smax-primary, #16a34a);
 }
 
 .tag-input {
-  border: 1px solid var(--smax-primary);
+  border: 1px solid var(--smax-primary, #16a34a);
   outline: none;
-  padding: 2px 7px;
-  border-radius: 7px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill, 999px);
   font-size: 11px;
   width: 110px;
   font-family: inherit;
 }
 
-.empty { color: var(--smax-grey-300); font-size: 11px; }
+.empty { color: var(--smax-grey-400, #9ca3af); font-size: 11px; }
 </style>

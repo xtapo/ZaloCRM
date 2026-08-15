@@ -20,6 +20,8 @@
   --smax-canvas-2: #e4e7ea;
   --smax-surface: #ffffff;
   --smax-surface-muted: #f6f8f7;
+  /* Alias legacy: nhiều component dùng var(--smax-bg) làm màu viền/nền tách lớp */
+  --smax-bg: #ffffff;
 
   /* Header giờ là light pill nổi trên canvas */
   --smax-header-bg: #ffffff;
@@ -31,6 +33,34 @@
 
   --smax-surface-glass: rgba(255, 255, 255, 0.88);
   --smax-surface-border: rgba(17, 24, 39, 0.06);
+
+  /* ── Thang grey (giữ tên legacy --smax-grey-*) ─────────────
+     Các biến này được dùng rải rác trong TagChipList, CareStatusBadge,
+     ToastContainer, các view chat/contacts… nên bắt buộc phải tồn tại. */
+  --smax-grey-50: #f9fafb;
+  --smax-grey-100: #f3f4f6;
+  --smax-grey-200: #e5e7eb;
+  --smax-grey-300: #d1d5db;
+  --smax-grey-400: #9ca3af;
+  --smax-grey-500: #6b7280;
+  --smax-grey-600: #4b5563;
+  --smax-grey-700: #374151;
+  --smax-grey-800: #1f2937;
+  --smax-grey-900: #111827;
+
+  /* ── Màu semantic ─────────────────────────────────────────── */
+  --smax-success: #16a34a;
+  --smax-success-soft: #dcfce7;
+  --smax-warning: #f59e0b;
+  --smax-warning-soft: #fef3c7;
+  --smax-error: #ef4444;
+  --smax-error-soft: #fee2e2;
+  --smax-info: #0ea5e9;
+  --smax-info-soft: #e0f2fe;
+
+  /* Badge giới tính trên Avatar */
+  --smax-female: #ec4899;
+  --smax-male: #0ea5e9;
 
   /* Bo góc lớn kiểu mockup */
   --radius-sm: 12px;
@@ -198,6 +228,18 @@ h1, h2, h3, h4, .text-h1, .text-h2, .text-h3, .text-h4 {
   color: #ffffff;
   box-shadow: var(--shadow-glow);
 }
+
+/* ── Chip utilities dùng chung toàn app ─────────────────────
+   care-status.ts / TagCrmBar / ActivityItem… tham chiếu các class này,
+   nên định nghĩa 1 lần ở global để mọi nơi hiện cùng màu. */
+.chip-grey    { background: rgba(17, 24, 39, 0.06);  color: var(--smax-grey-700); }
+.chip-info    { background: var(--smax-info-soft);   color: #0369a1; }
+.chip-cyan    { background: rgba(14, 165, 233, 0.12); color: #0369a1; }
+.chip-success { background: var(--smax-success-soft); color: var(--smax-primary-hover); }
+.chip-warning { background: var(--smax-warning-soft); color: #b45309; }
+.chip-error   { background: var(--smax-error-soft);   color: #b91c1c; }
+.chip-purple  { background: rgba(139, 92, 246, 0.12); color: #6d28d9; }
+.chip-zalo    { background: rgba(245, 158, 11, 0.16); color: #b45309; }
 
 /* Badge & Chip Micro Animations */
 .chip-score {
