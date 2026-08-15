@@ -126,8 +126,8 @@ function onNickAvatarError(e: Event): void {
 
 <style scoped>
 .nick-sidebar {
-  background: #fff;
-  border-right: 1px solid #e4e8ef;
+  background: var(--smax-surface, #fff);
+  border-right: 1px solid var(--smax-surface-border, #e4e8ef);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -136,13 +136,13 @@ function onNickAvatarError(e: Event): void {
 
 .head {
   padding: 14px 16px 10px;
-  border-bottom: 1px solid #e4e8ef;
+  border-bottom: 1px solid var(--smax-surface-border, #e4e8ef);
 }
 .head .title {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: .06em;
-  color: #8d96a4;
+  color: var(--smax-text-muted, #8d96a4);
   font-weight: 700;
   margin-bottom: 6px;
   display: flex;
@@ -159,21 +159,22 @@ function onNickAvatarError(e: Event): void {
 .head .search {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid #e4e8ef;
+  border: 1px solid var(--smax-surface-border, #e4e8ef);
   border-radius: 6px;
   font-size: 12px;
-  background: #f9fafc;
+  background: var(--smax-surface-muted, #f9fafc);
+  color: var(--smax-text, #111827);
   font-family: inherit;
   box-sizing: border-box;
 }
-.head .search:focus { outline: none; background: #fff; border-color: var(--smax-primary, #16a34a); }
+.head .search:focus { outline: none; background: var(--smax-surface, #fff); border-color: var(--smax-primary, #16a34a); }
 
 .all-row {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 10px; border-radius: 8px;
-  cursor: pointer; border: 1px dashed #cdd4df;
+  cursor: pointer; border: 1px dashed var(--smax-surface-border, #cdd4df);
   margin: 8px;
-  font-weight: 600; font-size: 13px; color: #5b6573;
+  font-weight: 600; font-size: 13px; color: var(--smax-text, #5b6573);
 }
 .all-row:hover { background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary, #16a34a); border-color: var(--smax-primary, #16a34a); }
 .all-row.active { background: var(--smax-primary, #16a34a); color: #fff; border-color: var(--smax-primary, #16a34a); border-style: solid; }
@@ -188,7 +189,7 @@ function onNickAvatarError(e: Event): void {
 .all-row .count {
   margin-left: auto; font-size: 11px;
   padding: 2px 8px; border-radius: 10px;
-  background: #f9fafc; color: #5b6573;
+  background: var(--smax-surface-muted, #f9fafc); color: var(--smax-text-muted, #5b6573);
 }
 .all-row.active .count { background: rgba(255,255,255,.2); color: #fff; }
 
@@ -201,7 +202,7 @@ function onNickAvatarError(e: Event): void {
   border: 1px solid transparent;
   margin-bottom: 2px;
 }
-.nick-pill:hover { background: #f9fafc; }
+.nick-pill:hover { background: var(--smax-surface-muted, #f9fafc); }
 .nick-pill.active {
   background: var(--smax-primary-soft, #eaf7ef);
   border-color: var(--smax-primary, #16a34a);
@@ -222,19 +223,20 @@ function onNickAvatarError(e: Event): void {
 .nick-pill .av::after {
   content: ""; position: absolute; bottom: -1px; right: -1px;
   width: 10px; height: 10px; border-radius: 50%;
-  background: #16a34a; border: 2px solid #fff;
+  background: #16a34a; border: 2px solid var(--smax-surface, #fff);
   z-index: 1;
 }
 .nick-pill .av.offline::after { background: #9ca3af; }
 .nick-pill .info { min-width: 0; }
 .nick-pill .info .name {
   font-weight: 600; font-size: 13px;
+  color: var(--smax-text, #111827);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.nick-pill .info .meta { font-size: 11px; color: #8d96a4; }
+.nick-pill .info .meta { font-size: 11px; color: var(--smax-text-subtle, #8d96a4); }
 .nick-pill .count {
   font-size: 11px; font-weight: 700;
-  background: #f9fafc; color: #5b6573;
+  background: var(--smax-surface-muted, #f9fafc); color: var(--smax-text-muted, #5b6573);
   padding: 2px 8px; border-radius: 10px;
 }
 .nick-pill.active .count { background: var(--smax-primary, #16a34a); color: #fff; }
@@ -242,15 +244,15 @@ function onNickAvatarError(e: Event): void {
 .empty-nick {
   text-align: center;
   font-size: 12px;
-  color: #8d96a4;
+  color: var(--smax-text-subtle, #8d96a4);
   padding: 20px 10px;
 }
 
 .footer {
   padding: 10px 14px;
-  border-top: 1px solid #e4e8ef;
+  border-top: 1px solid var(--smax-surface-border, #e4e8ef);
   font-size: 11px;
-  color: #8d96a4;
+  color: var(--smax-text-subtle, #8d96a4);
   display: flex; align-items: center; gap: 6px;
 }
 .footer .dot { width: 8px; height: 8px; border-radius: 50%; background: #16a34a; }

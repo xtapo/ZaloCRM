@@ -93,12 +93,12 @@ async function onSubmit() {
 <style scoped>
 .password-page { max-width: 480px; font-family: inherit; }
 .page-head { margin-bottom: 24px; }
-.page-title { font-size: 20px; font-weight: 700; color: #1F2D3D; margin: 0 0 4px; }
-.page-desc { font-size: 13px; color: #6B7785; margin: 0; line-height: 1.5; }
+.page-title { font-size: 20px; font-weight: 700; color: var(--smax-text, #1F2D3D); margin: 0 0 4px; }
+.page-desc { font-size: 13px; color: var(--smax-text-muted, #6B7785); margin: 0; line-height: 1.5; }
 
 .password-form {
-  background: white;
-  border: 1px solid #E4E5E9;
+  background: var(--smax-surface, white);
+  border: 1px solid var(--smax-surface-border, #E4E5E9);
   border-radius: 12px;
   padding: 24px;
 }
@@ -111,18 +111,19 @@ async function onSubmit() {
 .form-row label {
   font-size: 11.5px;
   font-weight: 600;
-  color: #6B7785;
+  color: var(--smax-text-muted, #6B7785);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .form-row input {
   padding: 9px 12px;
   font-size: 14px;
-  border: 1px solid #E4E5E9;
+  border: 1px solid var(--smax-surface-border, #E4E5E9);
   border-radius: 8px;
   outline: none;
   font-family: inherit;
-  background: white;
+  background: var(--smax-surface-muted, white);
+  color: var(--smax-text, #1F2D3D);
 }
 .form-row input:focus {
   border-color: var(--smax-primary, #16a34a);
@@ -158,9 +159,9 @@ async function onSubmit() {
   font-size: 13px;
   font-weight: 500;
   border-radius: 8px;
-  border: 1px solid #E4E5E9;
-  background: white;
-  color: #1F2D3D;
+  border: 1px solid var(--smax-surface-border, #E4E5E9);
+  background: var(--smax-surface, white);
+  color: var(--smax-text, #1F2D3D);
   cursor: pointer;
   font-family: inherit;
   text-decoration: none;
@@ -172,16 +173,16 @@ async function onSubmit() {
 }
 .btn-primary:hover:not(:disabled) { background: var(--smax-primary-hover, #15803d); border-color: var(--smax-primary-hover, #15803d); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-ghost:hover { background: #F4F4F7; }
+.btn-ghost:hover { background: var(--smax-surface-muted, #F4F4F7); }
 
 .note {
   margin-top: 16px;
   padding: 12px 16px;
-  background: #FAFAFC;
+  background: var(--smax-surface-muted, #FAFAFC);
   border-left: 3px solid var(--smax-primary, #16a34a);
   border-radius: 6px;
   font-size: 12.5px;
-  color: #6B7785;
+  color: var(--smax-text-muted, #6B7785);
   line-height: 1.55;
 }
 .note a {

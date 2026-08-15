@@ -84,14 +84,14 @@ const cards = computed(() => [
 
 <style scoped>
 .kpi-card {
-  background: #ffffff;
-  border: none;
+  background: var(--smax-surface, #ffffff);
+  border: 1px solid var(--smax-surface-border, rgba(17, 24, 39, 0.04));
   border-radius: 24px;
   padding: 18px;
   display: flex;
   align-items: center;
   gap: 14px;
-  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04);
+  box-shadow: var(--shadow-sm, 0 2px 8px rgba(17, 24, 39, 0.04));
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
@@ -100,7 +100,7 @@ const cards = computed(() => [
 
 .kpi-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08);
+  box-shadow: var(--shadow-md, 0 14px 34px rgba(17, 24, 39, 0.08));
 }
 
 .kpi-icon-wrap {
@@ -123,14 +123,14 @@ const cards = computed(() => [
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #111827;
+  color: var(--smax-text, #111827);
   line-height: 1.2;
 }
 
 .kpi-title {
   font-size: 12.5px;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--smax-text-muted, #6b7280);
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;

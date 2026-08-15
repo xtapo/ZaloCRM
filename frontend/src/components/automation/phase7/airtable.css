@@ -70,6 +70,29 @@
   color: var(--at-body);
 }
 
+/* ── Dark Theme Overrides (WCAG AA Compliant) ────────────────────────── */
+.v-theme--legacy-dark .airtable-scope,
+.v-theme--legacy-dark.airtable-scope {
+  --at-primary: var(--smax-primary, #22c55e);
+  --at-primary-active: var(--smax-primary-hover, #4ade80);
+  --at-ink: var(--smax-text, #e6f4ec);
+  --at-body: var(--smax-text, #e6f4ec);
+  --at-muted: var(--smax-text-muted, #9ca3af);
+  --at-hairline: var(--smax-surface-border, rgba(230, 244, 236, 0.12));
+  --at-border-strong: rgba(230, 244, 236, 0.25);
+
+  --at-canvas: var(--smax-canvas, #0b1a12);
+  --at-surface-soft: var(--smax-surface, #12241a);
+  --at-surface-strong: var(--smax-surface-muted, #17301f);
+  --at-surface-dark: #06170e;
+
+  --at-on-primary: #ffffff;
+  --at-on-dark: #e6f4ec;
+
+  background: var(--at-canvas);
+  color: var(--at-body);
+}
+
 /* ── Typography roles ─────────────────────────────────────────────────── */
 .at-display-lg { font-size: 40px; font-weight: 400; line-height: 1.2; letter-spacing: 0; color: var(--at-ink); }
 .at-display-md { font-size: 32px; font-weight: 400; line-height: 1.2; letter-spacing: 0; color: var(--at-ink); }

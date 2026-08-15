@@ -74,11 +74,12 @@ function logout() {
 
 <style scoped>
 .mobile-app {
-  background: #eceef0;
+  background: var(--smax-canvas, #eceef0);
 }
 
 .mobile-appbar {
-  background: #ffffff !important;
+  background: var(--smax-surface, #ffffff) !important;
+  color: var(--smax-text, #111827) !important;
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04) !important;
 }
 
@@ -88,11 +89,11 @@ function logout() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #22c55e, #15803d);
+  background: linear-gradient(135deg, var(--smax-primary, #22c55e), var(--smax-primary-dark, #15803d));
   border-radius: 50%;
 }
 
 .brand-accent {
-  color: #16a34a;
+  color: var(--smax-primary, #16a34a);
 }
 </style>

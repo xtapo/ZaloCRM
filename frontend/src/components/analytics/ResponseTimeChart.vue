@@ -83,7 +83,7 @@ function formatTime(seconds: number | null): string {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: var(--smax-text, #111827);
   padding-bottom: 0;
 }
 .chart-wrap { position: relative; height: 280px; width: 100%; }
@@ -91,12 +91,12 @@ function formatTime(seconds: number | null): string {
   text-align: center;
   padding: 32px 0;
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--smax-text-subtle, #9ca3af);
 }
 .chart-caption {
   margin-top: 8px;
   text-align: center;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--smax-text-subtle, #9ca3af);
 }
 </style>

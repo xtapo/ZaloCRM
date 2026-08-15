@@ -91,8 +91,8 @@ function careLabel(v: string): string {
 <style scoped>
 .filter-bar {
   padding: 10px 20px;
-  background: #fff;
-  border-bottom: 1px solid #e4e8ef;
+  background: var(--smax-surface, #fff);
+  border-bottom: 1px solid var(--smax-surface-border, #e4e8ef);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -104,12 +104,12 @@ function careLabel(v: string): string {
 .kind-tab {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 5px 10px; border-radius: 14px;
-  background: #f9fafc; border: 1px solid #e4e8ef;
+  background: var(--smax-surface-muted, #f9fafc); border: 1px solid var(--smax-surface-border, #e4e8ef);
   font-size: 12px; cursor: pointer;
-  color: #5b6573;
+  color: var(--smax-text, #5b6573);
   font-family: inherit;
 }
-.kind-tab:hover { background: #fff; }
+.kind-tab:hover { background: var(--smax-surface, #fff); }
 .kind-tab.active {
   background: var(--smax-primary, #16a34a); color: #fff;
   border-color: var(--smax-primary, #16a34a); font-weight: 600;
@@ -120,40 +120,41 @@ function careLabel(v: string): string {
   padding: 0 6px; border-radius: 8px;
   font-size: 10px; font-weight: 700;
 }
-.kind-tab:not(.active) .num { background: #fff; color: #8d96a4; }
+.kind-tab:not(.active) .num { background: var(--smax-surface, #fff); color: var(--smax-text-muted, #8d96a4); }
 
-.divider { width: 1px; height: 22px; background: #e4e8ef; margin: 0 4px; }
+.divider { width: 1px; height: 22px; background: var(--smax-surface-border, #e4e8ef); margin: 0 4px; }
 
 .chip {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 5px 10px; border-radius: 14px;
-  border: 1px solid #e4e8ef; background: #fff;
-  font-size: 12px; cursor: pointer; color: #5b6573;
+  border: 1px solid var(--smax-surface-border, #e4e8ef); background: var(--smax-surface, #fff);
+  font-size: 12px; cursor: pointer; color: var(--smax-text, #5b6573);
   font-family: inherit;
 }
-.chip:hover { background: #f9fafc; }
+.chip:hover { background: var(--smax-surface-muted, #f9fafc); }
 .chip.on { background: var(--smax-primary, #16a34a); color: #fff; border-color: var(--smax-primary, #16a34a); font-weight: 600; }
 .chip .caret { opacity: .5; font-size: 9px; }
 
 .saved-view {
   margin-left: auto;
   padding: 5px 12px;
-  border: 1px solid #cdd4df; border-radius: 14px;
-  background: linear-gradient(180deg, #fff 0%, #f9fafc 100%);
+  border: 1px solid var(--smax-surface-border, #cdd4df); border-radius: 14px;
+  background: var(--smax-surface-muted, #f9fafc);
+  color: var(--smax-text, #5b6573);
   font-size: 12px;
   display: inline-flex; align-items: center; gap: 6px;
   cursor: pointer;
   font-family: inherit;
 }
-.saved-view:hover { box-shadow: 0 2px 4px rgba(0,0,0,.04); }
+.saved-view:hover { box-shadow: var(--shadow-sm, 0 2px 4px rgba(0,0,0,.04)); }
 .saved-view .star { color: #d97706; }
 .saved-view .caret { opacity: .5; font-size: 9px; }
 
 /* Care status dropdown */
 .dropdown.care-dd {
   position: absolute; top: 100%; left: 0; margin-top: 4px;
-  background: #fff; border: 1px solid #e4e8ef; border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.1);
+  background: var(--smax-surface, #fff); border: 1px solid var(--smax-surface-border, #e4e8ef); border-radius: 8px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,.1));
   padding: 4px; min-width: 200px;
   z-index: 10;
   display: flex; flex-direction: column;
@@ -162,8 +163,8 @@ function careLabel(v: string): string {
   padding: 6px 10px; border-radius: 6px;
   background: transparent; border: none; text-align: left;
   cursor: pointer; font-size: 12px; font-family: inherit;
-  color: #1a2433;
+  color: var(--smax-text, #1a2433);
 }
-.dropdown.care-dd button:hover { background: #f9fafc; }
+.dropdown.care-dd button:hover { background: var(--smax-surface-muted, #f9fafc); }
 .dropdown.care-dd button.active { background: var(--smax-primary-soft, #eaf7ef); color: var(--smax-primary, #16a34a); font-weight: 600; }
 </style>
