@@ -8,6 +8,9 @@
  * Default visibility:
  *   true  = mặc định HIỆN trong compact view (timeline panel Ghi chú)
  *   false = mặc định ẨN, user tự bật trong settings (sync nhiều, có thể nhiễu)
+ *
+ * Màu category bám theo design token trong src/style.css (--smax-*) và
+ * BRAND trong src/constants/chart-theme.ts — không dùng palette Material cũ.
  */
 
 export type ActivityCategory =
@@ -30,16 +33,16 @@ export interface CategoryMeta {
 }
 
 export const CATEGORY_META: Record<ActivityCategory, CategoryMeta> = {
-  customer_info: { label: 'Thông tin KH',  icon: '📝', color: '#1976D2', defaultVisible: true },
-  tags_crm:      { label: 'Tag CRM',       icon: '🏷️', color: '#7B1FA2', defaultVisible: true },
-  tags_zalo:     { label: 'Tag Zalo',      icon: '🔵', color: '#0288D1', defaultVisible: false }, // sync nhiều
-  status_care:   { label: 'Trạng thái',    icon: '🔄', color: '#388E3C', defaultVisible: true },
-  score:         { label: 'Điểm số',       icon: '📈', color: '#F57C00', defaultVisible: true },
-  appointment:   { label: 'Lịch hẹn',      icon: '📅', color: '#C2185B', defaultVisible: true },
-  interaction:   { label: 'Tương tác',     icon: '💬', color: '#5D4037', defaultVisible: false }, // nhiều event
-  system:        { label: 'Hệ thống',      icon: '⚙️', color: '#546E7A', defaultVisible: false },
-  automation:    { label: 'Tự động (Bot)', icon: '🤖', color: '#00897B', defaultVisible: true }, // bao gồm auto_tag_change — sale cần thấy KH state change
-  security:      { label: 'Bảo mật',       icon: '🛡️', color: '#D32F2F', defaultVisible: true },
+  customer_info: { label: 'Thông tin KH',  icon: '📝', color: '#16a34a', defaultVisible: true },
+  tags_crm:      { label: 'Tag CRM',       icon: '🏷️', color: '#8b5cf6', defaultVisible: true },
+  tags_zalo:     { label: 'Tag Zalo',      icon: '🔵', color: '#0ea5e9', defaultVisible: false }, // sync nhiều
+  status_care:   { label: 'Trạng thái',    icon: '🔄', color: '#15803d', defaultVisible: true },
+  score:         { label: 'Điểm số',       icon: '📈', color: '#f59e0b', defaultVisible: true },
+  appointment:   { label: 'Lịch hến',      icon: '📅', color: '#7c3aed', defaultVisible: true },
+  interaction:   { label: 'Tương tác',     icon: '💬', color: '#0f766e', defaultVisible: false }, // nhiều event
+  system:        { label: 'Hệ thống',      icon: '⚙️', color: '#6b7280', defaultVisible: false },
+  automation:    { label: 'Tự động (Bot)', icon: '🤖', color: '#0f6b34', defaultVisible: true }, // bao gồm auto_tag_change — sale cần thấy KH state change
+  security:      { label: 'Bảo mật',       icon: '🛡️', color: '#ef4444', defaultVisible: true },
 };
 
 /* Action-level metadata — icon đặc biệt + label động cho từng action.
@@ -80,8 +83,8 @@ export const ACTION_META: Record<string, ActionMeta> = {
   score_change: { label: 'Đổi điểm' },
 
   // appointment
-  appointment_create:     { label: 'Tạo lịch hẹn', icon: '✨' },
-  appointment_update:     { label: 'Sửa lịch hẹn' },
+  appointment_create:     { label: 'Tạo lịch hến', icon: '✨' },
+  appointment_update:     { label: 'Sửa lịch hến' },
   appointment_complete:   { label: 'Hoàn thành lịch', icon: '✅' },
   appointment_cancel:     { label: 'Huỷ lịch', icon: '❌' },
   appointment_reschedule: { label: 'Dời lịch', icon: '🔁' },
