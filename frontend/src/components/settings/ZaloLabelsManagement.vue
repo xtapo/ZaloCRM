@@ -263,7 +263,7 @@ onBeforeUnmount(() => { if (refreshInterval) clearInterval(refreshInterval); });
   object-fit: cover;
 }
 .acc-avatar.fallback {
-  background: linear-gradient(135deg, var(--smax-primary), #5e92ff);
+  background: linear-gradient(135deg, var(--smax-primary), #4ade80);
   color: #fff;
   display: flex;
   align-items: center;
@@ -295,7 +295,7 @@ onBeforeUnmount(() => { if (refreshInterval) clearInterval(refreshInterval); });
   cursor: pointer;
 }
 .sync-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.sync-btn:hover:not(:disabled) { background: #1e4cc7; }
+.sync-btn:hover:not(:disabled) { background: var(--smax-primary-hover, #15803d); }
 
 .labels-table {
   width: 100%;
