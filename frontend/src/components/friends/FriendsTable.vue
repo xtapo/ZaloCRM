@@ -669,7 +669,7 @@ function healthTooltip(f: DbFriend): string {
   position: sticky;
   left: 0;
   z-index: 3;
-  background: #fff;
+  background: var(--smax-surface, #fff);
 }
 .ftable thead th.cb-col { z-index: 4; }
 .ftable thead th:nth-child(2),
