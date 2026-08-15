@@ -1,14 +1,14 @@
 <template>
-  <v-app>
+  <v-app class="mobile-app">
     <OfflineIndicator />
 
     <!-- Slim mobile app bar -->
-    <v-app-bar density="compact" flat>
+    <v-app-bar density="compact" flat class="mobile-appbar">
       <div class="d-flex align-center ml-3" style="gap: 8px;">
-        <div class="d-flex align-center justify-center" style="width: 28px; height: 28px; background: linear-gradient(135deg, #00F2FF, #0077B6); border-radius: 8px;">
+        <div class="brand-badge">
           <v-icon size="16" color="white">mdi-robot</v-icon>
         </div>
-        <span class="font-weight-bold text-body-1">Zalo<span style="color: #00F2FF;">CRM</span></span>
+        <span class="font-weight-bold text-body-1">Zalo<span class="brand-accent">CRM</span></span>
       </div>
 
       <v-spacer />
@@ -42,19 +42,28 @@ import NotificationBell from '@/components/NotificationBell.vue';
 import BottomNav from '@/components/BottomNav.vue';
 import OfflineIndicator from '@/components/OfflineIndicator.vue';
 
+// Tên theme phải khớp với plugins/vuetify.ts ('smax-light' | 'legacy-dark').
+// Trước đây file này set 'dark'/'light' — 2 theme không tồn tại nên mobile bị
+// giữ nguyên màu và lệch hẳn so với desktop.
+const LIGHT = 'smax-light';
+const DARK = 'legacy-dark';
+
 const theme = useTheme();
 const authStore = useAuthStore();
 const router = useRouter();
-const isDark = ref(localStorage.getItem('theme') !== 'light');
+const isDark = ref((localStorage.getItem('theme') || LIGHT) === DARK);
 
 onMounted(() => {
-  theme.global.name.value = isDark.value ? 'dark' : 'light';
+  const saved = localStorage.getItem('theme') || LIGHT;
+  theme.global.name.value = saved;
+  isDark.value = saved === DARK;
 });
 
 function toggleTheme() {
   isDark.value = !isDark.value;
-  theme.global.name.value = isDark.value ? 'dark' : 'light';
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light');
+  const next = isDark.value ? DARK : LIGHT;
+  theme.global.name.value = next;
+  localStorage.setItem('theme', next);
 }
 
 function logout() {
@@ -62,3 +71,28 @@ function logout() {
   router.push('/login');
 }
 </script>
+
+<style scoped>
+.mobile-app {
+  background: #eceef0;
+}
+
+.mobile-appbar {
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.04) !important;
+}
+
+.brand-badge {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #22c55e, #15803d);
+  border-radius: 50%;
+}
+
+.brand-accent {
+  color: #16a34a;
+}
+</style>
