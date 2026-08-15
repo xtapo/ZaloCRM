@@ -22,8 +22,8 @@ export interface AppointmentExtras {
 export type AppointmentEx = Appointment & AppointmentExtras;
 
 const SALE_PALETTE = [
-  { bg: '#2f6ee5', soft: '#e8f0fe' },
   { bg: '#16a34a', soft: '#dcfce7' },
+  { bg: '#059669', soft: '#d1fae5' },
   { bg: '#d97706', soft: '#fef3c7' },
   { bg: '#7c3aed', soft: '#ede9fe' },
   { bg: '#db2777', soft: '#fce7f3' },
