@@ -461,7 +461,12 @@
                         <td>{{ row.becameFriendAt || '—' }}</td>
                         <td>
                           <div class="action-cell">
-                            <button class="row-action-btn" @click="onChildAction('chat', row)" title="Mở chat">💬</button>
+                            <button
+                              class="row-action-btn disabled:opacity-50 disabled:cursor-not-allowed"
+                              :disabled="row.chatLocked"
+                              :title="row.chatLocked ? 'Nick riêng tư — chỉ chính chủ mới mở được chat' : 'Mở chat'"
+                              @click="onChildAction('chat', row)"
+                            >💬</button>
                             <button class="row-action-btn" @click="onChildAction('auto', row)" title="Automation">⚡</button>
                             <button class="row-action-btn" @click="onPromoteFriend(row)" title="Tách Con này thành KH Cha riêng">✂</button>
                           </div>
@@ -807,6 +812,8 @@ interface ApiFriendship {
   leadScore: number;
   statusId: string | null;
   statusRef: StatusLite | null;
+  chatLocked?: boolean;
+  chatLockedReason?: string;
   zaloAccount: {
     id: string;
     displayName: string | null;
@@ -865,6 +872,8 @@ function mapFriendshipToChildRow(f: ApiFriendship, contact: Contact): ChildRow {
     totalOutbound: f.totalOutbound ?? 0,
     becameFriendAt: relativeTime(f.becameFriendAt),
     autoLabel: null,
+    chatLocked: f.chatLocked,
+    chatLockedReason: f.chatLockedReason,
   };
 }
 
@@ -1013,21 +1022,30 @@ function openDetail(c: Contact) {
  *
  *  Nick ưu tiên: đang có conversation → đã KB (friend) → đang nhắn lạ → đầu list. */
 async function goChat(c: Contact) {
-  let rows = friendshipCache.value[c.id];
-  if (!rows) {
-    try {
-      const res = await api.get<Contact & { friends?: ApiFriendship[] }>(`/contacts/${c.id}`);
-      rows = (res.data.friends || []).map(f => mapFriendshipToChildRow(f, c));
-      friendshipCache.value[c.id] = rows;
-    } catch {
-      rows = [];
-    }
+  let friends: ApiFriendship[] = [];
+  let hiddenByScope = 0;
+  let fetchFailed = false;
+  try {
+    const res = await api.get<Contact & { friends?: ApiFriendship[]; friendsHiddenByScope?: number }>(`/contacts/${c.id}`);
+    friends = (res.data?.friends ?? []) as ApiFriendship[];
+    hiddenByScope = Number(res.data?.friendsHiddenByScope ?? 0);
+    friendshipCache.value[c.id] = friends.map(f => mapFriendshipToChildRow(f, c));
+  } catch (err) {
+    fetchFailed = true;
+    console.error('[ContactsView] goChat fetch contact failed:', err);
   }
-  const pick = rows.find(r => r.hasConversation)
-    || rows.find(r => r.relationshipKind === 'friend')
-    || rows.find(r => r.relationshipKind === 'chatting_stranger')
-    || rows[0];
-  if (!pick) {
+  if (fetchFailed) return;
+
+  const candidates = friends.filter(f => !f.chatLocked);
+  if (candidates.length === 0) {
+    if (hiddenByScope > 0) {
+      toast.error('Bạn không được cấp quyền nick Zalo đang chăm KH này — liên hệ quản lý để cấp quyền chat.');
+      return;
+    }
+    if (friends.length > 0) {
+      toast.error('Nick Zalo của KH này đang ở chế độ riêng tư — chỉ chính chủ mới mở được hội thoại.');
+      return;
+    }
     // KH là bạn Zalo nhưng CHƯA có Friend row trong DB (vd mới KB, Friend sync chưa
     // chạy, hoặc chỉ có conversation từ trước). Fallback: tìm conversation hiện có
     // của KH (GET /conversations?contactId=) và mở thẳng — không chặn cứng nữa.
@@ -1046,16 +1064,24 @@ async function goChat(c: Contact) {
     toast.error('KH này chưa có hội thoại Zalo nào để mở. Vui lòng nhắn tin Zalo từ nick chăm trước.');
     return;
   }
+
+  const candidateRows = candidates.map(f => mapFriendshipToChildRow(f, c));
+  const pick = candidateRows.find(r => r.hasConversation)
+    || candidateRows.find(r => r.relationshipKind === 'friend')
+    || candidateRows.find(r => r.relationshipKind === 'chatting_stranger')
+    || candidateRows[0];
+
   try {
     const res = await api.post<{ conversationId: string }>(
       `/friends/${pick.id}/ensure-conversation`, {},
     );
     if (res.data?.conversationId) {
       router.push({ name: 'Chat', params: { convId: res.data.conversationId } });
+    } else {
+      toast.error(`Không mở được chat qua nick ${pick.nickName} — server không trả về hội thoại`);
     }
   } catch (err) {
     console.error('[ContactsView] goChat ensure-conversation failed:', err);
-    toast.error(`Không mở được chat qua nick ${pick.nickName}`);
   }
 }
 function onAutomation(_c: Contact) { toast.warning('Automation dialog: chưa implement'); }
@@ -1087,6 +1113,8 @@ interface ChildRow {
   totalOutbound: number;
   becameFriendAt: string | null;
   autoLabel: string | null;
+  chatLocked?: boolean;
+  chatLockedReason?: string;
 }
 
 /** Child rows: sort "đang chat" lên đầu, "chỉ KB" (chưa nhắn 1-1) xuống dưới.
@@ -1132,10 +1160,11 @@ async function onChildAction(action: string, row: ChildRow) {
       );
       if (res.data?.conversationId) {
         router.push({ name: 'Chat', params: { convId: res.data.conversationId } });
+      } else {
+        toast.error(`Không mở được chat qua nick ${row.nickName} — server không trả về hội thoại`);
       }
     } catch (err) {
       console.error('[ContactsView] ensure-conversation failed:', err);
-      toast.error(`Không mở được chat qua nick ${row.nickName}`);
     }
   } else if (action === 'auto') {
     toast.warning(`Automation cho cặp ${row.nickName} × KH: chưa implement`);
@@ -1524,7 +1553,8 @@ onMounted(() => {
   cursor: pointer;
   font-size: 12px;
 }
-.row-action-btn:hover { background: var(--smax-primary-soft); border-color: var(--smax-primary); color: var(--smax-primary); }
+.row-action-btn:hover:not(:disabled) { background: var(--smax-primary-soft); border-color: var(--smax-primary); color: var(--smax-primary); }
+.row-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .child-wrap td {
   background: var(--smax-grey-50);

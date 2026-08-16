@@ -5,6 +5,7 @@ import type { Contact } from '@/composables/use-contacts';
 import { useAuthStore } from '@/stores/auth';
 import { applyPendingTags } from '@/composables/use-pending-mutations';
 import { useToast } from '@/composables/use-toast';
+import { router } from '@/router/index';
 
 interface ZaloAccount {
   id: string;
@@ -515,6 +516,13 @@ export function useChat() {
         }
       } catch (err) {
         console.error('Failed to load conversation detail for deep-link:', err);
+        selectedConvId.value = null;
+        messages.value = [];
+        messagesConvId.value = null;
+        loadingMsgs.value = false;
+        clearAiState();
+        router.replace({ name: 'Chat' }).catch(() => {});
+        return;
       }
     }
     await fetchMessages(convId);
