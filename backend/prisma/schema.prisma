@@ -2175,7 +2175,6 @@ model AgentTask {
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, kind, subjectType, subjectId, status])
   @@index([orgId, status, dueAt])
   @@index([leasedUntil])
   @@map("agent_tasks")
