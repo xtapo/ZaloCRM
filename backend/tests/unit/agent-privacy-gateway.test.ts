@@ -36,9 +36,6 @@ import {
   getSafeContactForAgent,
   findSafeContactsForAgent,
   getSafeMessagesForAgent,
-  SAFE_MESSAGE_SELECT,
-  AGENT_VISIBLE_CONTACT_WHERE,
-  AGENT_VISIBLE_CONVERSATION_WHERE,
 } from '../../src/modules/agent/gateway/agent-gateway.js';
 
 describe('Agent Privacy & Tenant Gateway', () => {
@@ -222,17 +219,44 @@ describe('Agent Privacy & Tenant Gateway', () => {
       { orgId: 'org-1' },
     );
 
-    // Verify DB query filters out privacyMode: 'main' directly in conversation
+    // TRÙNG LẶP Ở ĐÂY LÀ CỐ Ý: Assertion bảo mật KHÔNG ĐƯỢC tham chiếu thứ nó đang kiểm (chống false-positive khi implementation bị sửa sai).
     expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
       where: {
         conversation: {
           orgId: 'org-1',
           id: 'conv-1',
-          ...AGENT_VISIBLE_CONVERSATION_WHERE,
+          zaloAccount: {
+            privacyMode: { not: 'main' },
+          },
+          OR: [
+            { contactId: null },
+            {
+              contact: {
+                mergedInto: null,
+                friends: {
+                  none: {
+                    zaloAccount: {
+                      privacyMode: 'main',
+                    },
+                  },
+                },
+              },
+            },
+          ],
         },
         isDeleted: false,
       },
-      select: SAFE_MESSAGE_SELECT,
+      select: {
+        id: true,
+        conversationId: true,
+        senderType: true,
+        senderName: true,
+        content: true,
+        contentType: true,
+        sentAt: true,
+        sentVia: true,
+        isDeleted: true,
+      },
       orderBy: { sentAt: 'desc' },
       take: 50,
     });
@@ -251,16 +275,44 @@ describe('Agent Privacy & Tenant Gateway', () => {
       { orgId: 'org-1' },
     );
 
+    // TRÙNG LẶP Ở ĐÂY LÀ CỐ Ý: Assertion bảo mật KHÔNG ĐƯỢC tham chiếu thứ nó đang kiểm.
     expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
       where: {
         conversation: {
           orgId: 'org-1',
           contactId: 'contact-1',
-          ...AGENT_VISIBLE_CONVERSATION_WHERE,
+          zaloAccount: {
+            privacyMode: { not: 'main' },
+          },
+          OR: [
+            { contactId: null },
+            {
+              contact: {
+                mergedInto: null,
+                friends: {
+                  none: {
+                    zaloAccount: {
+                      privacyMode: 'main',
+                    },
+                  },
+                },
+              },
+            },
+          ],
         },
         isDeleted: false,
       },
-      select: SAFE_MESSAGE_SELECT,
+      select: {
+        id: true,
+        conversationId: true,
+        senderType: true,
+        senderName: true,
+        content: true,
+        contentType: true,
+        sentAt: true,
+        sentVia: true,
+        isDeleted: true,
+      },
       orderBy: { sentAt: 'desc' },
       take: 50,
     });
