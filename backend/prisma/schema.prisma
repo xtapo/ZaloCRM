@@ -73,6 +73,11 @@ model Organization {
   // Phase FB — Facebook Lead Ingestion
   facebookPageConnections FacebookPageConnection[]
   facebookFormMappings    FacebookFormMapping[]
+  // Phase 8a — Agent Token Budget (Fail-closed: null = agent blocked)
+  agentTokenBudgetMonthly   Int?                  @map("agent_token_budget_monthly")
+  agentTokenUsedThisMonth   Int                   @default(0) @map("agent_token_used_this_month")
+  agentBudgetResetAt        DateTime?             @map("agent_budget_reset_at")
+  agentTasks                AgentTask[]
 
   @@map("organizations")
 }
@@ -2130,3 +2135,32 @@ model SaleAssignmentState {
 
   @@map("sale_assignment_states")
 }
+
+// Phase 8a — Durable Work Queue for Agent tasks
+model AgentTask {
+  id          String    @id @default(uuid())
+  orgId       String    @map("org_id")
+  kind        String
+  subjectType String    @map("subject_type")
+  subjectId   String    @map("subject_id")
+  dueAt       DateTime  @map("due_at")
+  priority    Int       @default(0)
+  leasedBy    String?   @map("leased_by")
+  leasedUntil DateTime? @map("leased_until")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3) @map("max_attempts")
+  status      String    @default("pending")
+  reason      String?
+  payload     Json?
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, kind, subjectType, subjectId, status])
+  @@index([orgId, status, dueAt])
+  @@index([leasedUntil])
+  @@map("agent_tasks")
+}
+
