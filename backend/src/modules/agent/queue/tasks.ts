@@ -86,6 +86,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
         "status",
         "reason",
         "payload",
+        "result",
         "last_error" AS "lastError",
         "created_at" AS "createdAt",
         "updated_at" AS "updatedAt";
@@ -124,6 +125,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
       "status",
       "reason",
       "payload",
+      "result",
       "last_error" AS "lastError",
       "created_at" AS "createdAt",
       "updated_at" AS "updatedAt";
@@ -131,7 +133,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
 }
 
 /**
- * 2. complete: Đánh dấu task hoàn thành
+ * 2. complete: Đánh dấu task hoàn thành (ghi vào result, KHÔNG chạm payload)
  */
 export async function complete(options: CompleteOptions): Promise<AgentTask | null> {
   const { orgId, taskId, result } = options;
@@ -148,7 +150,7 @@ export async function complete(options: CompleteOptions): Promise<AgentTask | nu
       status: 'completed',
       leasedUntil: null,
       leasedBy: null,
-      ...(result !== undefined ? { payload: result } : {}),
+      ...(result !== undefined ? { result } : {}),
     },
   });
 }

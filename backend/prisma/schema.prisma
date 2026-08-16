@@ -2169,6 +2169,7 @@ model AgentTask {
   status      String    @default("pending")
   reason      String?
   payload     Json?
+  result      Json?
   lastError   String?   @map("last_error")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")

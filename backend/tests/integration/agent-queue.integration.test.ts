@@ -310,6 +310,7 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
 
     // 6c. Org có hạn mức hợp lệ -> Chạy thành công qua noop handler và complete task
     const taskValidId = `${TEST_PREFIX}_task_valid`;
+    const initialPayload = { inputParam: 'hello_world', sampleId: 123 };
     await prisma.agentTask.create({
       data: {
         id: taskValidId,
@@ -319,6 +320,7 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
         subjectId: 'contact_valid',
         dueAt: new Date(),
         status: 'pending',
+        payload: initialPayload,
       },
     });
 
@@ -329,6 +331,7 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
 
     const taskCompleted = await prisma.agentTask.findUnique({ where: { id: taskValidId } });
     expect(taskCompleted?.status).toBe('completed');
-    expect(taskCompleted?.payload).toMatchObject({ handledBy: 'noop', taskId: taskValidId });
+    expect(taskCompleted?.payload).toEqual(initialPayload);
+    expect(taskCompleted?.result).toMatchObject({ handledBy: 'noop', taskId: taskValidId });
   });
 });
