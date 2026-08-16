@@ -224,6 +224,9 @@ export async function getSafeMessagesForAgent(
   const rawMessages = await prisma.message.findMany({
     where: {
       conversation: {
+        // BẤT BIẾN BẢO MẬT CÔ LẬP TENANT: zaloAccount: { orgId } đã biến mất khỏi câu đọc tin nhắn,
+        // nên cô lập tenant giờ chỉ còn một điểm cưỡng chế duy nhất là conversation.orgId.
+        // Xoá nó là mở toang cross-tenant, và test cross-tenant là thứ duy nhất canh.
         orgId: ctx.orgId,
         ...(params.conversationId ? { id: params.conversationId } : {}),
         ...(params.contactId ? { contactId: params.contactId } : {}),
