@@ -52,9 +52,7 @@ jobs:
         env:
           PGPASSWORD: devpassword
         run: |
-          npx prisma db execute --stdin --url "postgresql://crmuser:devpassword@localhost:5433/zalocrm_test" <<EOF
-          CREATE DATABASE zalocrm_shadow_test;
-          EOF
+          psql -h localhost -p 5433 -U crmuser -d zalocrm_test -c "CREATE DATABASE zalocrm_shadow_test;"
 
       - name: Deploy Prisma Migrations
         env:
