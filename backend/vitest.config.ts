@@ -5,9 +5,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    env: {
-      DATABASE_URL: process.env.DATABASE_URL || 'postgresql://crmuser:devpassword@localhost:5433/zalocrm',
-    },
+    exclude: ['tests/integration/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
       include: ['src/modules/**/*.ts', 'src/shared/**/*.ts'],
