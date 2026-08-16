@@ -17,7 +17,6 @@ export interface ClaimDueOptions {
   workerId: string;
   limit?: number;
   leaseMs?: number;
-  skipLocked?: boolean;
 }
 
 export interface CompleteOptions {
@@ -48,52 +47,11 @@ export interface ReapExpiredOptions {
  * 1. claimDue: Atomic claim các task đến hạn trong tenant qua SELECT ... FOR UPDATE SKIP LOCKED
  */
 export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
-  const { orgId, workerId, limit = 10, leaseMs = 60_000, skipLocked = true } = options;
+  const { orgId, workerId, limit = 10, leaseMs = 60_000 } = options;
   if (!orgId || !workerId) return [];
 
   const leaseUntil = new Date(Date.now() + leaseMs);
   const now = new Date();
-
-  if (skipLocked) {
-    return prisma.$queryRaw<AgentTask[]>`
-      UPDATE "agent_tasks"
-      SET 
-        "status" = 'running',
-        "leased_by" = ${workerId},
-        "leased_until" = ${leaseUntil},
-        "attempts" = "attempts" + 1,
-        "updated_at" = ${now}
-      WHERE "id" IN (
-        SELECT "id"
-        FROM "agent_tasks"
-        WHERE "org_id" = ${orgId}
-          AND "status" = 'pending'
-          AND "due_at" <= ${now}
-        ORDER BY "priority" DESC, "due_at" ASC
-        FOR UPDATE SKIP LOCKED
-        LIMIT ${limit}
-      )
-      RETURNING 
-        "id",
-        "org_id" AS "orgId",
-        "kind",
-        "subject_type" AS "subjectType",
-        "subject_id" AS "subjectId",
-        "due_at" AS "dueAt",
-        "priority",
-        "leased_by" AS "leasedBy",
-        "leased_until" AS "leasedUntil",
-        "attempts",
-        "max_attempts" AS "maxAttempts",
-        "status",
-        "reason",
-        "payload",
-        "result",
-        "last_error" AS "lastError",
-        "created_at" AS "createdAt",
-        "updated_at" AS "updatedAt";
-    `;
-  }
 
   return prisma.$queryRaw<AgentTask[]>`
     UPDATE "agent_tasks"
@@ -110,7 +68,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
         AND "status" = 'pending'
         AND "due_at" <= ${now}
       ORDER BY "priority" DESC, "due_at" ASC
-      FOR UPDATE
+      FOR UPDATE SKIP LOCKED
       LIMIT ${limit}
     )
     RETURNING 
