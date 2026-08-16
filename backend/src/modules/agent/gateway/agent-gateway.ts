@@ -19,9 +19,6 @@ export interface AgentSessionContext {
   taskId?: string;
 }
 
-// Deliberate type error to verify CI fails on typecheck error
-const _ciTestTypeError: number = "this is a string to trigger CI typecheck error";
-
 /**
  * BẤT ĐỐI XỨNG CÓ CHỦ ĐÍCH GIỮA AGENT-GATEWAY VÀ REDACT.TS:
  * - `redact.ts` phục vụ giao diện người dùng (User UI): chỉ che (mask/BLUR_TOKEN) tài khoản riêng tư
