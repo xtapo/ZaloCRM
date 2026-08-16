@@ -20,6 +20,16 @@ export interface AgentSessionContext {
 }
 
 /**
+ * BẤT ĐỐI XỨNG CÓ CHỦ ĐÍCH GIỮA AGENT-GATEWAY VÀ REDACT.TS:
+ * - `redact.ts` phục vụ giao diện người dùng (User UI): chỉ che (mask/BLUR_TOKEN) tài khoản riêng tư
+ *   của NGƯỜI KHÁC (`ownerUserId: { not: viewerUserId }`). Chủ sở hữu nick main vẫn xem được dữ liệu của chính mình.
+ * - `agent-gateway.ts` phục vụ Agent (LLM Autonomous Worker): Agent KHÔNG có "người xem" (viewer persona)
+ *   và hoạt động hoàn toàn tự động trong nền. Do đó, Gateway LOẠI BỎ TOÀN BỘ (exclude/trả về null) mọi contact
+ *   và conversation liên kết với tài khoản riêng tư (`privacyMode = 'main'`), bất kể tài khoản đó thuộc về user nào.
+ *   Không có cơ sở để nới lỏng cho Agent. Đây là quyết định thiết kế có chủ đích, không phải bug.
+ */
+
+/**
  * Allow-list tường minh các trường Contact an toàn cho Agent.
  * Loại bỏ hoàn toàn nội dung tin nhắn preview, ghi chú, và toàn bộ dữ liệu nhân khẩu học nhạy cảm.
  */
@@ -68,39 +78,11 @@ export const SAFE_FRIEND_SELECT = {
   becameFriendAt: true,
 } as const satisfies Prisma.FriendSelect;
 
-
-/**
- * Kiểm tra xem 1 hoặc nhiều contactIds có bị khóa bởi Privacy PIN hay không.
- * Contact bị coi là khóa PIN nếu có ít nhất 1 Friend row liên kết với ZaloAccount có `privacyMode = 'main'`.
- * Vì Agent là worker tự động chạy nền, Agent không sở hữu PIN session và không được xem contact riêng tư.
- */
-export async function getAgentLockedContactIds(
-  contactIds: string[],
-  orgId: string,
-): Promise<Set<string>> {
-  if (!contactIds || contactIds.length === 0 || !orgId) {
-    return new Set();
-  }
-
-  const lockedFriends = await prisma.friend.findMany({
-    where: {
-      orgId,
-      contactId: { in: contactIds },
-      zaloAccount: {
-        orgId,
-        privacyMode: PRIVACY_MODE_MAIN,
-      },
-    },
-    select: { contactId: true },
-  });
-
-  return new Set(lockedFriends.map((f) => f.contactId).filter((id): id is string => !!id));
-}
-
 /**
  * Lấy chi tiết 1 Contact an toàn cho Agent.
  * - Trả về null nếu contact không tồn tại hoặc khác orgId (Multi-tenant check).
- * - Trả về null (loại bỏ hoàn toàn) nếu contact bị khóa PIN (Privacy PIN check).
+ * - Trả về null (loại bỏ hoàn toàn) nếu contact bị khóa PIN (Privacy PIN check: có friend thuộc main nick).
+ * - Trả về null nếu contact đã bị gộp vào contact khác (mergedInto != null).
  */
 export async function getSafeContactForAgent(
   contactId: string,
@@ -108,11 +90,12 @@ export async function getSafeContactForAgent(
 ) {
   if (!contactId || !ctx?.orgId) return null;
 
-  // Query Contact kèm tenant scoping, loại bỏ contact bị khóa PIN và áp dụng allow-list select
+  // Query Contact kèm tenant scoping, loại bỏ contact bị khóa PIN và contact đã merge, áp dụng allow-list select
   const contact = await prisma.contact.findFirst({
     where: {
       id: contactId,
       orgId: ctx.orgId,
+      mergedInto: null,
       friends: {
         none: {
           zaloAccount: {
@@ -135,7 +118,7 @@ export async function getSafeContactForAgent(
 
 /**
  * Tìm kiếm danh sách Contact an toàn cho Agent.
- * Tự động lọc bỏ toàn bộ contact khác org và contact bị khóa Privacy PIN.
+ * Tự động lọc bỏ toàn bộ contact khác org, contact đã merge (mergedInto != null), và contact bị khóa Privacy PIN.
  */
 export async function findSafeContactsForAgent(
   params: {
@@ -152,6 +135,7 @@ export async function findSafeContactsForAgent(
 
   const whereConditions: Prisma.ContactWhereInput = {
     orgId: ctx.orgId,
+    mergedInto: null,
     friends: {
       none: {
         zaloAccount: {

@@ -154,6 +154,7 @@ model User {
   // Phase FB — Facebook Lead Ingestion
   customerListAssignments   CustomerListSaleAssignment[]
 
+  @@index([permissionGroupId])
   @@map("users")
 }
 
@@ -555,6 +556,7 @@ model Message {
   @@index([conversationId, zaloMsgIdNum(sort: Desc)])
   // Phase metrics 2026-05-22: aggregate query per nick per day per category
   @@index([conversationId, sentAt, senderType, sentVia])
+  @@index([zaloCliMsgId])
   @@map("messages")
 }
 
@@ -1565,6 +1567,7 @@ model Block {
   ownerNick ZaloAccount?     @relation("BlockOwnerNick", fields: [ownerNickId], references: [id], onDelete: SetNull)
   createdBy User             @relation("BlockCreatedBy", fields: [createdById], references: [id])
   tasks     AutomationTask[]
+  broadcasts AutomationBroadcast[]
 
   @@index([orgId, channel, actionType])
   @@index([orgId, archivedAt])
@@ -1671,6 +1674,7 @@ model AutomationBroadcast {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   org       Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  block     Block                @relation(fields: [blockId], references: [id])
   createdBy User                 @relation("BroadcastCreatedBy", fields: [createdById], references: [id])
   triggers  AutomationTrigger[]  @relation("TriggerBroadcast")
   campaigns AutomationCampaign[] @relation("CampaignBroadcast")
@@ -2016,6 +2020,7 @@ model PermissionGroup {
   users    User[]
 
   @@index([orgId])
+  @@index([grants], type: Gin)
   @@map("permission_groups")
 }
 

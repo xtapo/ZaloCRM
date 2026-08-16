@@ -36,7 +36,6 @@ import {
   getSafeContactForAgent,
   findSafeContactsForAgent,
   getSafeMessagesForAgent,
-  getAgentLockedContactIds,
 } from '../../src/modules/agent/gateway/agent-gateway.js';
 
 describe('Agent Privacy & Tenant Gateway', () => {
@@ -44,18 +43,21 @@ describe('Agent Privacy & Tenant Gateway', () => {
     vi.clearAllMocks();
   });
 
-  it('identifies contact locked by Privacy PIN when linked to main privacy account', async () => {
-    mockPrisma.friend.findMany.mockResolvedValueOnce([
-      { contactId: 'contact-locked-1' },
-    ]);
+  it('excludes merged contacts (mergedInto != null)', async () => {
+    mockPrisma.contact.findFirst.mockResolvedValueOnce(null);
 
-    const lockedSet = await getAgentLockedContactIds(
-      ['contact-locked-1', 'contact-public-2'],
-      'org-1',
+    const result = await getSafeContactForAgent('contact-merged', { orgId: 'org-1' });
+
+    expect(result).toBeNull();
+    expect(mockPrisma.contact.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: 'contact-merged',
+          orgId: 'org-1',
+          mergedInto: null,
+        }),
+      }),
     );
-
-    expect(lockedSet.has('contact-locked-1')).toBe(true);
-    expect(lockedSet.has('contact-public-2')).toBe(false);
   });
 
   it('returns null and completely excludes contact if locked by PIN (no metadata leak)', async () => {
@@ -70,6 +72,7 @@ describe('Agent Privacy & Tenant Gateway', () => {
         where: {
           id: 'contact-1',
           orgId: 'org-1',
+          mergedInto: null,
           friends: {
             none: {
               zaloAccount: {
@@ -112,6 +115,7 @@ describe('Agent Privacy & Tenant Gateway', () => {
       where: {
         id: 'contact-org-b',
         orgId: 'org-A',
+        mergedInto: null,
         friends: {
           none: {
             zaloAccount: {
@@ -140,6 +144,7 @@ describe('Agent Privacy & Tenant Gateway', () => {
     expect(mockPrisma.contact.findMany).toHaveBeenCalledWith({
       where: {
         orgId: 'org-1',
+        mergedInto: null,
         friends: {
           none: {
             zaloAccount: {
