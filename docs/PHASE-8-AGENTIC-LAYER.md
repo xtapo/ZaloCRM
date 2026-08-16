@@ -199,7 +199,7 @@ ZaloCRM có lợi thế mà Comp AI không có: nguồn bằng chứng tốt nh�
 | Khách tự nhắn số điện thoại trong chat | `zalo.self-stated` | Mạnh | `Message` + `shared/phone/` |
 | Form Facebook Lead khách tự điền | `facebook.lead-form` | Mạnh | Facebook Lead Ingestion v3.3 |
 | Trùng khớp SĐT sau chuẩn hoá | `crm.phone-match` | Mạnh | `normalizeVnMobile()`, `normalizeVnPhone()` |
-| Card chuyển khoản / QR trong chat | `zalo.bank-card` | Trung bình | `zinstant-proxy-routes.ts` (`parseVietQR` chỉ trích xuất `bankBin` + STK; **không có tên chủ thẻ, không có SĐT**) |
+| Card chuyển khoản / QR trong chat | `zalo.bank-card` | **Mạnh (chỉ cho `bank_account`)** | `zinstant-proxy-routes.ts` (`parseVietQR` chỉ trích xuất `bankBin` + STK; **CẤM suy họ tên hay định danh**; lưu Fact dưới NĐ 13 chưa chốt) |
 | Profile khách đồng bộ về qua `Friend` | `zalo.friend-sync` | Trung bình | `friend-sync-service.ts` (**chỉ đúng 4 trường:** tên hiển thị, avatar, `globalId`, `username`; **không chứa số điện thoại, giới tính, ngày sinh**) |
 | Alias sale tự đặt trong Zalo | `zalo.alias` | Trung bình | `Friend.aliasInNick` — pull định kỳ nên có thể cũ |
 | Zalo Label được gắn | `zalo.label` | Trung bình | Zalo Labels 2-way sync (`zalo-labels-routes.ts`, grace 30s + cooldown 5s) |
@@ -625,7 +625,7 @@ Hệ quả: Một bản ghi `Friend` có `becameFriendAt = null` hoàn toàn **k
 
 Hệ quả: `zalo.label` có độ mạnh **Trung bình**, đại diện cho quy ước phân loại của sale đối với khách hàng tại thời điểm đồng bộ gần nhất.
 
-### 6. `zalo.bank-card` — chỉ trích xuất số tài khoản và mã ngân hàng, không có định danh cá nhân
+### 6. `zalo.bank-card` — bằng chứng mạnh cho STK nhưng phạm vi hẹp, cấm định danh
 
 Đối chiếu `backend/src/modules/contacts/zinstant-proxy-routes.ts` (`parseVietQR`) và `zalo-message-helpers.ts`:
 - Tin nhắn chuyển khoản Zalo zinstant (`action: 'zinstant.bankcard'`) được lưu trữ dạng raw payload JSON trong bảng `messages`. Khi giao diện hoặc backend cần hiển thị, route `/api/v1/zalo-bankcard` sẽ tải mã HTML từ Zalo CDN và bóc tách chuỗi VietQR EMVCo dạng TLV.
@@ -633,9 +633,10 @@ Hệ quả: `zalo.label` có độ mạnh **Trung bình**, đại diện cho quy
 - **Hoàn toàn KHÔNG trích xuất được tên chủ tài khoản, KHÔNG có số điện thoại, và KHÔNG có họ tên khách hàng.**
 
 Hệ quả:
-- Độ mạnh của `zalo.bank-card` đối với việc định danh khách hàng là **Yếu / Không có giá trị**.
-- Độ mạnh đối với việc trích xuất số tài khoản ngân hàng của khách (trong tin nhắn inbound) là **Trung bình** (cần tạo `FactSuggestion` để người duyệt, do không có tên chủ thẻ đi kèm để đối soát chéo).
+- Độ mạnh của `zalo.bank-card` đối với thuộc tính `bank_account` (mã NH + STK) trong tin nhắn inbound do chính khách gửi là **Mạnh** (số bóc từ chuỗi chuẩn máy đọc).
+- **CẤM TUYỆT ĐỐI** dùng `zalo.bank-card` làm bằng chứng nhận diện khách hàng hay suy luận họ tên khách.
 - Với tin nhắn outbound do sale gửi, đây là STK của công ty/nhân viên, tuyệt đối không được ghi vào hồ sơ khách hàng.
+- *(Lưu ý thiết kế: Việc `bank_account` có được lưu chính thức thành `Fact` hay không dưới quy định Nghị định 13/2023/NĐ-CP hiện ở trạng thái **chưa chốt** và sẽ được quyết định riêng).*
 
 ### 7. Privacy PIN và yêu cầu cưỡng chế bằng code tại tầng Tool
 
