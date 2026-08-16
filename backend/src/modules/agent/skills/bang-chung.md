@@ -27,7 +27,7 @@ Một dữ kiện sai mà tự tin còn tệ hơn một ô trống. Ô trống t
 | `zalo.self-stated` | Mạnh | Khách tự gõ ra trong tin nhắn |
 | `facebook.lead-form` | Mạnh | Khách tự điền vào form — xem cảnh báo về `fieldMap` bên dưới |
 | `crm.phone-match` | Mạnh | Hai bản ghi trùng số sau khi chuẩn hoá |
-| `zalo.bank-card` | Trung bình | Card chuyển khoản/QR — **chỉ có STK + mã NH, KHÔNG có tên chủ thẻ, KHÔNG có SĐT** |
+| `zalo.bank-card` | **Mạnh (chỉ cho `bank_account`)** | Card chuyển khoản/QR do khách gửi — **chỉ ghi STK + mã NH; CẤM suy họ tên hay định danh** |
 | `zalo.friend-sync` | Trung bình | **Chỉ 4 trường:** tên hiển thị, avatar, `globalId`, `username` |
 | `zalo.alias` | Trung bình | Sale tự đặt, pull định kỳ nên có thể cũ |
 | `zalo.label` | Trung bình | Zalo Labels 2-way sync, phản ánh quy ước sale (grace 30s, cooldown 5s) |
@@ -50,16 +50,16 @@ zaloUsername      — handle @abc
 
 Dữ liệu này do cron chạy **mỗi 15 phút**, nên có thể cũ tới 15 phút. Đừng kết luận "khách chưa đổi tên" chỉ vì bản ghi bạn đọc chưa đổi.
 
-### `zalo.bank-card` chỉ chứa số tài khoản và mã ngân hàng
+### `zalo.bank-card` — bằng chứng mạnh cho STK nhưng phạm vi hẹp
 
-Đã đối chiếu `zinstant-proxy-routes.ts` (`parseVietQR`). Tin nhắn chuyển khoản Zalo zinstant embed chuỗi VietQR EMVCo, backend trích xuất được `bankBin` (mã ngân hàng) và `accountNumber` (số tài khoản).
+Đã đối chiếu `zinstant-proxy-routes.ts` (`parseVietQR`). Tin nhắn chuyển khoản Zalo zinstant embed chuỗi VietQR EMVCo dạng TLV, backend trích xuất được `bankBin` (mã ngân hàng) và `accountNumber` (số tài khoản).
 
-**Tuyệt đối KHÔNG có tên chủ tài khoản, KHÔNG có số điện thoại, KHÔNG có tên khách hàng.**
-
-Hệ quả:
-- `zalo.bank-card` **không thể dùng làm bằng chứng nhận diện khách hàng hay trích xuất họ tên**.
-- Nếu khách gửi thẻ ngân hàng (inbound) để nhận chuyển khoản: chỉ trích xuất thuộc tính số tài khoản / ngân hàng với độ mạnh **Trung bình** (phải tạo `suggest_fact` nếu ô đã có giá trị khác, hoặc cần xác nhận vì không có tên chủ thẻ đối chiếu).
-- Nếu là tin nhắn do sale gửi (outbound): đó là STK của công ty/sale, tuyệt đối không ghi vào hồ sơ khách hàng.
+Con số này do máy bóc từ chuỗi chuẩn EMVCo do chính khách gửi, nên độ tin cậy của giá trị số tài khoản là **Mạnh**. Tuy nhiên, **phạm vi bằng chứng rất hẹp**:
+- **Tuyệt đối KHÔNG có tên chủ tài khoản, KHÔNG có số điện thoại, KHÔNG có họ tên khách hàng.**
+- **CẤM TUYỆT ĐỐI** dùng `zalo.bank-card` để định danh khách hàng hay suy luận họ tên khách.
+- Nguồn này **CHỈ ĐƯỢC PHÉP GHI** đúng thuộc tính `bank_account` (mã ngân hàng + số tài khoản) khi khách gửi trong tin nhắn đến (inbound).
+- Nếu là tin nhắn do sale gửi đi (outbound): đó là STK của doanh nghiệp/nhân viên, tuyệt đối không ghi vào hồ sơ khách hàng.
+- *(Lưu ý: Việc `bank_account` có được lưu trữ thành `Fact` trong hệ thống hay không dưới Nghị định 13/2023/NĐ-CP là quyết định thiết kế **chưa chốt** — agent tuân thủ giới hạn không tự suy đoán).*
 
 ### `zalo.label` — đồng bộ hai chiều có độ trễ
 
@@ -115,9 +115,10 @@ Khi hai nguồn **Mạnh** mâu thuẫn nhau: **không tự chọn bên nào.** 
 
 Không tự viết logic so sánh số. Dùng đúng helper đang có trong `shared/phone/` và `shared/utils/phone.ts`. Chi tiết ở `nhan-dien-khach.md`.
 
-Ghi `value` theo đúng định dạng khách gõ, ghi `valueNormalized` theo dạng chuẩn. Đừng tự "sửa đẹp" số của khách trong `value`.
-
-Một chuỗi 10 chữ số không tự động là số điện thoại. Nó có thể là số tài khoản, mã đơn, hoặc CCCD — xem `ranh-gioi-du-lieu.md`.
+- Cột `Contact.phoneNormalized` (cột cơ sở dữ liệu `phone_normalized`) **có thật** trong `schema.prisma` và được lập chỉ mục (index) để tìm kiếm và đối soát chính xác O(log n).
+- Hai hàm helper chuẩn hóa: `normalizeVnPhone()` trả về object `{ phoneE164, phoneLocal, valid, invalidReason }`, còn `normalizeVnMobile()` trả về chuỗi canonical `"84XXXXXXXXX"`. Không có hàm nào trả về trường tên `phoneNormalized`. Đừng nhầm lẫn giữa tên cột trong DB và tên trường trong kết quả trả về của hàm.
+- Ghi `value` theo đúng định dạng khách gõ, ghi `valueNormalized` theo dạng chuẩn (`phoneE164` hoặc chuỗi canonical). Đừng tự "sửa đẹp" số của khách trong `value`.
+- Một chuỗi 10 chữ số không tự động là số điện thoại. Nó có thể là số tài khoản ngân hàng, mã đơn hàng, hoặc số CCCD — xem `ranh-gioi-du-lieu.md`.
 
 ## Năm ví dụ
 

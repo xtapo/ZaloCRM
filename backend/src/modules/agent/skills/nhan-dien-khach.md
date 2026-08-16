@@ -107,12 +107,21 @@ Khi khách được đưa vào hệ thống qua đồng bộ định kỳ, trư�
 
 Vậy nên: **trường này rỗng không nghĩa là khách mới.** Đừng dùng nó để suy ra khách mới hay khách cũ. Muốn biết quan hệ bắt đầu từ đâu, đọc tin nhắn đầu tiên trong lịch sử chat.
 
+## Quy tắc Nhãn Zalo (`zalo.label`)
+
+Nhãn Zalo được mirror hai chiều giữa ứng dụng Zalo và CRM (đối chiếu `zalo-labels-routes.ts`):
+
+- **Tiền tố `🔵 ` trong dữ liệu:** Mọi nhãn mirror từ Zalo vào `Friend.crmTagsPerNick` đều có **tiền tố `🔵 `** (ví dụ `"🔵 Khách VIP"`, `"🔵 Đang thương thảo"`). Đây là quy ước định dạng trong dữ liệu. Khi agent đọc và so khớp nhãn, **bắt buộc phải cắt bỏ tiền tố `🔵 `** trước khi so sánh chuỗi.
+- **Phân biệt hai loại nhãn:** Nhãn mirror từ Zalo (`Friend.crmTagsPerNick` có `🔵 `) **không phải** là nhãn do sale tự tạo trực tiếp trên CRM (`Contact.tags`). Hai thứ này có ý nghĩa nghiệp vụ khác nhau (nhãn Zalo quản lý theo từng nick sale, tag CRM áp dụng cho toàn bộ hồ sơ khách). Tuyệt đối không gộp chung khi suy luận.
+- **Không có webhook realtime khi xoá nhãn trên Zalo:** Khi sale xoá hoặc đổi nhãn trên app Zalo điện thoại/máy tính, SDK Zalo **không bắn sự kiện realtime**. CRM chỉ nhận biết và cập nhật trong lần sync tiếp theo. Do đó, **CẤM TUYỆT ĐỐI** kết luận "khách này không có nhãn X" — chỉ được nói "lần đồng bộ gần nhất không ghi nhận nhãn X".
+- **Zalo là nguồn chuẩn khi sync:** Khi thực hiện đồng bộ, dữ liệu từ Zalo SDK sẽ ghi đè. Hệ thống áp dụng grace window 30 giây (`ASSIGN_GRACE_MS = 30_000`) sau thao tác người dùng và cooldown 5 giây (`SYNC_COOLDOWN_MS = 5_000`) per nick để chống hiện tượng ghi đè do độ trễ mạng.
+
 ## Những thứ KHÔNG phải bằng chứng nhận diện
 
 - **Trùng tên.** "Nguyễn Văn A" trùng nhau không nghĩa lý gì ở Việt Nam.
 - **Trùng avatar.** Ảnh hoa, ảnh mèo, ảnh idol — hàng nghìn người dùng chung.
 - **Nhắn cùng một giờ.** Trùng hợp.
-- **Cùng được gắn một Zalo Label.** Label là quy ước của sale, không phải thuộc tính của khách.
+- **Cùng được gắn một Zalo Label.** Label là quy ước của sale, không phải thuộc tính định danh của khách.
 - **Văn phong giống nhau.** Bạn không làm phân tích văn bản pháp y.
 
 ## Khi đề xuất gộp
