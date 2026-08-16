@@ -108,18 +108,18 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
 
   // 4. Xử lý từng task qua handler
   for (const task of tasks) {
-    const handler = handlers[task.kind] || handlers['noop'];
-    if (!handler) {
-      await fail({
-        orgId,
-        taskId: task.id,
-        error: `No handler registered for kind '${task.kind}'`,
-      });
-      failedCount++;
-      continue;
-    }
-
     try {
+      const handler = handlers[task.kind] || handlers['noop'];
+      if (!handler) {
+        await fail({
+          orgId,
+          taskId: task.id,
+          error: `No handler registered for kind '${task.kind}'`,
+        });
+        failedCount++;
+        continue;
+      }
+
       const result = await handler(task);
       if (result.success) {
         await complete({
@@ -138,11 +138,15 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      await fail({
-        orgId,
-        taskId: task.id,
-        error: errorMsg,
-      });
+      try {
+        await fail({
+          orgId,
+          taskId: task.id,
+          error: errorMsg,
+        });
+      } catch {
+        // Nuốt lỗi an toàn nếu bản thân fail() bị lỗi DB, đảm bảo tiếp tục task sau
+      }
       failedCount++;
     }
   }
