@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '../../src/shared/database/prisma-client.js';
 import { claimDue, complete, fail, reschedule, reapExpired } from '../../src/modules/agent/queue/tasks.js';
 import { runOnce } from '../../src/modules/agent/queue/dispatcher.js';
+import { consumeTokens, checkAndResetMonthlyBudget, getNextMonthResetDate } from '../../src/modules/agent/queue/budget.js';
 
 describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', () => {
   const TEST_PREFIX = `queue_test_${Date.now()}`;
@@ -25,21 +26,31 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
   const orgValidId = `${TEST_PREFIX}_org_valid`;
 
   beforeAll(async () => {
+    const futureResetDate = getNextMonthResetDate();
     // Tạo các Organization phục vụ test
     await prisma.organization.createMany({
       data: [
-        { id: orgAId, name: 'Queue Test Org A', agentTokenBudgetMonthly: 50_000, agentTokenUsedThisMonth: 0 },
-        { id: orgBId, name: 'Queue Test Org B', agentTokenBudgetMonthly: 50_000, agentTokenUsedThisMonth: 0 },
-        { id: orgNoBudgetId, name: 'Queue Test Org No Budget', agentTokenBudgetMonthly: null, agentTokenUsedThisMonth: 0 },
-        { id: orgExhaustedId, name: 'Queue Test Org Exhausted', agentTokenBudgetMonthly: 1000, agentTokenUsedThisMonth: 1000 },
-        { id: orgValidId, name: 'Queue Test Org Valid', agentTokenBudgetMonthly: 100_000, agentTokenUsedThisMonth: 100 },
+        { id: orgAId, name: 'Queue Test Org A', agentTokenBudgetMonthly: 50_000, agentTokenUsedThisMonth: 0, agentBudgetResetAt: futureResetDate },
+        { id: orgBId, name: 'Queue Test Org B', agentTokenBudgetMonthly: 50_000, agentTokenUsedThisMonth: 0, agentBudgetResetAt: futureResetDate },
+        { id: orgNoBudgetId, name: 'Queue Test Org No Budget', agentTokenBudgetMonthly: null, agentTokenUsedThisMonth: 0, agentBudgetResetAt: null },
+        { id: orgExhaustedId, name: 'Queue Test Org Exhausted', agentTokenBudgetMonthly: 1000, agentTokenUsedThisMonth: 1000, agentBudgetResetAt: futureResetDate },
+        { id: orgValidId, name: 'Queue Test Org Valid', agentTokenBudgetMonthly: 100_000, agentTokenUsedThisMonth: 100, agentBudgetResetAt: futureResetDate },
       ],
     });
   });
 
   afterAll(async () => {
     // Dọn dẹp sạch sẽ dữ liệu test
-    const allOrgIds = [orgAId, orgBId, orgNoBudgetId, orgExhaustedId, orgValidId];
+    const allOrgIds = [
+      orgAId,
+      orgBId,
+      orgNoBudgetId,
+      orgExhaustedId,
+      orgValidId,
+      `${TEST_PREFIX}_org_consume_test`,
+      `${TEST_PREFIX}_org_expired_reset`,
+      `${TEST_PREFIX}_org_recover_next_month`,
+    ];
     await prisma.agentTask.deleteMany({
       where: { orgId: { in: allOrgIds } },
     });
@@ -419,5 +430,96 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     expect(taskCompleted?.status).toBe('completed');
     expect(taskCompleted?.payload).toEqual(initialPayload);
     expect(taskCompleted?.result).toMatchObject({ handledBy: 'noop', taskId: taskValidId });
+  });
+
+  // ── 7. Ngân sách Token Sống: consumeTokens, Reset Quá Hạn & Sang Tháng Mới ─
+  it('7a. consumeTokens: cộng chính xác tokens_in + tokens_out vào agent_token_used_this_month trong transaction', async () => {
+    const orgTestBudgetId = `${TEST_PREFIX}_org_consume_test`;
+    await prisma.organization.create({
+      data: {
+        id: orgTestBudgetId,
+        name: 'Org Consume Test',
+        agentTokenBudgetMonthly: 50_000,
+        agentTokenUsedThisMonth: 1_200,
+      },
+    });
+
+    const updated = await consumeTokens({
+      orgId: orgTestBudgetId,
+      tokensIn: 350,
+      tokensOut: 150,
+    });
+
+    expect(updated.agentTokenUsedThisMonth).toBe(1_700);
+
+    const inDb = await prisma.organization.findUnique({ where: { id: orgTestBudgetId } });
+    expect(inDb?.agentTokenUsedThisMonth).toBe(1_700);
+  });
+
+  it('7b. Reset khi quá hạn mốc: checkAndResetMonthlyBudget đặt used_this_month = 0 và reset_at = đầu tháng kế tiếp', async () => {
+    const orgExpiredBudgetId = `${TEST_PREFIX}_org_expired_reset`;
+    const pastResetDate = new Date(Date.now() - 7 * 24 * 3600 * 1000); // 7 ngày trước
+
+    await prisma.organization.create({
+      data: {
+        id: orgExpiredBudgetId,
+        name: 'Org Expired Budget Test',
+        agentTokenBudgetMonthly: 10_000,
+        agentTokenUsedThisMonth: 9_500,
+        agentBudgetResetAt: pastResetDate,
+      },
+    });
+
+    const resetOrg = await checkAndResetMonthlyBudget(orgExpiredBudgetId);
+    expect(resetOrg).not.toBeNull();
+    expect(resetOrg?.agentTokenUsedThisMonth).toBe(0);
+    expect(resetOrg?.agentBudgetResetAt).not.toBeNull();
+
+    const expectedNextMonth = getNextMonthResetDate();
+    expect(resetOrg?.agentBudgetResetAt?.toISOString()).toBe(expectedNextMonth.toISOString());
+
+    const inDb = await prisma.organization.findUnique({ where: { id: orgExpiredBudgetId } });
+    expect(inDb?.agentTokenUsedThisMonth).toBe(0);
+    expect(inDb?.agentBudgetResetAt?.toISOString()).toBe(expectedNextMonth.toISOString());
+  });
+
+  it('7c. Phục hồi sang tháng mới: Org đã hết hạn mức nhưng sang tháng mới thì runOnce tự reset và chạy được trở lại', async () => {
+    const orgRecoverId = `${TEST_PREFIX}_org_recover_next_month`;
+    const pastResetDate = new Date(Date.now() - 24 * 3600 * 1000); // Hôm qua (đã qua mốc reset)
+
+    await prisma.organization.create({
+      data: {
+        id: orgRecoverId,
+        name: 'Org Recover Test',
+        agentTokenBudgetMonthly: 5_000,
+        agentTokenUsedThisMonth: 5_000, // Đã hết 100% hạn mức của tháng trước
+        agentBudgetResetAt: pastResetDate,
+      },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_recover`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgRecoverId,
+        kind: 'noop',
+        subjectType: 'contact',
+        subjectId: 'contact_recover',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    // Gọi runOnce: Hệ thống phát hiện đã sang chu kỳ mới -> reset used về 0 và chạy task
+    const result = await runOnce({ orgId: orgRecoverId });
+    expect(result.status).toBe('ok');
+    expect(result.claimedCount).toBe(1);
+    expect(result.completedCount).toBe(1);
+
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).toBe('completed');
+
+    const orgInDb = await prisma.organization.findUnique({ where: { id: orgRecoverId } });
+    expect(orgInDb?.agentTokenUsedThisMonth).toBe(0);
   });
 });

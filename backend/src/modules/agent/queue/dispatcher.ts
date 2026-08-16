@@ -13,6 +13,7 @@
 import { prisma } from '../../../shared/database/prisma-client.js';
 import { claimDue, complete, fail, reapExpired } from './tasks.js';
 import { noopHandler, type TaskHandler } from './handlers/noop.js';
+import { checkAndResetMonthlyBudget } from './budget.js';
 
 export interface RunOnceOptions {
   orgId: string;
@@ -43,6 +44,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const {
     orgId,
     workerId = process.env.WORKER_ID || `dispatcher-${process.pid}`,
+    now = new Date(),
     limit = 10,
     customHandlers = {},
   } = options;
@@ -58,15 +60,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     };
   }
 
-  // 1. Cửa ngân sách token (Fail-closed): Đọc Organization.agentTokenBudgetMonthly
-  const org = await prisma.organization.findUnique({
-    where: { id: orgId },
-    select: {
-      id: true,
-      agentTokenBudgetMonthly: true,
-      agentTokenUsedThisMonth: true,
-    },
-  });
+  // 1. Cửa ngân sách token (Fail-closed & Auto-reset): Kiểm tra mốc reset và tự động đặt lại hạn mức nếu sang tháng mới
+  const org = await checkAndResetMonthlyBudget(orgId, now);
 
   if (!org) {
     return {
