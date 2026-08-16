@@ -189,7 +189,7 @@ describe('security-events-routes', () => {
     ];
 
     // Mô phỏng query Prisma lọc theo composite condition
-    vi.mocked(prisma.activityLog.findMany).mockImplementation(async (args: any) => {
+    (vi.mocked(prisma.activityLog.findMany) as any).mockImplementation(async (args: any) => {
       let filtered = [...allDbRecords];
       const andClauses = args?.where?.AND;
       if (andClauses && andClauses[0]?.OR) {
@@ -291,7 +291,7 @@ describe('security-events-routes', () => {
     currentUserId = 'u-boss-1';
 
     // Nick main của u-boss-1
-    vi.mocked(prisma.zaloAccount.findMany).mockImplementation(async (args: any) => {
+    (vi.mocked(prisma.zaloAccount.findMany) as any).mockImplementation(async (args: any) => {
       // Khi tìm hiddenNicks (ownerUserId != u-boss-1) -> trả rỗng vì u-boss-1 là chủ nick
       if (args?.where?.ownerUserId) return [];
       // Khi tìm privacyAccounts sau fetch -> trả thông tin nick
@@ -326,7 +326,7 @@ describe('security-events-routes', () => {
     currentUserId = 'u-admin-other';
 
     // Nick main thuộc về u-boss-1 khác u-admin-other
-    vi.mocked(prisma.zaloAccount.findMany).mockImplementation(async (args: any) => {
+    (vi.mocked(prisma.zaloAccount.findMany) as any).mockImplementation(async (args: any) => {
       if (args?.where?.ownerUserId) {
         return [{ id: 'acc-boss' } as any]; // hiddenMatchIds = ['acc-boss']
       }
@@ -375,7 +375,7 @@ describe('security-events-routes', () => {
     currentUserId = 'u-admin-other';
 
     // Nick sub của người khác: hiddenNicks trả rỗng vì privacyMode != 'main'
-    vi.mocked(prisma.zaloAccount.findMany).mockImplementation(async (args: any) => {
+    (vi.mocked(prisma.zaloAccount.findMany) as any).mockImplementation(async (args: any) => {
       if (args?.where?.ownerUserId) return [];
       return [{ id: 'acc-sub', privacyMode: 'sub', ownerUserId: 'u-boss-1', displayName: 'Nick Sub Cong Khai' } as any];
     });

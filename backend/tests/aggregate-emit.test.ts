@@ -36,7 +36,7 @@ vi.mock('../src/modules/zalo/zalo-pool.js', () => ({
   zaloPool: { getIO: vi.fn(() => ioMock) },
 }));
 
-const { applyFriendAggregate } = await import('../src/modules/contacts/contact-aggregate.ts');
+const { applyFriendAggregate } = await import('../src/modules/contacts/contact-aggregate.js');
 
 const BASE_CONV = {
   contactId: 'c1',

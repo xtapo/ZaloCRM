@@ -45,7 +45,8 @@ describe('chat-routes scope filters', () => {
     const json = res.json();
     expect(json.conversations).toEqual([]);
     expect(json.total).toBe(0);
-    expect(vi.mocked(prisma.conversation.findMany).mock.calls[0][0].where.zaloAccountId).toEqual({ in: [] });
+    const callArgs1 = vi.mocked(prisma.conversation.findMany).mock.calls[0]?.[0];
+    expect((callArgs1?.where as any)?.zaloAccountId).toEqual({ in: [] });
   });
 
   it('user with role NOT member and NOT org admin -> filtered by scope', async () => {
@@ -55,7 +56,8 @@ describe('chat-routes scope filters', () => {
 
     const res = await app.inject({ method: 'GET', url: '/api/v1/conversations' });
     expect(res.statusCode).toBe(200);
-    expect(vi.mocked(prisma.conversation.findMany).mock.calls[0][0].where.zaloAccountId).toEqual({ in: ['acc2'] });
+    const callArgs2 = vi.mocked(prisma.conversation.findMany).mock.calls[0]?.[0];
+    expect((callArgs2?.where as any)?.zaloAccountId).toEqual({ in: ['acc2'] });
   });
 
   it('out of scope accountId to /conversations -> 403', async () => {

@@ -56,9 +56,10 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts' });
     expect(res.statusCode).toBe(200);
     expect(res.json().total).toBe(0);
-    const where = vi.mocked(prisma.contact.findMany).mock.calls[0][0].where;
-    expect(where.AND[0].OR).toContainEqual({ friends: { some: { zaloAccountId: { in: ['acc1'] } } } });
-    expect(where.AND[0].OR).toContainEqual({ friends: { none: {} } });
+    const callArgs = vi.mocked(prisma.contact.findMany).mock.calls[0]?.[0];
+    const where = callArgs?.where as any;
+    expect(where?.AND?.[0]?.OR).toContainEqual({ friends: { some: { zaloAccountId: { in: ['acc1'] } } } });
+    expect(where?.AND?.[0]?.OR).toContainEqual({ friends: { none: {} } });
   });
 
   // 2. List: contact tạo tay (friends rỗng) → vẫn xuất hiện.
@@ -107,8 +108,9 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts' });
     const json = res.json();
     
-    const where = vi.mocked(prisma.contact.findMany).mock.calls[0][0].where;
-    expect(where.AND).toBeUndefined();
+    const callArgs = vi.mocked(prisma.contact.findMany).mock.calls[0]?.[0];
+    const where = callArgs?.where as any;
+    expect(where?.AND).toBeUndefined();
     
     expect(json.contacts[0].redacted).toBe(true);
   });
@@ -143,8 +145,9 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts/stats' });
     expect(res.statusCode).toBe(200);
     
-    const where = vi.mocked(prisma.contact.count).mock.calls[0][0].where;
-    expect(where.AND).toBeDefined();
+    const callArgs = vi.mocked(prisma.contact.count).mock.calls[0]?.[0];
+    const where = callArgs?.where as any;
+    expect(where?.AND).toBeDefined();
   });
   
   it('Stats skips scope filter for admin', async () => {
@@ -155,8 +158,9 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts/stats' });
     expect(res.statusCode).toBe(200);
     
-    const where = vi.mocked(prisma.contact.count).mock.calls[0][0].where;
-    expect(where.AND).toBeUndefined();
+    const callArgs = vi.mocked(prisma.contact.count).mock.calls[0]?.[0];
+    const where = callArgs?.where as any;
+    expect(where?.AND).toBeUndefined();
   });
 
   // 9. Friendships: chỉ trả rows thuộc nick trong scope.
@@ -166,8 +170,9 @@ describe('contact-routes scope and privacy', () => {
     
     await app.inject({ method: 'GET', url: '/api/v1/contacts/c1/friendships' });
     
-    const where = vi.mocked(prisma.friend.findMany).mock.calls[0][0].where;
-    expect(where.zaloAccountId).toEqual({ in: ['acc1'] });
+    const callArgs = vi.mocked(prisma.friend.findMany).mock.calls[0]?.[0];
+    const where = callArgs?.where as any;
+    expect(where?.zaloAccountId).toEqual({ in: ['acc1'] });
   });
 
   // 10. Duplicates/parent-candidates: member → 403; admin → 200.

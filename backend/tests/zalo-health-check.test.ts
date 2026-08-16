@@ -97,7 +97,7 @@ describe('zalo-health-check', () => {
 
   it('kết nối lại sau khi đã cảnh báo -> báo recovered', async () => {
     vi.mocked(zaloPool.getStatus).mockReturnValue('connected');
-    vi.mocked(prisma.activityLog.findFirst).mockImplementation(async (args: any) => {
+    (vi.mocked(prisma.activityLog.findFirst) as any).mockImplementation(async (args: any) => {
       if (args?.where?.action === 'zalo_session_down') {
         return { createdAt: new Date(Date.now() - 10 * MINUTE) } as any;
       }
@@ -117,7 +117,7 @@ describe('zalo-health-check', () => {
 
   it('đã có log recovered mới hơn -> không báo recovered lần nữa', async () => {
     vi.mocked(zaloPool.getStatus).mockReturnValue('connected');
-    vi.mocked(prisma.activityLog.findFirst).mockImplementation(async (args: any) => {
+    (vi.mocked(prisma.activityLog.findFirst) as any).mockImplementation(async (args: any) => {
       if (args?.where?.action === 'zalo_session_down') {
         return { createdAt: new Date(Date.now() - 30 * MINUTE) } as any;
       }

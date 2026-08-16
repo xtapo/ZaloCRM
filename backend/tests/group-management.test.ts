@@ -58,7 +58,7 @@ vi.mock('../src/modules/auth/auth-middleware.js', () => ({
 
 import { zaloOps } from '../src/shared/zalo-operations.js';
 
-const mockOps = zaloOps as Record<string, ReturnType<typeof vi.fn>>;
+const mockOps = zaloOps as unknown as Record<string, ReturnType<typeof vi.fn>>;
 
 function makeUser() {
   return { id: 'user-1', orgId: 'org-1', email: 'test@example.com', role: 'member' };
