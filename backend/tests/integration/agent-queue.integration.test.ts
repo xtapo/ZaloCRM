@@ -12,10 +12,11 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AgentTask } from '@prisma/client';
-import { prisma } from '../../src/shared/database/prisma-client.js';
+import { prisma, type PrismaTx } from '../../src/shared/database/prisma-client.js';
 import { claimDue, complete, fail, reschedule, reapExpired } from '../../src/modules/agent/queue/tasks.js';
 import { runOnce } from '../../src/modules/agent/queue/dispatcher.js';
 import { consumeTokens, checkAndResetMonthlyBudget, getNextMonthResetDate } from '../../src/modules/agent/queue/budget.js';
+import type { PreparedTaskResult } from '../../src/modules/agent/queue/handlers/noop.js';
 
 describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', () => {
   const TEST_PREFIX = `queue_test_${Date.now()}`;
@@ -580,12 +581,14 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     });
 
     const customHandlers = {
-      custom_consume_task: async (task: AgentTask) => ({
-        success: true,
-        result: { handled: true, taskId: task.id },
-        tokensIn: 300,
-        tokensOut: 200,
-      }),
+      custom_consume_task: {
+        prepare: async (task: AgentTask) => ({
+          success: true,
+          result: { handled: true, taskId: task.id },
+          tokensIn: 300,
+          tokensOut: 200,
+        }),
+      },
     };
 
     // Gọi runOnce: Hệ thống phát hiện đã sang chu kỳ mới -> reset used về 0, chạy task và consume 500 tokens
@@ -668,12 +671,14 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     });
 
     const customHandlers = {
-      custom_consume_task: async (task: AgentTask) => ({
-        success: true,
-        result: { handled: true, taskId: task.id },
-        tokensIn: 300,
-        tokensOut: 200, // tổng tiêu 500
-      }),
+      custom_consume_task: {
+        prepare: async (task: AgentTask) => ({
+          success: true,
+          result: { handled: true, taskId: task.id },
+          tokensIn: 300,
+          tokensOut: 200, // tổng tiêu 500
+        }),
+      },
     };
 
     // Lượt 1: used = 999 < 1000 -> ĐƯỢC CHẠY (limit: 1 để chỉ xử lý task 1)
@@ -704,5 +709,77 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     // Task 2 vẫn giữ nguyên trạng thái pending, không hề bị claim
     const task2InDb = await prisma.agentTask.findUnique({ where: { id: task2Id } });
     expect(task2InDb?.status).toBe('pending');
+  });
+
+  // ── 8. Giao dịch nguyên tử hai pha: prepare ngoài tx, apply trong tx ────────
+  it('8. Atomic Two-Phase Apply: apply ném lỗi sau khi ghi DB -> bản ghi bị rollback và task về pending', async () => {
+    const orgAtomicId = `${TEST_PREFIX}_org_atomic_test`;
+    await prisma.organization.create({
+      data: {
+        id: orgAtomicId,
+        name: 'Org Atomic Test',
+        agentTokenBudgetMonthly: 10_000,
+        agentTokenUsedThisMonth: 0,
+      },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_atomic`;
+    const contactRollbackId = `${TEST_PREFIX}_contact_should_rollback`;
+
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgAtomicId,
+        kind: 'custom_failing_apply',
+        subjectType: 'contact',
+        subjectId: 'contact_dummy',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    const customHandlers = {
+      custom_failing_apply: {
+        prepare: async (task: AgentTask) => ({
+          success: true,
+          writes: { contactId: contactRollbackId },
+          result: { shouldNotPersist: true },
+          tokensIn: 100,
+          tokensOut: 50,
+        }),
+        apply: async (tx: PrismaTx, prepared: PreparedTaskResult<{ contactId: string }>) => {
+          // 1. Ghi bản ghi Contact vào DB qua tx
+          await tx.contact.create({
+            data: {
+              id: prepared.writes!.contactId,
+              orgId: orgAtomicId,
+              fullName: 'Contact Should Be Rolled Back',
+            },
+          });
+          // 2. Cố tình ném lỗi sau khi ghi để kích hoạt rollback
+          throw new Error('Intentional error in apply phase to trigger rollback');
+        },
+      },
+    };
+
+    const result = await runOnce({ orgId: orgAtomicId, customHandlers });
+    expect(result.status).toBe('ok');
+    expect(result.claimedCount).toBe(1);
+    expect(result.completedCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+
+    // Khẳng định bản ghi Contact KHÔNG HỀ tồn tại trong DB (đã được rollback)
+    const contactInDb = await prisma.contact.findUnique({ where: { id: contactRollbackId } });
+    expect(contactInDb).toBeNull();
+
+    // Khẳng định task quay về status = pending với attempts = 1 (do attempts < maxAttempts)
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).toBe('pending');
+    expect(taskInDb?.attempts).toBe(1);
+    expect(taskInDb?.lastError).toContain('Intentional error in apply phase');
+
+    // Token vẫn bị tiêu thụ vì pha prepare đã thực hiện xong ngoài tx
+    const orgInDb = await prisma.organization.findUnique({ where: { id: orgAtomicId } });
+    expect(orgInDb?.agentTokenUsedThisMonth).toBe(150);
   });
 });

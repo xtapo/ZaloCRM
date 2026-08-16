@@ -12,7 +12,7 @@
 
 import { prisma } from '../../../shared/database/prisma-client.js';
 import { claimDue, complete, fail, reapExpired } from './tasks.js';
-import { noopHandler, type TaskHandler } from './handlers/noop.js';
+import { noopHandler, type TaskHandler, type PreparedTaskResult, type TaskHandlerContext } from './handlers/noop.js';
 import { checkAndResetMonthlyBudget, consumeTokens } from './budget.js';
 
 export interface RunOnceOptions {
@@ -20,7 +20,7 @@ export interface RunOnceOptions {
   workerId?: string;
   now?: Date;
   limit?: number;
-  customHandlers?: Record<string, TaskHandler>;
+  customHandlers?: Record<string, TaskHandler<any>>;
 }
 
 export interface RunOnceResult {
@@ -32,7 +32,7 @@ export interface RunOnceResult {
   failedCount: number;
 }
 
-const DEFAULT_HANDLERS: Record<string, TaskHandler> = {
+const DEFAULT_HANDLERS: Record<string, TaskHandler<any>> = {
   noop: noopHandler,
   test: noopHandler,
 };
@@ -107,57 +107,122 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   let completedCount = 0;
   let failedCount = 0;
 
-  // 4. Xử lý từng task qua handler
+  const ctx: TaskHandlerContext = {
+    orgId,
+    workerId,
+    now,
+  };
+
+  // 4. Xử lý từng task qua handler hai pha (prepare ngoài giao dịch, apply + complete trong 1 giao dịch)
   for (const task of tasks) {
+    const handler = handlers[task.kind] || handlers['noop'];
+    if (!handler) {
+      await fail({
+        orgId,
+        taskId: task.id,
+        error: `No handler registered for kind '${task.kind}'`,
+      });
+      failedCount++;
+      continue;
+    }
+
+    // ── PHA 1: prepare chạy NGOÀI giao dịch database ──
+    let prepared: PreparedTaskResult;
     try {
-      const handler = handlers[task.kind] || handlers['noop'];
-      if (!handler) {
-        await fail({
-          orgId,
-          taskId: task.id,
-          error: `No handler registered for kind '${task.kind}'`,
-        });
-        failedCount++;
-        continue;
-      }
-
-      const result = await handler(task);
-      const totalTokens = (result.tokensIn || 0) + (result.tokensOut || 0);
-      if (totalTokens > 0) {
-        await consumeTokens({
-          orgId,
-          tokensIn: result.tokensIn || 0,
-          tokensOut: result.tokensOut || 0,
-        });
-      }
-
-      if (result.success) {
-        await complete({
-          orgId,
-          taskId: task.id,
-          result: result.result,
-        });
-        completedCount++;
-      } else {
-        await fail({
-          orgId,
-          taskId: task.id,
-          error: result.error || 'Handler returned failure without error message',
-        });
-        failedCount++;
-      }
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
+      prepared = await handler.prepare(task, ctx);
+    } catch (prepareErr: unknown) {
+      const errorMsg = prepareErr instanceof Error ? prepareErr.message : String(prepareErr);
       try {
         await fail({
           orgId,
           taskId: task.id,
           error: errorMsg,
         });
-      } catch {
-        // Nuốt lỗi an toàn nếu bản thân fail() bị lỗi DB, đảm bảo tiếp tục task sau
+      } catch {}
+      failedCount++;
+      continue;
+    }
+
+    // Nếu prepare trả về thất bại logic
+    if (!prepared.success) {
+      try {
+        await fail({
+          orgId,
+          taskId: task.id,
+          error: prepared.error || 'Handler prepare returned failure',
+        });
+      } catch {}
+      failedCount++;
+
+      // Vẫn consume token nếu prepare đã gọi LLM/network và tiêu thụ token
+      const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
+      if (totalTokens > 0) {
+        try {
+          await consumeTokens({
+            orgId,
+            tokensIn: prepared.tokensIn || 0,
+            tokensOut: prepared.tokensOut || 0,
+          });
+        } catch (tokenErr) {
+          console.error(`[WARN] [dispatcher] Failed to consume tokens on prepare failure for task ${task.id}:`, tokenErr);
+        }
+      }
+      continue;
+    }
+
+    // ── PHA 2: MỘT prisma.$transaction gồm apply(tx) + complete(tx) ──
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (handler.apply) {
+          await handler.apply(tx, prepared, task);
+        }
+        await complete({
+          orgId,
+          taskId: task.id,
+          result: prepared.result,
+          tx,
+        });
+      });
+      completedCount++;
+    } catch (txErr: unknown) {
+      const errorMsg = txErr instanceof Error ? txErr.message : String(txErr);
+      // Phân biệt 2 lớp lỗi:
+      // - Lỗi hạ tầng giao dịch DB (P1001, P1017, P2024, timeout, connection drop...) -> KHÔNG gọi fail(), ghi log CRITICAL để lease hết hạn cho reapExpired thu về
+      // - Lỗi từ logic/validation trong apply -> fail() và tính vào attempts
+      const isDbInfraError =
+        (txErr && typeof txErr === 'object' && 'code' in txErr && typeof txErr.code === 'string' &&
+          (txErr.code.startsWith('P1') || txErr.code === 'P2024' || txErr.code === 'P2028' || txErr.code === '57014')) ||
+        errorMsg.includes('Connection') ||
+        errorMsg.includes('timeout') ||
+        errorMsg.includes('closed') ||
+        errorMsg.includes('ECONNREFUSED');
+
+      if (isDbInfraError) {
+        console.error(`[CRITICAL] [dispatcher] Database transaction infrastructure error for task ${task.id} (org ${orgId}):`, txErr);
+      } else {
+        try {
+          await fail({
+            orgId,
+            taskId: task.id,
+            error: errorMsg,
+          });
+        } catch {}
       }
       failedCount++;
+    }
+
+    // ── BƯỚC 3: consumeTokens gọi SAU giao dịch (kể cả khi tx rollback vì token LLM/mạng trong prepare đã tiêu thật) ──
+    const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
+    if (totalTokens > 0) {
+      try {
+        await consumeTokens({
+          orgId,
+          tokensIn: prepared.tokensIn || 0,
+          tokensOut: prepared.tokensOut || 0,
+        });
+      } catch (tokenErr) {
+        console.error(`[WARN] [dispatcher] Failed to consume tokens for task ${task.id}:`, tokenErr);
+      }
     }
   }
 

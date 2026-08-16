@@ -9,7 +9,7 @@
  * 5. reapExpired: Thu hồi các task running bị treo / quá hạn lease về pending
  */
 
-import { prisma } from '../../../shared/database/prisma-client.js';
+import { prisma, type PrismaTx } from '../../../shared/database/prisma-client.js';
 import type { Prisma, AgentTask } from '@prisma/client';
 
 export interface ClaimDueOptions {
@@ -23,12 +23,14 @@ export interface CompleteOptions {
   orgId: string;
   taskId: string;
   result?: Prisma.InputJsonValue;
+  tx?: PrismaTx;
 }
 
 export interface FailOptions {
   orgId: string;
   taskId: string;
   error: string;
+  tx?: PrismaTx;
 }
 
 export interface RescheduleOptions {
@@ -36,6 +38,7 @@ export interface RescheduleOptions {
   taskId: string;
   runAt: Date;
   reason: string;
+  tx?: PrismaTx;
 }
 
 export interface ReapExpiredOptions {
@@ -97,15 +100,16 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
  * 2. complete: Đánh dấu task hoàn thành (ghi vào result, KHÔNG chạm payload)
  */
 export async function complete(options: CompleteOptions): Promise<AgentTask | null> {
-  const { orgId, taskId, result } = options;
+  const { orgId, taskId, result, tx } = options;
   if (!orgId || !taskId) return null;
 
-  const task = await prisma.agentTask.findFirst({
+  const db = tx || prisma;
+  const task = await db.agentTask.findFirst({
     where: { id: taskId, orgId },
   });
   if (!task) return null;
 
-  return prisma.agentTask.update({
+  return db.agentTask.update({
     where: { id: taskId },
     data: {
       status: 'completed',
@@ -120,17 +124,18 @@ export async function complete(options: CompleteOptions): Promise<AgentTask | nu
  * 3. fail: Xử lý lỗi tác vụ (backoff mũ hoặc đánh dấu dead)
  */
 export async function fail(options: FailOptions): Promise<AgentTask | null> {
-  const { orgId, taskId, error } = options;
+  const { orgId, taskId, error, tx } = options;
   if (!orgId || !taskId) return null;
 
-  const task = await prisma.agentTask.findFirst({
+  const db = tx || prisma;
+  const task = await db.agentTask.findFirst({
     where: { id: taskId, orgId },
   });
   if (!task) return null;
 
   const isDead = task.attempts >= task.maxAttempts;
   if (isDead) {
-    return prisma.agentTask.update({
+    return db.agentTask.update({
       where: { id: taskId },
       data: {
         status: 'dead',

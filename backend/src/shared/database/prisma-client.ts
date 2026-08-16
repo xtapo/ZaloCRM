@@ -13,7 +13,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { normalizePhone } from '../utils/phone.js';
 
 // $extends() returns a structurally-different type — alias to host extended client.
-type ExtendedPrisma = ReturnType<typeof createPrismaClient>;
+export type ExtendedPrisma = ReturnType<typeof createPrismaClient>;
+export type PrismaTx = Parameters<Parameters<ExtendedPrisma['$transaction']>[0]>[0];
 const globalForPrisma = globalThis as unknown as { prisma: ExtendedPrisma };
 
 function deriveContactPhoneNormalized<T extends Record<string, unknown>>(data: T): T {
