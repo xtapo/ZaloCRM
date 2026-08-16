@@ -32,6 +32,7 @@ import {
   findSafeContactsForAgent,
   getSafeMessagesForAgent,
   SAFE_CONTACT_SELECT,
+  SAFE_MESSAGE_SELECT,
 } from '../../src/modules/agent/gateway/agent-gateway.js';
 
 describe('Agent Gateway Integration Tests (Real DB without mock)', () => {
@@ -51,6 +52,16 @@ describe('Agent Gateway Integration Tests (Real DB without mock)', () => {
   const msgSub2Id = `${TEST_PREFIX}_msg_sub_2`;
   const msgMain1Id = `${TEST_PREFIX}_msg_main_1`;
   const msgMain2Id = `${TEST_PREFIX}_msg_main_2`;
+
+  // Kịch bản hỗn hợp (Contact B có conv trên sub-nick)
+  const convSubBId = `${TEST_PREFIX}_conv_sub_b`;
+  const msgSubB1Id = `${TEST_PREFIX}_msg_sub_b1`;
+  const msgSubB2Id = `${TEST_PREFIX}_msg_sub_b2`;
+
+  // Vỏ đã gộp (ContactMerged có conv trên sub-nick)
+  const convSubMergedId = `${TEST_PREFIX}_conv_sub_merged`;
+  const msgSubMerged1Id = `${TEST_PREFIX}_msg_sub_merged_1`;
+  const msgSubMerged2Id = `${TEST_PREFIX}_msg_sub_merged_2`;
 
   // Tenant 2 (Cross-tenant check)
   const org2Id = `${TEST_PREFIX}_org_2`;
@@ -263,6 +274,88 @@ describe('Agent Gateway Integration Tests (Real DB without mock)', () => {
       },
     });
 
+    // Kịch bản hỗn hợp: Contact B (có friend nick main) có thêm 1 hội thoại trên nick SUB
+    await prisma.conversation.create({
+      data: {
+        id: convSubBId,
+        orgId: org1Id,
+        zaloAccountId: accSub1Id,
+        contactId: contactBId,
+        externalThreadId: `${TEST_PREFIX}_zconv_sub_b`,
+        tab: 'main',
+      },
+    });
+
+    await prisma.message.create({
+      data: {
+        id: msgSubB1Id,
+        conversationId: convSubBId,
+        zaloMsgId: `${TEST_PREFIX}_zmsg_sub_b1`,
+        senderType: 'customer',
+        senderUid: `${TEST_PREFIX}_uid_b`,
+        senderName: 'Khách B VIP',
+        content: 'Tin nhắn trên nick sub của khách B',
+        originalContent: 'Nội dung cũ nháp của B đã bị sửa',
+        editedAt: timeT2,
+        sentAt: timeT1,
+        sentVia: 'user',
+      },
+    });
+
+    await prisma.message.create({
+      data: {
+        id: msgSubB2Id,
+        conversationId: convSubBId,
+        zaloMsgId: `${TEST_PREFIX}_zmsg_sub_b2`,
+        senderType: 'staff',
+        senderUid: user1Id,
+        senderName: 'Nhân viên',
+        content: 'Tin nhắn trả lời khách B trên nick sub',
+        sentAt: timeT2,
+        sentVia: 'user',
+      },
+    });
+
+    // Vỏ đã gộp: ContactMerged có hội thoại trên nick SUB
+    await prisma.conversation.create({
+      data: {
+        id: convSubMergedId,
+        orgId: org1Id,
+        zaloAccountId: accSub1Id,
+        contactId: contactMergedId,
+        externalThreadId: `${TEST_PREFIX}_zconv_sub_merged`,
+        tab: 'main',
+      },
+    });
+
+    await prisma.message.create({
+      data: {
+        id: msgSubMerged1Id,
+        conversationId: convSubMergedId,
+        zaloMsgId: `${TEST_PREFIX}_zmsg_sub_merged_1`,
+        senderType: 'customer',
+        senderUid: 'merged_uid',
+        senderName: 'Khách Đã Gộp',
+        content: 'Tin nhắn của vỏ đã gộp',
+        sentAt: timeT1,
+        sentVia: 'user',
+      },
+    });
+
+    await prisma.message.create({
+      data: {
+        id: msgSubMerged2Id,
+        conversationId: convSubMergedId,
+        zaloMsgId: `${TEST_PREFIX}_zmsg_sub_merged_2`,
+        senderType: 'staff',
+        senderUid: user1Id,
+        senderName: 'Nhân viên',
+        content: 'Tin trả lời vỏ đã gộp',
+        sentAt: timeT2,
+        sentVia: 'user',
+      },
+    });
+
     // 5. Tạo Tenant 2 (Org 2)
     await prisma.organization.create({
       data: {
@@ -332,10 +425,28 @@ describe('Agent Gateway Integration Tests (Real DB without mock)', () => {
   afterAll(async () => {
     // Dọn sạch toàn bộ dữ liệu test
     await prisma.message.deleteMany({
-      where: { id: { in: [msgSub1Id, msgSub2Id, msgMain1Id, msgMain2Id, msgSub2_1Id] } },
+      where: {
+        id: {
+          in: [
+            msgSub1Id,
+            msgSub2Id,
+            msgMain1Id,
+            msgMain2Id,
+            msgSubB1Id,
+            msgSubB2Id,
+            msgSubMerged1Id,
+            msgSubMerged2Id,
+            msgSub2_1Id,
+          ],
+        },
+      },
     });
     await prisma.conversation.deleteMany({
-      where: { id: { in: [convSub1Id, convMain1Id, convSub2Id] } },
+      where: {
+        id: {
+          in: [convSub1Id, convMain1Id, convSubBId, convSubMergedId, convSub2Id],
+        },
+      },
     });
     await prisma.friend.deleteMany({
       where: { id: { in: [`${TEST_PREFIX}_friend_a_sub`, `${TEST_PREFIX}_friend_b_main`] } },
@@ -465,5 +576,80 @@ describe('Agent Gateway Integration Tests (Real DB without mock)', () => {
     expect(rawObj.incomeRange).toBeUndefined();
     expect(rawObj.socialFacebook).toBeUndefined();
     expect(rawObj.socialTiktok).toBeUndefined();
+  });
+
+  // ── 5. Lỗ hổng bảo mật nâng cao vừa bịt ──────────────────────────────────────
+  it('getSafeMessagesForAgent: Kịch bản hỗn hợp — Contact B có friend nick main thì hội thoại trên nick sub cũng trả về rỗng [] (qua cả contactId lẫn conversationId)', async () => {
+    // Hỏi qua contactId -> trả về rỗng
+    const messagesByContact = await getSafeMessagesForAgent(
+      { contactId: contactBId },
+      { orgId: org1Id },
+    );
+    expect(messagesByContact).toEqual([]);
+
+    // Hỏi trực tiếp qua conversationId của hội thoại nick sub của Contact B -> cũng phải trả về rỗng
+    const messagesByConv = await getSafeMessagesForAgent(
+      { conversationId: convSubBId },
+      { orgId: org1Id },
+    );
+    expect(messagesByConv).toEqual([]);
+  });
+
+  it('getSafeMessagesForAgent: Vỏ đã gộp — ContactMerged có hội thoại trên nick sub cũng trả về rỗng [] (qua cả contactId lẫn conversationId)', async () => {
+    // Hỏi qua contactId -> trả về rỗng
+    const messagesByContact = await getSafeMessagesForAgent(
+      { contactId: contactMergedId },
+      { orgId: org1Id },
+    );
+    expect(messagesByContact).toEqual([]);
+
+    // Hỏi qua conversationId của hội thoại nick sub của contactMerged -> cũng phải trả về rỗng
+    const messagesByConv = await getSafeMessagesForAgent(
+      { conversationId: convSubMergedId },
+      { orgId: org1Id },
+    );
+    expect(messagesByConv).toEqual([]);
+  });
+
+  it('getSafeMessagesForAgent: Cross-tenant isolation — Org 2 hỏi conversationId của Org 1 phải trả về rỗng []', async () => {
+    // Org 2 hỏi hội thoại của Org 1
+    const crossMessages1 = await getSafeMessagesForAgent(
+      { conversationId: convSub1Id },
+      { orgId: org2Id },
+    );
+    expect(crossMessages1).toEqual([]);
+
+    // Org 1 hỏi hội thoại của Org 2
+    const crossMessages2 = await getSafeMessagesForAgent(
+      { conversationId: convSub2Id },
+      { orgId: org1Id },
+    );
+    expect(crossMessages2).toEqual([]);
+  });
+
+  it('Allow-list: getSafeMessagesForAgent chỉ trả các trường trong SAFE_MESSAGE_SELECT, loại bỏ originalContent và audit metadata', async () => {
+    const messages = await getSafeMessagesForAgent(
+      { conversationId: convSub1Id },
+      { orgId: org1Id },
+    );
+    expect(messages.length).toBeGreaterThan(0);
+
+    const allowedKeys = Object.keys(SAFE_MESSAGE_SELECT).sort();
+    for (const msg of messages) {
+      expect(Object.keys(msg).sort()).toEqual(allowedKeys);
+
+      const rawMsg = msg as Record<string, unknown>;
+      // Bắt buộc loại bỏ originalContent, editedAt và metadata audit
+      expect(rawMsg.originalContent).toBeUndefined();
+      expect(rawMsg.editedAt).toBeUndefined();
+      expect(rawMsg.zaloMsgId).toBeUndefined();
+      expect(rawMsg.zaloMsgIdNum).toBeUndefined();
+      expect(rawMsg.zaloCliMsgId).toBeUndefined();
+      expect(rawMsg.attachments).toBeUndefined();
+      expect(rawMsg.quote).toBeUndefined();
+      expect(rawMsg.deliveredAt).toBeUndefined();
+      expect(rawMsg.seenAt).toBeUndefined();
+      expect(rawMsg.repliedByUserId).toBeUndefined();
+    }
   });
 });
