@@ -1,0 +1,84 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  backend-ci:
+    name: Backend CI (TypeCheck, Migrate, Tests, Integration, Drift)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: crmuser
+          POSTGRES_PASSWORD: devpassword
+          POSTGRES_DB: zalocrm_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create Shadow Database for Drift Check
+        env:
+          PGPASSWORD: devpassword
+        run: |
+          npx prisma db execute --stdin --url "postgresql://crmuser:devpassword@localhost:5433/zalocrm_test" <<EOF
+          CREATE DATABASE zalocrm_shadow_test;
+          EOF
+
+      - name: Deploy Prisma Migrations
+        env:
+          DATABASE_URL: "postgresql://crmuser:devpassword@localhost:5433/zalocrm_test"
+        run: npx prisma migrate deploy
+
+      - name: TypeCheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Unit Tests (npm test)
+        run: npm test
+
+      - name: Integration Tests (Real Database)
+        env:
+          DATABASE_URL: "postgresql://crmuser:devpassword@localhost:5433/zalocrm_test"
+          ALLOW_INTEGRATION_DB: "1"
+        run: npm run test:integration
+
+      - name: Drift Check (Prisma Migrate Diff)
+        env:
+          DATABASE_URL: "postgresql://crmuser:devpassword@localhost:5433/zalocrm_test"
+          SHADOW_DATABASE_URL: "postgresql://crmuser:devpassword@localhost:5433/zalocrm_shadow_test"
+        run: |
+          npx prisma migrate diff \
+            --from-migrations ./prisma/migrations \
+            --to-schema ./prisma/schema.prisma \
+            --exit-code
