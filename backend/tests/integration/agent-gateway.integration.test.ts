@@ -11,21 +11,6 @@
  *    - Merged contact exclusion: Contact đã mergedInto != null bị loại bỏ hoàn toàn.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-
-// ── Database Safety Guard cho Integration Test ─────────────────────────────
-const dbUrl = process.env.DATABASE_URL || '';
-const isDevPort = dbUrl.includes(':5433');
-const urlPath = dbUrl.split('?')[0] || '';
-const isSafeDbName = urlPath.endsWith('/zalocrm') || urlPath.endsWith('_test') || urlPath.includes('/zalocrm_test');
-
-if (!dbUrl || !isDevPort || !isSafeDbName) {
-  throw new Error(
-    `[GUARD BẢO VỆ DATABASE] DATABASE_URL="${dbUrl}" không hợp lệ cho integration test! ` +
-    `Integration test chỉ được phép chạy trên database dev (bắt buộc cổng :5433 và tên database kết thúc bằng '_test' hoặc là 'zalocrm'). ` +
-    `Tuyệt đối không chạy trên database production hoặc cổng khác!`
-  );
-}
-
 import { prisma } from '../../src/shared/database/prisma-client.js';
 import {
   getSafeContactForAgent,

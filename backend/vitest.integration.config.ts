@@ -5,5 +5,6 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['tests/integration/**/*.test.ts'],
+    setupFiles: ['./tests/integration/db-guard.ts'],
   },
 });
