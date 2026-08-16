@@ -35,6 +35,9 @@ git clone https://github.com/locphamnguyen/ZaloCRM.git
 
 # Vào thư mục dự án
 cd ZaloCRM
+
+# Cấu hình Git Hooks để tự động chạy kiểm tra chất lượng trước khi push
+git config core.hooksPath .githooks
 ```
 
 ## Bước 3: Cấu hình
