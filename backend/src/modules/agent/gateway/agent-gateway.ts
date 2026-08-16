@@ -79,6 +79,23 @@ export const SAFE_FRIEND_SELECT = {
 } as const satisfies Prisma.FriendSelect;
 
 /**
+ * Allow-list tường minh các trường Message an toàn cho Agent.
+ * BẮT BUỘC LOẠI BỎ: originalContent, editedAt và mọi cột audit sửa tin.
+ * Loại bỏ toàn bộ ID kỹ thuật Zalo, read receipts, attachments chưa sanitize và quote snapshot.
+ */
+export const SAFE_MESSAGE_SELECT = {
+  id: true,
+  conversationId: true,
+  senderType: true,
+  senderName: true,
+  content: true,
+  contentType: true,
+  sentAt: true,
+  sentVia: true,
+  isDeleted: true,
+} as const satisfies Prisma.MessageSelect;
+
+/**
  * Vị từ duy nhất lọc Contact an toàn cho Agent:
  * - Không bao giờ trả về contact đã bị gộp (mergedInto: null).
  * - Không bao giờ trả về contact có liên kết bạn bè với bất kỳ nick riêng tư nào (privacyMode = 'main').
@@ -203,6 +220,7 @@ export async function getSafeMessagesForAgent(
 
   // Lỗi 1 & Lỗi 2: Query messages loại trừ tài khoản riêng tư ngay trong DB query,
   // lấy `limit` tin nhắn mới nhất (sentAt: 'desc'), rồi reverse để giữ thứ tự thời gian tăng dần.
+  // Áp dụng SAFE_MESSAGE_SELECT loại bỏ hoàn toàn originalContent, editedAt và metadata nhạy cảm.
   const rawMessages = await prisma.message.findMany({
     where: {
       conversation: {
@@ -213,6 +231,7 @@ export async function getSafeMessagesForAgent(
       },
       isDeleted: false,
     },
+    select: SAFE_MESSAGE_SELECT,
     orderBy: { sentAt: 'desc' },
     take: limit,
   });

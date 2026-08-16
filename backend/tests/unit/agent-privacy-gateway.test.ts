@@ -36,6 +36,7 @@ import {
   getSafeContactForAgent,
   findSafeContactsForAgent,
   getSafeMessagesForAgent,
+  SAFE_MESSAGE_SELECT,
   AGENT_VISIBLE_CONTACT_WHERE,
   AGENT_VISIBLE_CONVERSATION_WHERE,
 } from '../../src/modules/agent/gateway/agent-gateway.js';
@@ -231,6 +232,7 @@ describe('Agent Privacy & Tenant Gateway', () => {
         },
         isDeleted: false,
       },
+      select: SAFE_MESSAGE_SELECT,
       orderBy: { sentAt: 'desc' },
       take: 50,
     });
@@ -258,6 +260,7 @@ describe('Agent Privacy & Tenant Gateway', () => {
         },
         isDeleted: false,
       },
+      select: SAFE_MESSAGE_SELECT,
       orderBy: { sentAt: 'desc' },
       take: 50,
     });
