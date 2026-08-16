@@ -78,6 +78,12 @@ model Organization {
   agentTokenUsedThisMonth   Int                   @default(0) @map("agent_token_used_this_month")
   agentBudgetResetAt        DateTime?             @map("agent_budget_reset_at")
   agentTasks                AgentTask[]
+  // Phase 8b — Agent Memory & Sessions
+  facts                     Fact[]
+  factEvidence              FactEvidence[]
+  factSuggestions           FactSuggestion[]
+  agentSessions             AgentSession[]
+  agentSteps                AgentStep[]
 
   @@map("organizations")
 }
@@ -153,6 +159,8 @@ model User {
   phoneSearchEvents         PhoneSearchEvent[]
   // Phase FB — Facebook Lead Ingestion
   customerListAssignments   CustomerListSaleAssignment[]
+  // Phase 8b — Fact Suggestions Review
+  reviewedFactSuggestions   FactSuggestion[]
 
   @@index([permissionGroupId])
   @@map("users")
@@ -367,6 +375,9 @@ model Contact {
   contactNotes      Note[]
   // Phase 7 — Automation framework
   automationTasks   AutomationTask[]
+  // Phase 8b — Facts & Suggestions
+  facts             Fact[]
+  factSuggestions   FactSuggestion[]
 
   // Per-Contact counters (cache from Friend rows; updated by friend-aggregate hooks)
   acceptedNicksCount Int @default(0) @map("accepted_nicks_count")
@@ -489,6 +500,7 @@ model Conversation {
   messages      Message[]
   aiSuggestions AiSuggestion[]
   pins          PinnedConversation[]
+  factEvidence  FactEvidence[]
 
   @@unique([zaloAccountId, externalThreadId])
   @@index([orgId, zaloAccountId, isReplied, lastMessageAt])
@@ -2168,4 +2180,112 @@ model AgentTask {
   @@index([leasedUntil])
   @@map("agent_tasks")
 }
+
+// Phase 8b — Agent Memory & Execution Layer
+
+model Fact {
+  id              String   @id @default(uuid())
+  orgId           String   @map("org_id")
+  contactId       String   @map("contact_id")
+  field           String
+  value           String
+  source          String
+  strength        String   // strong | medium | weak
+  writtenToRecord Boolean  @default(false) @map("written_to_record")
+  supersededById  String?  @map("superseded_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  org          Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contact      Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  supersededBy Fact?          @relation("FactSuperseded", fields: [supersededById], references: [id], onDelete: SetNull)
+  supersedes   Fact[]         @relation("FactSuperseded")
+  evidence     FactEvidence[]
+
+  @@index([orgId, contactId, field])
+  @@index([supersededById])
+  @@map("facts")
+}
+
+model FactEvidence {
+  id             String    @id @default(uuid())
+  orgId          String    @map("org_id")
+  factId         String    @map("fact_id")
+  excerpt        String
+  messageId      String?   @map("message_id")
+  conversationId String?   @map("conversation_id")
+  capturedAt     DateTime  @default(now()) @map("captured_at")
+
+  org          Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  fact         Fact          @relation(fields: [factId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, factId])
+  @@map("fact_evidence")
+}
+
+model FactSuggestion {
+  id               String    @id @default(uuid())
+  orgId            String    @map("org_id")
+  contactId        String    @map("contact_id")
+  field            String
+  proposedValue    String    @map("proposed_value")
+  source           String
+  strength         String    // strong | medium | weak
+  reason           String
+  excerpt          String
+  status           String    @default("pending") // pending | accepted | rejected
+  reviewedByUserId String?   @map("reviewed_by_user_id")
+  reviewedAt       DateTime? @map("reviewed_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  contact        Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  reviewedByUser User?        @relation(fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orgId, contactId, status])
+  @@map("fact_suggestions")
+}
+
+model AgentSession {
+  id        String    @id @default(uuid())
+  orgId     String    @map("org_id")
+  trigger   String
+  status    String    @default("running")
+  model     String
+  tokensIn  Int       @default(0) @map("tokens_in")
+  tokensOut Int       @default(0) @map("tokens_out")
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  error     String?
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  steps AgentStep[]
+
+  @@index([orgId, status, startedAt])
+  @@map("agent_sessions")
+}
+
+model AgentStep {
+  id             String   @id @default(uuid())
+  orgId          String   @map("org_id")
+  sessionId      String   @map("session_id")
+  stepIndex      Int      @map("step_index")
+  kind           String   // tool_call | llm | decision
+  toolName       String?  @map("tool_name")
+  inputRedacted  Json?    @map("input_redacted")
+  outputRedacted Json?    @map("output_redacted")
+  tokensIn       Int      @default(0) @map("tokens_in")
+  tokensOut      Int      @default(0) @map("tokens_out")
+  durationMs     Int      @default(0) @map("duration_ms")
+  error          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  org     Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  session AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, stepIndex])
+  @@index([orgId, sessionId, stepIndex])
+  @@map("agent_steps")
+}
+
 
