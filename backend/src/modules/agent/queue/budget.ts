@@ -70,8 +70,25 @@ export async function checkAndResetMonthlyBudget(
     });
     if (!org) return null;
 
-    const isExpired = !org.agentBudgetResetAt || org.agentBudgetResetAt <= now;
-    if (isExpired) {
+    // Khi agentBudgetResetAt là null: CHỈ đặt mốc reset, TUYỆT ĐỐI không chạm agentTokenUsedThisMonth
+    if (org.agentBudgetResetAt === null) {
+      const nextReset = getNextMonthResetDate(now);
+      return tx.organization.update({
+        where: { id: orgId },
+        data: {
+          agentBudgetResetAt: nextReset,
+        },
+        select: {
+          id: true,
+          agentTokenBudgetMonthly: true,
+          agentTokenUsedThisMonth: true,
+          agentBudgetResetAt: true,
+        },
+      });
+    }
+
+    // Chỉ zero-hoá khi vượt qua một mốc đã đặt (agentBudgetResetAt <= now)
+    if (org.agentBudgetResetAt <= now) {
       const nextReset = getNextMonthResetDate(now);
       return tx.organization.update({
         where: { id: orgId },

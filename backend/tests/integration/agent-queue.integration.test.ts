@@ -503,7 +503,7 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
       data: {
         id: taskId,
         orgId: orgRecoverId,
-        kind: 'noop',
+        kind: 'custom_consume_task',
         subjectType: 'contact',
         subjectId: 'contact_recover',
         dueAt: new Date(),
@@ -511,8 +511,17 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
       },
     });
 
-    // Gọi runOnce: Hệ thống phát hiện đã sang chu kỳ mới -> reset used về 0 và chạy task
-    const result = await runOnce({ orgId: orgRecoverId });
+    const customHandlers = {
+      custom_consume_task: async (task: AgentTask) => ({
+        success: true,
+        result: { handled: true, taskId: task.id },
+        tokensIn: 300,
+        tokensOut: 200,
+      }),
+    };
+
+    // Gọi runOnce: Hệ thống phát hiện đã sang chu kỳ mới -> reset used về 0, chạy task và consume 500 tokens
+    const result = await runOnce({ orgId: orgRecoverId, customHandlers });
     expect(result.status).toBe('ok');
     expect(result.claimedCount).toBe(1);
     expect(result.completedCount).toBe(1);
@@ -521,6 +530,111 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     expect(taskInDb?.status).toBe('completed');
 
     const orgInDb = await prisma.organization.findUnique({ where: { id: orgRecoverId } });
-    expect(orgInDb?.agentTokenUsedThisMonth).toBe(0);
+    // Sau reset về 0 + handler tiêu 500 tokens -> used phải là 500
+    expect(orgInDb?.agentTokenUsedThisMonth).toBe(500);
+  });
+
+  it('7d. Khởi tạo mốc reset: Org có reset_at null và used = 777 -> checkAndResetMonthlyBudget giữ nguyên used = 777 và đặt reset_at', async () => {
+    const orgNullResetId = `${TEST_PREFIX}_org_null_reset`;
+    await prisma.organization.create({
+      data: {
+        id: orgNullResetId,
+        name: 'Org Null Reset Test',
+        agentTokenBudgetMonthly: 10_000,
+        agentTokenUsedThisMonth: 777,
+        agentBudgetResetAt: null,
+      },
+    });
+
+    const res = await checkAndResetMonthlyBudget(orgNullResetId);
+    expect(res).not.toBeNull();
+    expect(res?.agentTokenUsedThisMonth).toBe(777);
+    expect(res?.agentBudgetResetAt).not.toBeNull();
+
+    const expectedNextMonth = getNextMonthResetDate();
+    expect(res?.agentBudgetResetAt?.toISOString()).toBe(expectedNextMonth.toISOString());
+
+    const inDb = await prisma.organization.findUnique({ where: { id: orgNullResetId } });
+    expect(inDb?.agentTokenUsedThisMonth).toBe(777);
+    expect(inDb?.agentBudgetResetAt?.toISOString()).toBe(expectedNextMonth.toISOString());
+  });
+
+  it('7e. Cửa ngân sách đóng thật sự: org có budget 1000, used 999, handler tiêu 500 -> lượt runOnce kế tiếp trả blocked TOKEN_BUDGET_EXHAUSTED', async () => {
+    const orgExhaustId = `${TEST_PREFIX}_org_exhaust_budget`;
+    const nextResetDate = getNextMonthResetDate(); // Chưa qua mốc reset
+
+    await prisma.organization.create({
+      data: {
+        id: orgExhaustId,
+        name: 'Org Exhaust Budget Test',
+        agentTokenBudgetMonthly: 1_000,
+        agentTokenUsedThisMonth: 999,
+        agentBudgetResetAt: nextResetDate,
+      },
+    });
+
+    const task1Id = `${TEST_PREFIX}_task_exhaust_1`;
+    const task2Id = `${TEST_PREFIX}_task_exhaust_2`;
+
+    await prisma.agentTask.createMany({
+      data: [
+        {
+          id: task1Id,
+          orgId: orgExhaustId,
+          kind: 'custom_consume_task',
+          subjectType: 'contact',
+          subjectId: 'contact_exhaust_1',
+          dueAt: new Date(),
+          status: 'pending',
+        },
+        {
+          id: task2Id,
+          orgId: orgExhaustId,
+          kind: 'custom_consume_task',
+          subjectType: 'contact',
+          subjectId: 'contact_exhaust_2',
+          dueAt: new Date(),
+          status: 'pending',
+        },
+      ],
+    });
+
+    const customHandlers = {
+      custom_consume_task: async (task: AgentTask) => ({
+        success: true,
+        result: { handled: true, taskId: task.id },
+        tokensIn: 300,
+        tokensOut: 200, // tổng tiêu 500
+      }),
+    };
+
+    // Lượt 1: used = 999 < 1000 -> ĐƯỢC CHẠY (limit: 1 để chỉ xử lý task 1)
+    const run1 = await runOnce({
+      orgId: orgExhaustId,
+      limit: 1,
+      customHandlers,
+    });
+    expect(run1.status).toBe('ok');
+    expect(run1.claimedCount).toBe(1);
+    expect(run1.completedCount).toBe(1);
+
+    // Kiểm tra used sau lượt 1: 999 + 500 = 1499
+    const orgAfterRun1 = await prisma.organization.findUnique({ where: { id: orgExhaustId } });
+    expect(orgAfterRun1?.agentTokenUsedThisMonth).toBe(1_499);
+
+    // Lượt 2 (KẾ TIẾP): used = 1499 >= 1000 -> BỊ CHẶN HOÀN TOÀN
+    const run2 = await runOnce({
+      orgId: orgExhaustId,
+      limit: 1,
+      customHandlers,
+    });
+    expect(run2.status).toBe('blocked');
+    expect(run2.reason).toBe('TOKEN_BUDGET_EXHAUSTED');
+    expect(run2.claimedCount).toBe(0);
+    expect(run2.completedCount).toBe(0);
+
+    // Task 2 vẫn giữ nguyên trạng thái pending, không hề bị claim
+    const task2InDb = await prisma.agentTask.findUnique({ where: { id: task2Id } });
+    expect(task2InDb?.status).toBe('pending');
   });
 });

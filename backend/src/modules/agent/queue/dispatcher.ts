@@ -13,7 +13,7 @@
 import { prisma } from '../../../shared/database/prisma-client.js';
 import { claimDue, complete, fail, reapExpired } from './tasks.js';
 import { noopHandler, type TaskHandler } from './handlers/noop.js';
-import { checkAndResetMonthlyBudget } from './budget.js';
+import { checkAndResetMonthlyBudget, consumeTokens } from './budget.js';
 
 export interface RunOnceOptions {
   orgId: string;
@@ -122,6 +122,15 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       }
 
       const result = await handler(task);
+      const totalTokens = (result.tokensIn || 0) + (result.tokensOut || 0);
+      if (totalTokens > 0) {
+        await consumeTokens({
+          orgId,
+          tokensIn: result.tokensIn || 0,
+          tokensOut: result.tokensOut || 0,
+        });
+      }
+
       if (result.success) {
         await complete({
           orgId,
