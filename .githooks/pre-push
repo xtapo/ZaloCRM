@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GIT_DIR="$(git rev-parse --git-dir)"
+STAMP_FILE="${GIT_DIR}/ci-local-pass"
+
+if [ ! -f "${STAMP_FILE}" ]; then
+  echo "❌ [BLOCK PRE-PUSH] Khong tim thay con dau ${STAMP_FILE}!"
+  echo "👉 Vui long chay './backend/scripts/ci-local.sh' (hoac bash backend/scripts/ci-local.sh) de kiem tra toan bo cong local truoc khi push."
+  exit 1
+fi
+
+echo "✅ [PRE-PUSH] Con dau ci-local-pass hop le. Cho phep push."
+exit 0

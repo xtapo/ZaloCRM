@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import type { AgentTask } from '@prisma/client';
 import { prisma } from '../../src/shared/database/prisma-client.js';
 import { claimDue, complete, fail, reschedule, reapExpired } from '../../src/modules/agent/queue/tasks.js';
 import { runOnce } from '../../src/modules/agent/queue/dispatcher.js';
