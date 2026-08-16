@@ -36,6 +36,8 @@ import {
   getSafeContactForAgent,
   findSafeContactsForAgent,
   getSafeMessagesForAgent,
+  AGENT_VISIBLE_CONTACT_WHERE,
+  AGENT_VISIBLE_CONVERSATION_WHERE,
 } from '../../src/modules/agent/gateway/agent-gateway.js';
 
 describe('Agent Privacy & Tenant Gateway', () => {
@@ -225,10 +227,7 @@ describe('Agent Privacy & Tenant Gateway', () => {
         conversation: {
           orgId: 'org-1',
           id: 'conv-1',
-          zaloAccount: {
-            orgId: 'org-1',
-            privacyMode: { not: 'main' },
-          },
+          ...AGENT_VISIBLE_CONVERSATION_WHERE,
         },
         isDeleted: false,
       },
@@ -255,10 +254,7 @@ describe('Agent Privacy & Tenant Gateway', () => {
         conversation: {
           orgId: 'org-1',
           contactId: 'contact-1',
-          zaloAccount: {
-            orgId: 'org-1',
-            privacyMode: { not: 'main' },
-          },
+          ...AGENT_VISIBLE_CONVERSATION_WHERE,
         },
         isDeleted: false,
       },

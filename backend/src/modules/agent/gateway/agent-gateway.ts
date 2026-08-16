@@ -79,6 +79,33 @@ export const SAFE_FRIEND_SELECT = {
 } as const satisfies Prisma.FriendSelect;
 
 /**
+ * Vị từ duy nhất lọc Contact an toàn cho Agent:
+ * - Không bao giờ trả về contact đã bị gộp (mergedInto: null).
+ * - Không bao giờ trả về contact có liên kết bạn bè với bất kỳ nick riêng tư nào (privacyMode = 'main').
+ */
+export const AGENT_VISIBLE_CONTACT_WHERE = {
+  mergedInto: null,
+  friends: { none: { zaloAccount: { privacyMode: PRIVACY_MODE_MAIN } } },
+} as const satisfies Prisma.ContactWhereInput;
+
+/**
+ * Vị từ duy nhất lọc Conversation an toàn cho Agent:
+ * - Thuộc ZaloAccount có privacyMode khác 'main' (chỉ nick sub công khai).
+ * - Hoặc conversation không gắn contact (chat nhóm / khách lạ chưa tạo contact),
+ *   hoặc contact gắn kèm phải thoả mãn AGENT_VISIBLE_CONTACT_WHERE (chưa merge, không có friend thuộc main nick).
+ *
+ * QUYẾT ĐỊNH ĐÃ CHỐT: Hội thoại `contactId: null` (chat nhóm, chưa gắn contact) vẫn cho phép Agent đọc nếu nằm trên nick sub.
+ * Giới hạn đã biết: Chat nhóm có thể chứa thành viên là người quen thuộc nick main mà hệ thống CRM chưa liên kết contact.
+ */
+export const AGENT_VISIBLE_CONVERSATION_WHERE = {
+  zaloAccount: { privacyMode: { not: PRIVACY_MODE_MAIN } },
+  OR: [
+    { contactId: null },
+    { contact: AGENT_VISIBLE_CONTACT_WHERE },
+  ],
+} as const satisfies Prisma.ConversationWhereInput;
+
+/**
  * Lấy chi tiết 1 Contact an toàn cho Agent.
  * - Trả về null nếu contact không tồn tại hoặc khác orgId (Multi-tenant check).
  * - Trả về null (loại bỏ hoàn toàn) nếu contact bị khóa PIN (Privacy PIN check: có friend thuộc main nick).
@@ -95,14 +122,7 @@ export async function getSafeContactForAgent(
     where: {
       id: contactId,
       orgId: ctx.orgId,
-      mergedInto: null,
-      friends: {
-        none: {
-          zaloAccount: {
-            privacyMode: PRIVACY_MODE_MAIN,
-          },
-        },
-      },
+      ...AGENT_VISIBLE_CONTACT_WHERE,
     },
     select: {
       ...SAFE_CONTACT_SELECT,
@@ -135,14 +155,7 @@ export async function findSafeContactsForAgent(
 
   const whereConditions: Prisma.ContactWhereInput = {
     orgId: ctx.orgId,
-    mergedInto: null,
-    friends: {
-      none: {
-        zaloAccount: {
-          privacyMode: PRIVACY_MODE_MAIN,
-        },
-      },
-    },
+    ...AGENT_VISIBLE_CONTACT_WHERE,
   };
 
   if (params.phoneNormalized) {
@@ -196,10 +209,7 @@ export async function getSafeMessagesForAgent(
         orgId: ctx.orgId,
         ...(params.conversationId ? { id: params.conversationId } : {}),
         ...(params.contactId ? { contactId: params.contactId } : {}),
-        zaloAccount: {
-          orgId: ctx.orgId,
-          privacyMode: { not: PRIVACY_MODE_MAIN },
-        },
+        ...AGENT_VISIBLE_CONVERSATION_WHERE,
       },
       isDeleted: false,
     },
