@@ -14,6 +14,7 @@ import type { Prisma, AgentTask } from '@prisma/client';
 
 export interface ClaimDueOptions {
   orgId: string;
+  workerId: string;
   limit?: number;
   leaseMs?: number;
   skipLocked?: boolean;
@@ -47,8 +48,8 @@ export interface ReapExpiredOptions {
  * 1. claimDue: Atomic claim các task đến hạn trong tenant qua SELECT ... FOR UPDATE SKIP LOCKED
  */
 export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
-  const { orgId, limit = 10, leaseMs = 60_000, skipLocked = true } = options;
-  if (!orgId) return [];
+  const { orgId, workerId, limit = 10, leaseMs = 60_000, skipLocked = true } = options;
+  if (!orgId || !workerId) return [];
 
   const leaseUntil = new Date(Date.now() + leaseMs);
   const now = new Date();
@@ -58,6 +59,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
       UPDATE "agent_tasks"
       SET 
         "status" = 'running',
+        "leased_by" = ${workerId},
         "leased_until" = ${leaseUntil},
         "attempts" = "attempts" + 1,
         "updated_at" = ${now}
@@ -97,6 +99,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
     UPDATE "agent_tasks"
     SET 
       "status" = 'running',
+      "leased_by" = ${workerId},
       "leased_until" = ${leaseUntil},
       "attempts" = "attempts" + 1,
       "updated_at" = ${now}

@@ -16,6 +16,7 @@ import { noopHandler, type TaskHandler } from './handlers/noop.js';
 
 export interface RunOnceOptions {
   orgId: string;
+  workerId?: string;
   now?: Date;
   limit?: number;
   customHandlers?: Record<string, TaskHandler>;
@@ -39,7 +40,12 @@ const DEFAULT_HANDLERS: Record<string, TaskHandler> = {
  * runOnce: Một lượt quét và xử lý hàng đợi cho một tổ chức (tenant)
  */
 export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
-  const { orgId, limit = 10, customHandlers = {} } = options;
+  const {
+    orgId,
+    workerId = process.env.WORKER_ID || `dispatcher-${process.pid}`,
+    limit = 10,
+    customHandlers = {},
+  } = options;
 
   if (!orgId) {
     return {
@@ -100,7 +106,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const { count: reapedCount } = await reapExpired({ orgId });
 
   // 3. Claim tasks đến hạn
-  const tasks = await claimDue({ orgId, limit });
+  const tasks = await claimDue({ orgId, workerId, limit });
   const handlers = { ...DEFAULT_HANDLERS, ...customHandlers };
 
   let completedCount = 0;

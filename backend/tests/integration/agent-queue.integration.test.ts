@@ -70,10 +70,13 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
       });
     }
 
+    const worker1 = 'worker_node_1';
+    const worker2 = 'worker_node_2';
+
     // Gọi 2 lần claimDue song song
     const [batch1, batch2] = await Promise.all([
-      claimDue({ orgId: orgAId, limit: 10 }),
-      claimDue({ orgId: orgAId, limit: 10 }),
+      claimDue({ orgId: orgAId, workerId: worker1, limit: 10 }),
+      claimDue({ orgId: orgAId, workerId: worker2, limit: 10 }),
     ]);
 
     const ids1 = new Set(batch1.map((t) => t.id));
@@ -91,6 +94,18 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     expect(union.size).toBe(10);
     for (const id of taskIds) {
       expect(union.has(id)).toBe(true);
+    }
+
+    // Khẳng định leasedBy đúng bằng workerId cả trong kết quả trả về và trong DB
+    for (const t of batch1) {
+      expect(t.leasedBy).toBe(worker1);
+      const inDb = await prisma.agentTask.findUnique({ where: { id: t.id } });
+      expect(inDb?.leasedBy).toBe(worker1);
+    }
+    for (const t of batch2) {
+      expect(t.leasedBy).toBe(worker2);
+      const inDb = await prisma.agentTask.findUnique({ where: { id: t.id } });
+      expect(inDb?.leasedBy).toBe(worker2);
     }
   });
 
@@ -119,8 +134,8 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     // Khi không có SKIP LOCKED, câu lệnh subquery FOR UPDATE khóa toàn bộ hàng phù hợp.
     // Lần gọi song song thứ hai phải chờ khóa hoặc đọc trạng thái sau khi câu thứ nhất hoàn tất.
     const [batch1, batch2] = await Promise.all([
-      claimDue({ orgId: orgAId, limit: 5, skipLocked: false }),
-      claimDue({ orgId: orgAId, limit: 5, skipLocked: false }),
+      claimDue({ orgId: orgAId, workerId: 'worker_noskip_1', limit: 5, skipLocked: false }),
+      claimDue({ orgId: orgAId, workerId: 'worker_noskip_2', limit: 5, skipLocked: false }),
     ]);
 
     // Quan sát kết quả: câu thứ nhất claim hết 5 task, câu thứ hai chờ và sau đó lấy được 0 task
@@ -229,16 +244,18 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     });
 
     // Org A claim
-    const batchA = await claimDue({ orgId: orgAId, limit: 10 });
+    const batchA = await claimDue({ orgId: orgAId, workerId: 'worker_tenant_a', limit: 10 });
     const batchAIds = batchA.map((t) => t.id);
     expect(batchAIds).toContain(taskAId);
     expect(batchAIds).not.toContain(taskBId);
+    expect(batchA[0].leasedBy).toBe('worker_tenant_a');
 
     // Org B claim
-    const batchB = await claimDue({ orgId: orgBId, limit: 10 });
+    const batchB = await claimDue({ orgId: orgBId, workerId: 'worker_tenant_b', limit: 10 });
     const batchBIds = batchB.map((t) => t.id);
     expect(batchBIds).toContain(taskBId);
     expect(batchBIds).not.toContain(taskAId);
+    expect(batchB[0].leasedBy).toBe('worker_tenant_b');
 
     // Cross-tenant mutation: Org A cố complete task của Org B -> Bị từ chối (null)
     const crossComplete = await complete({ orgId: orgAId, taskId: taskBId });
