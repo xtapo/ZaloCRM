@@ -59,14 +59,27 @@ describe('Agent Privacy & Tenant Gateway', () => {
   });
 
   it('returns null and completely excludes contact if locked by PIN (no metadata leak)', async () => {
-    mockPrisma.friend.findMany.mockResolvedValueOnce([
-      { contactId: 'contact-1' },
-    ]);
+    mockPrisma.contact.findFirst.mockResolvedValueOnce(null);
 
     const result = await getSafeContactForAgent('contact-1', { orgId: 'org-1' });
 
     // Contact must be completely invisible (null) — not even masked metadata
     expect(result).toBeNull();
+    expect(mockPrisma.contact.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'contact-1',
+          orgId: 'org-1',
+          friends: {
+            none: {
+              zaloAccount: {
+                privacyMode: 'main',
+              },
+            },
+          },
+        },
+      }),
+    );
   });
 
   it('returns contact details when not locked by PIN within same org', async () => {
@@ -99,52 +112,156 @@ describe('Agent Privacy & Tenant Gateway', () => {
       where: {
         id: 'contact-org-b',
         orgId: 'org-A',
+        friends: {
+          none: {
+            zaloAccount: {
+              privacyMode: 'main',
+            },
+          },
+        },
       },
-      include: expect.anything(),
+      select: expect.objectContaining({
+        id: true,
+        fullName: true,
+        friends: expect.anything(),
+      }),
     });
   });
 
-  it('filters out locked contacts from search results (excluding metadata entirely)', async () => {
+  it('filters out locked contacts from search results and uses allow-list select (Bug 3)', async () => {
     mockPrisma.contact.findMany.mockResolvedValueOnce([
-      { id: 'c-locked', orgId: 'org-1', fullName: 'Khách VIP 1', leadScore: 100 },
       { id: 'c-public', orgId: 'org-1', fullName: 'Khách Thường', leadScore: 50 },
-    ]);
-    mockPrisma.friend.findMany.mockResolvedValueOnce([
-      { contactId: 'c-locked' },
     ]);
 
     const results = await findSafeContactsForAgent({ query: 'Khách' }, { orgId: 'org-1' });
 
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe('c-public');
-    expect(results.some((c) => c.id === 'c-locked')).toBe(false);
-  });
-
-  it('returns empty message list if conversation belongs to main privacy account', async () => {
-    mockPrisma.conversation.findFirst.mockResolvedValueOnce({
-      id: 'conv-1',
-      orgId: 'org-1',
-      zaloAccount: { privacyMode: 'main' },
+    expect(mockPrisma.contact.findMany).toHaveBeenCalledWith({
+      where: {
+        orgId: 'org-1',
+        friends: {
+          none: {
+            zaloAccount: {
+              privacyMode: 'main',
+            },
+          },
+        },
+        OR: [
+          { fullName: { contains: 'Khách', mode: 'insensitive' } },
+          { phone: { contains: 'Khách' } },
+          { zaloUsername: { contains: 'Khách', mode: 'insensitive' } },
+        ],
+      },
+      select: expect.objectContaining({
+        id: true,
+        fullName: true,
+        phone: true,
+      }),
+      take: 20,
+      orderBy: { updatedAt: 'desc' },
     });
 
-    const messages = await getSafeMessagesForAgent(
-      { conversationId: 'conv-1' },
-      { orgId: 'org-1' },
-    );
-
-    expect(messages).toEqual([]);
+    // Verify allow-list does NOT contain sensitive message previews or notes
+    const callSelect = mockPrisma.contact.findMany.mock.calls[0][0].select;
+    expect(callSelect.lastInboundPreview).toBeUndefined();
+    expect(callSelect.lastOutboundPreview).toBeUndefined();
+    expect(callSelect.lastInteractionPayload).toBeUndefined();
+    expect(callSelect.notes).toBeUndefined();
+    expect(callSelect.metadata).toBeUndefined();
+    expect(callSelect.gender).toBeUndefined();
+    expect(callSelect.birthYear).toBeUndefined();
+    expect(callSelect.addressLine).toBeUndefined();
   });
 
-  it('returns empty message list if target contact is locked by PIN', async () => {
-    mockPrisma.friend.findMany.mockResolvedValueOnce([
-      { contactId: 'c-locked' },
-    ]);
+  it('ensures getSafeContactForAgent uses allow-list select without sensitive fields (Bug 3)', async () => {
+    mockPrisma.contact.findFirst.mockResolvedValueOnce({
+      id: 'contact-safe-1',
+      orgId: 'org-1',
+      fullName: 'Khách A',
+      phone: '0901112222',
+      friends: [],
+    });
+
+    const contact = await getSafeContactForAgent('contact-safe-1', { orgId: 'org-1' });
+
+    expect(contact).not.toBeNull();
+    const callSelect = mockPrisma.contact.findFirst.mock.calls[0][0].select;
+    expect(callSelect.lastInboundPreview).toBeUndefined();
+    expect(callSelect.lastOutboundPreview).toBeUndefined();
+    expect(callSelect.notes).toBeUndefined();
+    expect(callSelect.metadata).toBeUndefined();
+    expect(callSelect.gender).toBeUndefined();
+    expect(callSelect.incomeRange).toBeUndefined();
+  });
+
+  it('fails closed and throws if neither conversationId nor contactId is provided (Bug 1 reproduction)', async () => {
+    // Calling getSafeMessagesForAgent without conversationId or contactId must throw immediately
+    await expect(getSafeMessagesForAgent({}, { orgId: 'org-1' })).rejects.toThrow(
+      /conversationId or contactId is required/i,
+    );
+  });
+
+  it('queries messages with inline exclusion of main privacy mode and returns newest messages in asc order (Bug 1 & 2)', async () => {
+    const msgOlder = { id: 'm1', content: 'Chào bạn', sentAt: new Date('2026-08-16T07:00:00Z') };
+    const msgNewer = { id: 'm2', content: 'Tôi cần hỗ trợ', sentAt: new Date('2026-08-16T08:00:00Z') };
+
+    // DB returns in desc order (newest first)
+    mockPrisma.message.findMany.mockResolvedValueOnce([msgNewer, msgOlder]);
 
     const messages = await getSafeMessagesForAgent(
-      { contactId: 'c-locked' },
+      { conversationId: 'conv-1', limit: 50 },
       { orgId: 'org-1' },
     );
 
-    expect(messages).toEqual([]);
+    // Verify DB query filters out privacyMode: 'main' directly in conversation
+    expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
+      where: {
+        conversation: {
+          orgId: 'org-1',
+          id: 'conv-1',
+          zaloAccount: {
+            orgId: 'org-1',
+            privacyMode: { not: 'main' },
+          },
+        },
+        isDeleted: false,
+      },
+      orderBy: { sentAt: 'desc' },
+      take: 50,
+    });
+
+    // Verify results are reversed back to chronological order (oldest to newest)
+    expect(messages).toEqual([msgOlder, msgNewer]);
+    expect(messages[0].id).toBe('m1');
+    expect(messages[1].id).toBe('m2');
+  });
+
+  it('queries messages by contactId with privacyMode excluded (Bug 1 & 2)', async () => {
+    mockPrisma.message.findMany.mockResolvedValueOnce([]);
+
+    await getSafeMessagesForAgent(
+      { contactId: 'contact-1' },
+      { orgId: 'org-1' },
+    );
+
+    expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
+      where: {
+        conversation: {
+          orgId: 'org-1',
+          contactId: 'contact-1',
+          zaloAccount: {
+            orgId: 'org-1',
+            privacyMode: { not: 'main' },
+          },
+        },
+        isDeleted: false,
+      },
+      orderBy: { sentAt: 'desc' },
+      take: 50,
+    });
   });
 });
+
+
+

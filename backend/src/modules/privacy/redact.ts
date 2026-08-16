@@ -11,6 +11,7 @@
 import { prisma } from '../../shared/database/prisma-client.js';
 
 const BLUR_TOKEN = '▒'.repeat(8);
+export const PRIVACY_MODE_MAIN = 'main' as const;
 
 export interface PrivacyContext {
   /** Current user (viewer) — null = anonymous (shouldn't happen post-auth) */
@@ -30,7 +31,7 @@ export function canSeeConversationContent(
   conv: { zaloAccount: { privacyMode: string; ownerUserId: string } },
   ctx: PrivacyContext,
 ): boolean {
-  if (conv.zaloAccount.privacyMode !== 'main') return true;
+  if (conv.zaloAccount.privacyMode !== PRIVACY_MODE_MAIN) return true;
   const isOwner = conv.zaloAccount.ownerUserId === ctx.viewerUserId;
   return isOwner && ctx.privacyUnlocked;
 }
@@ -119,7 +120,7 @@ export async function getRedactableContactIds(
       contactId: { in: contactIds },
       zaloAccount: {
         orgId: ctx.orgId,
-        privacyMode: 'main',
+        privacyMode: PRIVACY_MODE_MAIN,
         ownerUserId: ctx.viewerUserId ? { not: ctx.viewerUserId } : undefined,
       },
     },
@@ -185,7 +186,7 @@ export function redactFriend<T extends {
   friend: T & { zaloAccount: { privacyMode: string; ownerUserId: string } },
   ctx: PrivacyContext,
 ): T & { redacted?: boolean } {
-  if (friend.zaloAccount.privacyMode !== 'main') return friend;
+  if (friend.zaloAccount.privacyMode !== PRIVACY_MODE_MAIN) return friend;
   const isOwner = friend.zaloAccount.ownerUserId === ctx.viewerUserId;
   if (isOwner && ctx.privacyUnlocked) return friend;
   return {

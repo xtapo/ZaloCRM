@@ -8,7 +8,9 @@
  *    - Bị LOẠI BỎ HOÀN TOÀN khỏi kết quả (không chỉ mask/che).
  *    - Không lọt PII, không lọt content, không lọt metadata (leadScore, priorityScore, timestamps, counts).
  */
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../../shared/database/prisma-client.js';
+import { PRIVACY_MODE_MAIN } from '../../privacy/redact.js';
 
 export interface AgentSessionContext {
   /** orgId bắt buộc từ AgentSession — không tin tưởng input từ LLM */
@@ -16,6 +18,56 @@ export interface AgentSessionContext {
   sessionId?: string;
   taskId?: string;
 }
+
+/**
+ * Allow-list tường minh các trường Contact an toàn cho Agent.
+ * Loại bỏ hoàn toàn nội dung tin nhắn preview, ghi chú, và toàn bộ dữ liệu nhân khẩu học nhạy cảm.
+ */
+export const SAFE_CONTACT_SELECT = {
+  id: true,
+  orgId: true,
+  fullName: true,
+  crmName: true,
+  phone: true,
+  phoneNormalized: true,
+  email: true,
+  zaloUid: true,
+  zaloGlobalId: true,
+  zaloUsername: true,
+  avatarUrl: true,
+  source: true,
+  sourceDate: true,
+  firstContactDate: true,
+  status: true,
+  statusId: true,
+  nextAppointment: true,
+  assignedUserId: true,
+  tags: true,
+  leadScore: true,
+  priorityScore: true,
+  engagementScore: true,
+  engagementPattern: true,
+  engagementTrend: true,
+  lastActivity: true,
+  hasZalo: true,
+  consentStatus: true,
+  mergedInto: true,
+  createdAt: true,
+  updatedAt: true,
+} as const satisfies Prisma.ContactSelect;
+
+export const SAFE_FRIEND_SELECT = {
+  id: true,
+  zaloDisplayName: true,
+  zaloAvatarUrl: true,
+  zaloGlobalId: true,
+  zaloUsername: true,
+  aliasInNick: true,
+  crmTagsPerNick: true,
+  friendshipStatus: true,
+  becameFriendAt: true,
+} as const satisfies Prisma.FriendSelect;
+
 
 /**
  * Kiểm tra xem 1 hoặc nhiều contactIds có bị khóa bởi Privacy PIN hay không.
@@ -36,7 +88,7 @@ export async function getAgentLockedContactIds(
       contactId: { in: contactIds },
       zaloAccount: {
         orgId,
-        privacyMode: 'main',
+        privacyMode: PRIVACY_MODE_MAIN,
       },
     },
     select: { contactId: true },
@@ -56,32 +108,24 @@ export async function getSafeContactForAgent(
 ) {
   if (!contactId || !ctx?.orgId) return null;
 
-  // 1. Kiểm tra khóa PIN trước (Fail-closed)
-  const lockedIds = await getAgentLockedContactIds([contactId], ctx.orgId);
-  if (lockedIds.has(contactId)) {
-    return null; // Vô hình hoàn toàn với agent
-  }
-
-  // 2. Query Contact kèm tenant scoping
+  // Query Contact kèm tenant scoping, loại bỏ contact bị khóa PIN và áp dụng allow-list select
   const contact = await prisma.contact.findFirst({
     where: {
       id: contactId,
       orgId: ctx.orgId,
+      friends: {
+        none: {
+          zaloAccount: {
+            privacyMode: PRIVACY_MODE_MAIN,
+          },
+        },
+      },
     },
-    include: {
+    select: {
+      ...SAFE_CONTACT_SELECT,
       friends: {
         where: { orgId: ctx.orgId },
-        select: {
-          id: true,
-          zaloDisplayName: true,
-          zaloAvatarUrl: true,
-          zaloGlobalId: true,
-          zaloUsername: true,
-          aliasInNick: true,
-          crmTagsPerNick: true,
-          friendshipStatus: true,
-          becameFriendAt: true,
-        },
+        select: SAFE_FRIEND_SELECT,
       },
     },
   });
@@ -106,8 +150,15 @@ export async function findSafeContactsForAgent(
 
   const limit = Math.min(Math.max(params.limit ?? 20, 1), 100);
 
-  const whereConditions: any = {
+  const whereConditions: Prisma.ContactWhereInput = {
     orgId: ctx.orgId,
+    friends: {
+      none: {
+        zaloAccount: {
+          privacyMode: PRIVACY_MODE_MAIN,
+        },
+      },
+    },
   };
 
   if (params.phoneNormalized) {
@@ -122,27 +173,19 @@ export async function findSafeContactsForAgent(
     ];
   }
 
-  const rawContacts = await prisma.contact.findMany({
+  return prisma.contact.findMany({
     where: whereConditions,
-    take: limit * 2, // Lấy dư để trừ hao contact bị lọc PIN
+    select: SAFE_CONTACT_SELECT,
+    take: limit,
     orderBy: { updatedAt: 'desc' },
   });
-
-  if (rawContacts.length === 0) return [];
-
-  // Lọc Privacy PIN
-  const contactIds = rawContacts.map((c) => c.id);
-  const lockedIds = await getAgentLockedContactIds(contactIds, ctx.orgId);
-
-  // Chỉ giữ lại contact không bị khóa PIN
-  const visible = rawContacts.filter((c) => !lockedIds.has(c.id));
-  return visible.slice(0, limit);
 }
 
 /**
  * Đọc lịch sử tin nhắn an toàn cho Agent.
- * Nếu cuộc hội thoại hoặc contact liên quan thuộc tài khoản riêng tư (`privacyMode = 'main'`),
- * trả về danh sách rỗng `[]`.
+ * Bắt buộc phải có ít nhất conversationId hoặc contactId (fail-closed).
+ * Tự động loại trừ tin nhắn thuộc các cuộc hội thoại gắn với tài khoản riêng tư (`privacyMode = 'main'`).
+ * Trả về `limit` tin nhắn MỚI NHẤT theo thứ tự thời gian tăng dần.
  */
 export async function getSafeMessagesForAgent(
   params: {
@@ -154,43 +197,31 @@ export async function getSafeMessagesForAgent(
 ) {
   if (!ctx?.orgId) return [];
 
-  // 1. Nếu có contactId, kiểm tra PIN trước
-  if (params.contactId) {
-    const locked = await getAgentLockedContactIds([params.contactId], ctx.orgId);
-    if (locked.has(params.contactId)) {
-      return [];
-    }
-  }
-
-  // 2. Nếu có conversationId, kiểm tra conversation thuộc account main hay không
-  if (params.conversationId) {
-    const conv = await prisma.conversation.findFirst({
-      where: {
-        id: params.conversationId,
-        orgId: ctx.orgId,
-      },
-      include: {
-        zaloAccount: {
-          select: { privacyMode: true },
-        },
-      },
-    });
-
-    if (!conv || conv.zaloAccount?.privacyMode === 'main') {
-      return []; // Vô hình với agent
-    }
+  // Lỗi 1: Bắt buộc phải có ít nhất một trong conversationId hoặc contactId. Không có thì throw.
+  if (!params.conversationId && !params.contactId) {
+    throw new Error('Either conversationId or contactId is required for getSafeMessagesForAgent');
   }
 
   const limit = Math.min(Math.max(params.limit ?? 50, 1), 200);
 
-  return prisma.message.findMany({
+  // Lỗi 1 & Lỗi 2: Query messages loại trừ tài khoản riêng tư ngay trong DB query,
+  // lấy `limit` tin nhắn mới nhất (sentAt: 'desc'), rồi reverse để giữ thứ tự thời gian tăng dần.
+  const rawMessages = await prisma.message.findMany({
     where: {
-      orgId: ctx.orgId,
-      ...(params.conversationId ? { conversationId: params.conversationId } : {}),
-      ...(params.contactId ? { contactId: params.contactId } : {}),
+      conversation: {
+        orgId: ctx.orgId,
+        ...(params.conversationId ? { id: params.conversationId } : {}),
+        ...(params.contactId ? { contactId: params.contactId } : {}),
+        zaloAccount: {
+          orgId: ctx.orgId,
+          privacyMode: { not: PRIVACY_MODE_MAIN },
+        },
+      },
       isDeleted: false,
     },
-    orderBy: { sentAt: 'asc' },
+    orderBy: { sentAt: 'desc' },
     take: limit,
   });
+
+  return [...rawMessages].reverse();
 }
