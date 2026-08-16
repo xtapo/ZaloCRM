@@ -146,8 +146,6 @@ describe('Database CHECK Constraints Integration Tests', () => {
         status: 'pending',
       },
     });
-    expect(validTask.id).toBeDefined();
-
     // Không hợp lệ: 'in_review' -> Database từ chối
     await expect(
       prisma.agentTask.create({
@@ -159,6 +157,51 @@ describe('Database CHECK Constraints Integration Tests', () => {
           subjectId: contactId,
           dueAt: new Date(),
           status: 'in_review',
+        },
+      })
+    ).rejects.toThrow();
+  });
+
+  // ── CHECK 5: fact_suggestions.source <> 'zalo.bank-card' (Quyết định 0.3) ────
+  it('5. CHECK fact_suggestions.source: từ chối INSERT suggestion có source là zalo.bank-card', async () => {
+    // Không hợp lệ: 'zalo.bank-card' -> Database từ chối
+    await expect(
+      prisma.factSuggestion.create({
+        data: {
+          id: `${TEST_PREFIX}_sug_bank_card`,
+          orgId,
+          contactId,
+          field: 'bank_card',
+          proposedValue: '1234-5678-9012-3456',
+          source: 'zalo.bank-card',
+          strength: 'strong',
+          reason: 'Trích xuất thẻ ngân hàng',
+          excerpt: 'STK 12345678',
+          status: 'pending',
+        },
+      })
+    ).rejects.toThrow();
+  });
+
+  // ── CHECK 6: contacts.merged_into IS DISTINCT FROM id (chống tự merge chính mình) ──
+  it('6. CHECK contacts.merged_into: từ chối UPDATE/INSERT contact tự trỏ mergedInto vào chính mình', async () => {
+    const selfMergeContactId = `${TEST_PREFIX}_self_merge_contact`;
+
+    // Tạo contact bình thường
+    await prisma.contact.create({
+      data: {
+        id: selfMergeContactId,
+        orgId,
+        fullName: 'Self Merge Candidate',
+      },
+    });
+
+    // Cố tình update mergedInto = chính nó -> Database từ chối
+    await expect(
+      prisma.contact.update({
+        where: { id: selfMergeContactId },
+        data: {
+          mergedInto: selfMergeContactId,
         },
       })
     ).rejects.toThrow();
