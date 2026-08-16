@@ -57,7 +57,9 @@ jobs:
       - name: Deploy Prisma Migrations
         env:
           DATABASE_URL: "postgresql://crmuser:devpassword@localhost:5433/zalocrm_test"
-        run: npx prisma migrate deploy
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
 
       - name: TypeCheck (tsc --noEmit)
         run: npm run typecheck
