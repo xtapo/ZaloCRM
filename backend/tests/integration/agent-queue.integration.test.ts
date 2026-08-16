@@ -122,106 +122,174 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
   });
 
   // ── 2. Phép thử ngược: Phân biệt SKIP LOCKED vs KHÔNG CÓ SKIP LOCKED ────────
-  it('2. Phép thử ngược: Khẳng định sự khác biệt phân bố giữa SKIP LOCKED và KHÔNG SKIP LOCKED', async () => {
-    // Dọn dẹp task cũ trước khi kiểm thử phân bố
+  it('2a. Khong tranh chap: hai che do cho ket qua giong nhau', async () => {
+    // Dọn dẹp task cũ trước khi kiểm thử
     await prisma.agentTask.deleteMany({ where: { orgId: orgAId } });
 
-    // 2a. Với SKIP LOCKED (Production): 5 task, 2 worker gọi limit: 3 song song -> Worker 1 nhận 3, Worker 2 nhận 2 (chia tải tức thì)
+    // Khi hai worker chạy auto-commit liên tiếp mà không giữ transaction mở, Worker 1 hoàn tất commit
+    // cực nhanh (~1-2ms), Worker 2 đến sau thấy 2 task pending còn lại và claim nốt -> cả hai chế độ đều ra [3, 2].
     for (let i = 0; i < 5; i++) {
       await prisma.agentTask.create({
         data: {
-          id: `${TEST_PREFIX}_skip_dist_task_${i}`,
+          id: `${TEST_PREFIX}_noconflict_task_${i}`,
           orgId: orgAId,
-          kind: 'test_skip_dist',
+          kind: 'test_noconflict',
           subjectType: 'contact',
-          subjectId: `contact_skip_${i}`,
+          subjectId: `contact_noconflict_${i}`,
           dueAt: new Date(Date.now() - 1000 * (5 - i)),
           status: 'pending',
         },
       });
     }
 
-    const [skipBatch1, skipBatch2] = await Promise.all([
-      claimDue({ orgId: orgAId, workerId: 'worker_skip_1', limit: 3 }),
-      claimDue({ orgId: orgAId, workerId: 'worker_skip_2', limit: 3 }),
+    const [batch1, batch2] = await Promise.all([
+      claimDue({ orgId: orgAId, workerId: 'worker_nc_1', limit: 3 }),
+      claimDue({ orgId: orgAId, workerId: 'worker_nc_2', limit: 3 }),
     ]);
 
-    // Phân bố SKIP LOCKED: Worker 1 nhận 3, Worker 2 skip và nhận ngay 2 task còn lại
-    const skipCounts = [skipBatch1.length, skipBatch2.length].sort((a, b) => b - a);
-    expect(skipCounts).toEqual([3, 2]);
+    const counts = [batch1.length, batch2.length].sort((a, b) => b - a);
+    expect(counts).toEqual([3, 2]);
+  });
 
-    // Dọn dẹp trước phần 2b
+  it('2b. SKIP LOCKED loai bo nghen dau hang (do bang thoi gian cho)', async () => {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const leaseUntil = new Date(Date.now() + 60_000);
+
+    // ── BIẾN THỂ 1: Với SKIP LOCKED (claimDue) ──
     await prisma.agentTask.deleteMany({ where: { orgId: orgAId } });
-
-    // 2b. Với KHÔNG CÓ SKIP LOCKED (Bản thử nghiệm $queryRaw tại chỗ):
-    // 5 task, 2 worker gọi limit: 5 song song -> 1 worker chiếm toàn bộ 5 task, worker còn lại bị nghẽn và nhận 0 task
     for (let i = 0; i < 5; i++) {
       await prisma.agentTask.create({
         data: {
-          id: `${TEST_PREFIX}_noskip_dist_task_${i}`,
+          id: `${TEST_PREFIX}_skip_hold_task_${i}`,
           orgId: orgAId,
-          kind: 'test_noskip_dist',
+          kind: 'test_skip_hold',
           subjectType: 'contact',
-          subjectId: `contact_noskip_${i}`,
-          dueAt: new Date(Date.now() - 1000 * (5 - i)),
+          subjectId: `contact_skip_hold_${i}`,
+          dueAt: new Date(Date.now() - 60_000 - i * 1000),
           status: 'pending',
         },
       });
     }
 
-    const leaseUntil = new Date(Date.now() + 60_000);
-    const now = new Date();
-
-    // Raw query FOR UPDATE không có SKIP LOCKED viết tại chỗ phục vụ phép thử ngược
-    const claimWithoutSkipLocked = async (workerId: string, limit: number): Promise<AgentTask[]> => {
-      return prisma.$queryRaw<AgentTask[]>`
+    const now1 = new Date();
+    // Worker 1: Giữ khoá 3 task đầu trong transaction 1400ms
+    const w1SkipPromise = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SET LOCAL lock_timeout = '8s'`;
+      const rows = await tx.$queryRaw<AgentTask[]>`
         UPDATE "agent_tasks"
         SET 
           "status" = 'running',
-          "leased_by" = ${workerId},
+          "leased_by" = 'w1_skip',
           "leased_until" = ${leaseUntil},
           "attempts" = "attempts" + 1,
-          "updated_at" = ${now}
+          "updated_at" = ${now1}
         WHERE "id" IN (
           SELECT "id"
           FROM "agent_tasks"
           WHERE "org_id" = ${orgAId}
             AND "status" = 'pending'
-            AND "due_at" <= ${now}
+            AND "due_at" <= ${now1}
+          ORDER BY "priority" DESC, "due_at" ASC
+          FOR UPDATE SKIP LOCKED
+          LIMIT 3
+        )
+        RETURNING *;
+      `;
+      await sleep(1400);
+      return rows;
+    }, { timeout: 20000, maxWait: 5000 });
+
+    // Worker 2: Chạy sau 300ms, gọi claimDue (SKIP LOCKED) trên connection khác
+    await sleep(300);
+    const startSkip = Date.now();
+    const w2SkipRows = await claimDue({ orgId: orgAId, workerId: 'w2_skip', limit: 3 });
+    const elapsedSkip = Date.now() - startSkip;
+
+    const w1SkipRows = await w1SkipPromise;
+    // Bất biến đúng đắn: 2 worker không bao giờ nhận trùng task (w1 nhận 3, w2 nhận 2)
+    const skipIds1 = new Set(w1SkipRows.map((r) => r.id));
+    const skipIds2 = new Set(w2SkipRows.map((r) => r.id));
+    expect([...skipIds1].filter((id) => skipIds2.has(id))).toEqual([]);
+
+    // ── BIẾN THỂ 2: Với KHÔNG SKIP LOCKED (FOR UPDATE đơn thuần) ──
+    await prisma.agentTask.deleteMany({ where: { orgId: orgAId } });
+    for (let i = 0; i < 5; i++) {
+      await prisma.agentTask.create({
+        data: {
+          id: `${TEST_PREFIX}_noskip_hold_task_${i}`,
+          orgId: orgAId,
+          kind: 'test_noskip_hold',
+          subjectType: 'contact',
+          subjectId: `contact_noskip_hold_${i}`,
+          dueAt: new Date(Date.now() - 60_000 - i * 1000),
+          status: 'pending',
+        },
+      });
+    }
+
+    const now2 = new Date();
+    // Worker 1: Giữ khoá 3 task đầu trong transaction 1400ms
+    const w1NoSkipPromise = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SET LOCAL lock_timeout = '8s'`;
+      const rows = await tx.$queryRaw<AgentTask[]>`
+        UPDATE "agent_tasks"
+        SET 
+          "status" = 'running',
+          "leased_by" = 'w1_noskip',
+          "leased_until" = ${leaseUntil},
+          "attempts" = "attempts" + 1,
+          "updated_at" = ${now2}
+        WHERE "id" IN (
+          SELECT "id"
+          FROM "agent_tasks"
+          WHERE "org_id" = ${orgAId}
+            AND "status" = 'pending'
+            AND "due_at" <= ${now2}
           ORDER BY "priority" DESC, "due_at" ASC
           FOR UPDATE
-          LIMIT ${limit}
+          LIMIT 3
         )
-        RETURNING 
-          "id",
-          "org_id" AS "orgId",
-          "kind",
-          "subject_type" AS "subjectType",
-          "subject_id" AS "subjectId",
-          "due_at" AS "dueAt",
-          "priority",
-          "leased_by" AS "leasedBy",
-          "leased_until" AS "leasedUntil",
-          "attempts",
-          "max_attempts" AS "maxAttempts",
-          "status",
-          "reason",
-          "payload",
-          "result",
-          "last_error" AS "lastError",
-          "created_at" AS "createdAt",
-          "updated_at" AS "updatedAt";
+        RETURNING *;
       `;
-    };
+      await sleep(1400);
+      return rows;
+    }, { timeout: 20000, maxWait: 5000 });
 
-    const [noSkipBatch1, noSkipBatch2] = await Promise.all([
-      claimWithoutSkipLocked('worker_noskip_1', 5),
-      claimWithoutSkipLocked('worker_noskip_2', 5),
-    ]);
+    // Worker 2: Chạy sau 300ms, gọi claim KHÔNG CÓ SKIP LOCKED
+    await sleep(300);
+    const startNoSkip = Date.now();
+    const w2NoSkipRows = await prisma.$queryRaw<AgentTask[]>`
+      UPDATE "agent_tasks"
+      SET 
+        "status" = 'running',
+        "leased_by" = 'w2_noskip',
+        "leased_until" = ${leaseUntil},
+        "attempts" = "attempts" + 1,
+        "updated_at" = ${now2}
+      WHERE "id" IN (
+        SELECT "id"
+        FROM "agent_tasks"
+        WHERE "org_id" = ${orgAId}
+          AND "status" = 'pending'
+          AND "due_at" <= ${now2}
+        ORDER BY "priority" DESC, "due_at" ASC
+        FOR UPDATE
+        LIMIT 3
+      )
+      RETURNING *;
+    `;
+    const elapsedNoSkip = Date.now() - startNoSkip;
 
-    // Phân bố KHÔNG CÓ SKIP LOCKED: 1 worker nhận trọn 5, worker thứ 2 nhận 0 vì bị lock serialization
-    const noSkipCounts = [noSkipBatch1.length, noSkipBatch2.length].sort((a, b) => b - a);
-    expect(noSkipCounts).toEqual([5, 0]);
+    const w1NoSkipRows = await w1NoSkipPromise;
+    // Bất biến đúng đắn: 2 worker không bao giờ nhận trùng task (w1 nhận 3, w2 nhận 2 sau unblock)
+    const noSkipIds1 = new Set(w1NoSkipRows.map((r) => r.id));
+    const noSkipIds2 = new Set(w2NoSkipRows.map((r) => r.id));
+    expect([...noSkipIds1].filter((id) => noSkipIds2.has(id))).toEqual([]);
+
+    // ── Trục phân biệt duy nhất: Thời gian chờ (Head-of-line blocking) ──
+    expect(elapsedNoSkip).toBeGreaterThan(1000);
+    expect(elapsedSkip * 4).toBeLessThan(elapsedNoSkip);
+    expect(elapsedNoSkip).toBeLessThan(8000); // lock_timeout chưa hề nổ
   });
 
   // ── 3. Reaper: Task running quá hạn lease quay về pending ────────────────────
