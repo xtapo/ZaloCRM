@@ -94,7 +94,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
   `;
 
   // 1b. Claim các task pending đến hạn (claim_count < MAX_CLAIMS)
-  return prisma.$queryRaw<AgentTask[]>`
+  const tasks = await prisma.$queryRaw<AgentTask[]>`
     UPDATE "agent_tasks"
     SET 
       "status" = 'running',
@@ -134,6 +134,14 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
       "created_at" AS "createdAt",
       "updated_at" AS "updatedAt";
   `;
+
+  // Sắp xếp lại mảng kết quả theo thứ tự ưu tiên cao -> thấp, hạn đến sớm -> muộn
+  return tasks.sort((a, b) => {
+    if (b.priority !== a.priority) return b.priority - a.priority;
+    const aTime = a.dueAt instanceof Date ? a.dueAt.getTime() : new Date(a.dueAt).getTime();
+    const bTime = b.dueAt instanceof Date ? b.dueAt.getTime() : new Date(b.dueAt).getTime();
+    return aTime - bTime;
+  });
 }
 
 /**
