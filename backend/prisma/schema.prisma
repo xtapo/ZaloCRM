@@ -2165,6 +2165,7 @@ model AgentTask {
   leasedBy    String?   @map("leased_by")
   leasedUntil DateTime? @map("leased_until")
   attempts    Int       @default(0)
+  claimCount  Int       @default(0) @map("claim_count")
   maxAttempts Int       @default(3) @map("max_attempts")
   status      String    @default("pending")
   reason      String?
@@ -2193,6 +2194,7 @@ model Fact {
   strength        String   // strong | medium | weak
   writtenToRecord Boolean  @default(false) @map("written_to_record")
   supersededById  String?  @map("superseded_by_id")
+  createdByTaskId String?  @map("created_by_task_id")
   createdAt       DateTime @default(now()) @map("created_at")
 
   org          Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
@@ -2236,6 +2238,7 @@ model FactSuggestion {
   status           String    @default("pending") // pending | accepted | rejected
   reviewedByUserId String?   @map("reviewed_by_user_id")
   reviewedAt       DateTime? @map("reviewed_at")
+  createdByTaskId  String?   @map("created_by_task_id")
   createdAt        DateTime  @default(now()) @map("created_at")
 
   org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)

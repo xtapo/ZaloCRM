@@ -26,14 +26,26 @@ export interface CollectMergedContactIdsOptions {
   canonicalId: string;
 }
 
+export interface CanonicalContactResult {
+  id: string;
+  truncated: boolean;
+  depth: number;
+}
+
+export interface MergedContactIdsResult {
+  ids: string[];
+  truncated: boolean;
+  depth: number;
+}
+
 /**
  * 1. resolveCanonicalContactId: Walk UP the `mergedInto` chain to find the canonical (active) Contact ID.
  */
 export async function resolveCanonicalContactId(
   options: ResolveCanonicalContactOptions,
-): Promise<string> {
+): Promise<CanonicalContactResult> {
   const { orgId, contactId } = options;
-  if (!orgId || !contactId) return contactId;
+  if (!orgId || !contactId) return { id: contactId, truncated: false, depth: 0 };
 
   // 1. Kiểm tra node khởi đầu có tồn tại trong orgId không
   const initial = await prisma.contact.findFirst({
@@ -41,7 +53,7 @@ export async function resolveCanonicalContactId(
     select: { id: true, mergedInto: true },
   });
   if (!initial || !initial.mergedInto) {
-    return contactId;
+    return { id: contactId, truncated: false, depth: 0 };
   }
 
   let currentId = contactId;
@@ -52,12 +64,12 @@ export async function resolveCanonicalContactId(
   while (nextId && depth < MAX_MERGE_CHAIN_DEPTH) {
     if (nextId === currentId) {
       console.warn(`[WARN] [merge-chain] Self-referencing loop detected at contact ${currentId} in org ${orgId}`);
-      return currentId;
+      return { id: currentId, truncated: true, depth };
     }
 
     if (visited.has(nextId)) {
       console.warn(`[WARN] [merge-chain] Merge cycle detected at contact ${currentId} -> ${nextId} in org ${orgId}`);
-      return currentId;
+      return { id: currentId, truncated: true, depth };
     }
 
     // Kiểm tra node tiếp theo có thuộc orgId không (ngăn rò rỉ sang Org khác)
@@ -68,7 +80,7 @@ export async function resolveCanonicalContactId(
 
     if (!nextContact) {
       // Node trỏ sang ID không tồn tại hoặc thuộc Org khác -> dừng lại tại node hợp lệ cuối cùng trong org
-      return currentId;
+      return { id: currentId, truncated: false, depth };
     }
 
     visited.add(nextId);
@@ -77,11 +89,12 @@ export async function resolveCanonicalContactId(
     depth++;
   }
 
-  if (depth >= MAX_MERGE_CHAIN_DEPTH) {
+  const truncated = depth >= MAX_MERGE_CHAIN_DEPTH && nextId !== null;
+  if (truncated) {
     console.warn(`[WARN] [merge-chain] Max depth ${MAX_MERGE_CHAIN_DEPTH} exceeded resolving canonical for contact ${contactId} in org ${orgId}`);
   }
 
-  return currentId;
+  return { id: currentId, truncated, depth };
 }
 
 /**
@@ -89,17 +102,18 @@ export async function resolveCanonicalContactId(
  */
 export async function collectMergedContactIds(
   options: CollectMergedContactIdsOptions,
-): Promise<string[]> {
+): Promise<MergedContactIdsResult> {
   const { orgId, canonicalId } = options;
-  if (!orgId || !canonicalId) return [];
+  if (!orgId || !canonicalId) return { ids: [], truncated: false, depth: 0 };
 
   const visited = new Set<string>([canonicalId]);
   const mergedIds: string[] = [];
   let currentLevel = [canonicalId];
   let depth = 0;
+  let truncated = false;
 
   while (currentLevel.length > 0 && depth < MAX_MERGE_CHAIN_DEPTH) {
-    const children = await prisma.contact.findMany({
+    const children: { id: string; mergedInto: string | null }[] = await prisma.contact.findMany({
       where: {
         orgId,
         mergedInto: { in: currentLevel },
@@ -113,6 +127,7 @@ export async function collectMergedContactIds(
     for (const child of children) {
       if (visited.has(child.id)) {
         console.warn(`[WARN] [merge-chain] Downward merge cycle detected at contact ${child.id} in org ${orgId}`);
+        truncated = true;
         continue;
       }
       visited.add(child.id);
@@ -126,7 +141,8 @@ export async function collectMergedContactIds(
 
   if (depth >= MAX_MERGE_CHAIN_DEPTH && currentLevel.length > 0) {
     console.warn(`[WARN] [merge-chain] Max depth ${MAX_MERGE_CHAIN_DEPTH} reached collecting merged contacts for ${canonicalId} in org ${orgId}`);
+    truncated = true;
   }
 
-  return mergedIds;
+  return { ids: mergedIds, truncated, depth };
 }

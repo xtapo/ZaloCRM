@@ -62,22 +62,23 @@ describe('Contact Merge Chain Integration Tests (Real DB without mock)', () => {
 
     // 1. Đi LÊN: resolveCanonicalContactId
     const canonicalFromC = await resolveCanonicalContactId({ orgId: orgAId, contactId: contactC });
-    expect(canonicalFromC).toBe(contactA);
+    expect(canonicalFromC).toEqual({ id: contactA, truncated: false, depth: 2 });
 
     const canonicalFromB = await resolveCanonicalContactId({ orgId: orgAId, contactId: contactB });
-    expect(canonicalFromB).toBe(contactA);
+    expect(canonicalFromB).toEqual({ id: contactA, truncated: false, depth: 1 });
 
     const canonicalFromA = await resolveCanonicalContactId({ orgId: orgAId, contactId: contactA });
-    expect(canonicalFromA).toBe(contactA);
+    expect(canonicalFromA).toEqual({ id: contactA, truncated: false, depth: 0 });
 
     // 2. Đi XUỐNG: collectMergedContactIds
     const mergedUnderA = await collectMergedContactIds({ orgId: orgAId, canonicalId: contactA });
-    expect(mergedUnderA).toHaveLength(2);
-    expect(new Set(mergedUnderA)).toEqual(new Set([contactB, contactC]));
+    expect(mergedUnderA.truncated).toBe(false);
+    expect(mergedUnderA.ids).toHaveLength(2);
+    expect(new Set(mergedUnderA.ids)).toEqual(new Set([contactB, contactC]));
   });
 
   // ── 2. Vòng lặp: A -> B -> A ────────────────────────────────────────────────
-  it('2. Vòng lặp A -> B -> A: dừng nhánh an toàn và không bao giờ ném ngoại lệ (throw)', async () => {
+  it('2. Vòng lặp A -> B -> A: dừng nhánh an toàn, trả về truncated = true và không throw', async () => {
     const contactLoopA = `${TEST_PREFIX}_loop_A`;
     const contactLoopB = `${TEST_PREFIX}_loop_B`;
 
@@ -95,17 +96,19 @@ describe('Contact Merge Chain Integration Tests (Real DB without mock)', () => {
       data: { mergedInto: contactLoopB },
     });
 
-    // Đi LÊN không bị treo vòng lặp vô tận, không ném exception
+    // Đi LÊN: phát hiện vòng lặp -> truncated === true, không throw
     const canonicalRes = await resolveCanonicalContactId({ orgId: orgAId, contactId: contactLoopA });
-    expect([contactLoopA, contactLoopB]).toContain(canonicalRes);
+    expect(canonicalRes.truncated).toBe(true);
+    expect([contactLoopA, contactLoopB]).toContain(canonicalRes.id);
 
-    // Đi XUỐNG không bị treo vô tận, không ném exception
+    // Đi XUỐNG: phát hiện vòng lặp -> truncated === true, không throw
     const mergedRes = await collectMergedContactIds({ orgId: orgAId, canonicalId: contactLoopA });
-    expect(Array.isArray(mergedRes)).toBe(true);
+    expect(mergedRes.truncated).toBe(true);
+    expect(Array.isArray(mergedRes.ids)).toBe(true);
   });
 
   // ── 3. Độ sâu vượt giới hạn (> 25 node) ─────────────────────────────────────
-  it('3. Độ sâu chuỗi > 25 cấp (28 node): dừng sau tối đa 25 bước và không bị crash', async () => {
+  it('3. Độ sâu chuỗi > 25 cấp (28 node): dừng sau tối đa 25 bước và trả về truncated = true', async () => {
     const chainLength = 28;
     const nodeIds: string[] = [];
 
@@ -133,13 +136,16 @@ describe('Contact Merge Chain Integration Tests (Real DB without mock)', () => {
     // Đi LÊN từ lá sâu nhất (Node 27)
     const leafId = nodeIds[chainLength - 1];
     const canonical = await resolveCanonicalContactId({ orgId: orgAId, contactId: leafId });
-    expect(canonical).toBeDefined();
+    expect(canonical.truncated).toBe(true);
+    expect(canonical.depth).toBe(MAX_MERGE_CHAIN_DEPTH);
     // Sau 25 bước, dừng ở node 27 - 25 = node 2 (không chạm được node 0 vì bị cap ở 25)
-    expect(canonical).toBe(nodeIds[chainLength - 1 - MAX_MERGE_CHAIN_DEPTH]);
+    expect(canonical.id).toBe(nodeIds[chainLength - 1 - MAX_MERGE_CHAIN_DEPTH]);
 
     // Đi XUỐNG từ root (Node 0)
     const collected = await collectMergedContactIds({ orgId: orgAId, canonicalId: nodeIds[0] });
-    expect(collected.length).toBe(MAX_MERGE_CHAIN_DEPTH);
+    expect(collected.truncated).toBe(true);
+    expect(collected.depth).toBe(MAX_MERGE_CHAIN_DEPTH);
+    expect(collected.ids.length).toBe(MAX_MERGE_CHAIN_DEPTH);
   });
 
   // ── 4. Cô lập Tenant: Node trỏ sang Contact thuộc Org khác ──────────────────
@@ -167,14 +173,15 @@ describe('Contact Merge Chain Integration Tests (Real DB without mock)', () => {
       orgId: orgAId,
       contactId: contactOrgA,
     });
-    expect(canonicalInOrgA).toBe(contactOrgA);
+    expect(canonicalInOrgA).toEqual({ id: contactOrgA, truncated: false, depth: 0 });
 
     // 2. Đi XUỐNG trong Org B: Không bao giờ thu nạp contact thuộc Org A
     const mergedInOrgB = await collectMergedContactIds({
       orgId: orgBId,
       canonicalId: contactOrgB,
     });
-    expect(mergedInOrgB).not.toContain(contactOrgA);
-    expect(mergedInOrgB).toHaveLength(0);
+    expect(mergedInOrgB.ids).not.toContain(contactOrgA);
+    expect(mergedInOrgB.ids).toHaveLength(0);
+    expect(mergedInOrgB.truncated).toBe(false);
   });
 });

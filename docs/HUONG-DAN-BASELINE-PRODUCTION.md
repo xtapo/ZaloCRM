@@ -52,8 +52,58 @@ npx prisma migrate diff \
   --to-url "$PROD_DATABASE_URL"
 ```
 
-- Nếu output là `No difference detected` hoặc chỉ chứa các bảng/cột mới cần migrate -> Tiếp tục bước 3.
-- Nếu phát hiện cột lạ bị xoá hoặc cấu trúc bất thường -> Dừng lại phân tích, không chạy tiếp.
+> [!WARNING]
+> **CẢNH BÁO MÙNG DRIFF (PRISMA MIGRATE DIFF LÀ "MÙ" VỚI THUẦN-SQL)**:
+> `prisma migrate diff` hoàn toàn không nhận diện được `CHECK constraints` và mệnh đề `WHERE` của `Partial Unique Indexes`.
+> Do đó, **nếu lệnh diff trả về 0 ("No difference detected"), điều đó KHÔNG CÓ NGHĨA là database production đã đầy đủ bảo vệ dữ liệu!** Bắt buộc phải thực hiện Bước 2b bên dưới.
+
+---
+
+## Bước 2b: Bảng Checklist Các Object Thuần-SQL (Bắt Buộc)
+
+Chạy truy vấn SQL trực tiếp trên database Production để kiểm tra sự tồn tại của toàn bộ 11 object thuần-SQL:
+
+```sql
+-- 1. Kiểm tra 6 CHECK constraints
+SELECT conname, pg_get_constraintdef(oid) 
+FROM pg_constraint 
+WHERE contype = 'c' 
+  AND conname IN (
+    'facts_strength_check',
+    'facts_source_not_bank_card_check',
+    'fact_suggestions_status_check',
+    'fact_suggestions_source_not_bank_card_check',
+    'agent_tasks_status_check',
+    'contacts_no_self_merge_check'
+  );
+
+-- 2. Kiểm tra 5 Partial Unique Indexes
+SELECT indexname, indexdef 
+FROM pg_indexes 
+WHERE indexname IN (
+  'uniq_one_leader_per_dept',
+  'uniq_one_deputy_per_dept',
+  'agent_tasks_active_dedup_key',
+  'facts_created_by_task_id_uniq',
+  'fact_suggestions_created_by_task_id_uniq'
+);
+```
+
+### Bảng Đối Chiếu 11 Object Thuần-SQL
+
+| Loại Object | Tên Constraint / Index | Bảng Áp Dụng | Biểu Thức Định Nghĩa (Predicate / Rule) |
+|---|---|---|---|
+| CHECK | `facts_strength_check` | `facts` | `CHECK ("strength" IN ('strong', 'medium', 'weak'))` |
+| CHECK | `facts_source_not_bank_card_check` | `facts` | `CHECK ("source" <> 'zalo.bank-card')` |
+| CHECK | `fact_suggestions_status_check` | `fact_suggestions` | `CHECK ("status" IN ('pending', 'accepted', 'rejected'))` |
+| CHECK | `fact_suggestions_source_not_bank_card_check` | `fact_suggestions` | `CHECK ("source" <> 'zalo.bank-card')` |
+| CHECK | `agent_tasks_status_check` | `agent_tasks` | `CHECK ("status" IN ('pending', 'running', 'completed', 'dead'))` |
+| CHECK | `contacts_no_self_merge_check` | `contacts` | `CHECK ("merged_into" IS DISTINCT FROM "id")` |
+| PARTIAL INDEX | `uniq_one_leader_per_dept` | `department_members` | `("department_id") WHERE ("dept_role" = 'leader')` |
+| PARTIAL INDEX | `uniq_one_deputy_per_dept` | `department_members` | `("department_id") WHERE ("dept_role" = 'deputy')` |
+| PARTIAL INDEX | `agent_tasks_active_dedup_key` | `agent_tasks` | `("org_id", "kind", "subject_type", "subject_id") WHERE ("status" IN ('pending', 'running'))` |
+| PARTIAL INDEX | `facts_created_by_task_id_uniq` | `facts` | `("created_by_task_id") WHERE ("created_by_task_id" IS NOT NULL)` |
+| PARTIAL INDEX | `fact_suggestions_created_by_task_id_uniq` | `fact_suggestions` | `("created_by_task_id") WHERE ("created_by_task_id" IS NOT NULL)` |
 
 ---
 
@@ -73,41 +123,42 @@ Nếu cơ sở dữ liệu production trước đây được tạo bằng `db p
 
 ## Bước 4: Đánh Dấu Các Migration Đã Tồn Tại (`migrate resolve --applied`)
 
-Đối với tất cả các migration đã có cấu trúc trong DB production từ trước:
+> [!CAUTION]
+> **QUY TẮC NGHIÊM NGẶT VỀ CUSTOM SQL (BẮT BUỘC TUÂN THỦ)**:
+> **MỌI MIGRATION CHỨA CUSTOM SQL (CHECK CONSTRAINTS, PARTIAL INDEXES, BACKFILL DỮ LIỆU) TUYỆT ĐỐI KHÔNG ĐƯỢC DÙNG `migrate resolve --applied` MÀ BẮT BUỘC PHẢI CHẠY THẬT QUA `prisma migrate deploy` HOẶC CÓ MIGRATION TỰ CHỮA.**
+> 
+> Nếu `resolve --applied` các migration này, bảng `_prisma_migrations` sẽ ghi nhận đã chạy nhưng database Production thực tế sẽ THIẾU TOÀN BỘ các ràng buộc bảo vệ dữ liệu!
 
-```bash
-# Ví dụ: Đánh dấu các migration từ baseline phase 6 đến phase 7 đã được áp dụng
-npx prisma migrate resolve --applied "20260329120357_add_contact_intelligence" --url "$PROD_DATABASE_URL"
-npx prisma migrate resolve --applied "20260331234500_add_proxy_url_to_zalo_account" --url "$PROD_DATABASE_URL"
-npx prisma migrate resolve --applied "20260416095400_add_crm_name_and_conversation_tab" --url "$PROD_DATABASE_URL"
-npx prisma migrate resolve --applied "20260519000000_baseline_phase6" --url "$PROD_DATABASE_URL"
-# ... lặp lại cho các migration đã tồn tại trong schema thực tế
-```
+### Danh Sách Các Migration Chứa Custom SQL (CẤM `resolve --applied`):
+1. `20260522000000_rbac_partial_unique_leader_deputy` (Partial Unique Indexes cho Leader / Deputy)
+2. `20260817000000_agent_tasks_partial_unique` (Partial Unique Index dedup active tasks)
+3. `20260817020000_add_check_constraints` (CHECK constraints Phase 8b/8c)
+4. `20260817030000_check_constraints_hardening` (Idempotent CHECK constraints)
+5. `20260817040000_repair_pure_sql_objects` (Idempotent self-healing toàn bộ 11 object thuần-SQL và backfill claim_count)
 
-Sau khi resolve, chạy thử nghiệm `migrate deploy` ở chế độ kiểm tra:
+---
+
+## Bước 5: Chạy `migrate deploy` và Đổi CMD Dockerfile Production
+
+Chạy migration deploy để tự động áp dụng và tự chữa toàn bộ schema thuần-SQL trên Production:
 
 ```bash
 npx prisma migrate deploy --url "$PROD_DATABASE_URL"
 ```
 
-Lệnh trên sẽ áp dụng nốt các migration mới của Phase 8 (như `20260816000000_phase8a_agent_tasks`, `20260816140000_phase8b_facts_sessions`, `20260817020000_add_check_constraints`, `20260817030000_check_constraints_hardening`).
+Kiểm tra lại toàn bộ bằng script verify:
+```bash
+DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/verify-pure-sql-objects.ts
+```
 
----
+Khi script trả về `🎉 [GATE 6 HOÀN TẤT] Toàn bộ 11 object thuần-SQL đều toàn vẹn`:
 
-## Bước 5: Đổi CMD Dockerfile và Deploy Production Container
-
-Khi toàn bộ migration đã xanh và database đã đồng bộ hoàn toàn:
-
-1. Hình ảnh container production mới đã cấu hình CMD trong `docker/Dockerfile`:
-   ```dockerfile
-   CMD ["sh", "-c", "npx prisma migrate deploy && node dist/app.js"]
-   ```
-2. Build image và khởi động lại dịch vụ production:
+1. Khởi động lại container Production (với CMD `npx prisma migrate deploy && node dist/app.js` đã đóng gói trong `docker/Dockerfile`):
    ```bash
    docker compose build zalo-crm-app
    docker compose up -d zalo-crm-app
    ```
-3. Kiểm tra log khởi động của container để đảm bảo migration deploy thành công:
+2. Kiểm tra log khởi động của container:
    ```bash
    docker logs -f zalo-crm-app
    ```

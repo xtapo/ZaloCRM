@@ -1,17 +1,5 @@
-/**
- * dispatcher.ts — Pure single-pass execution cycle for Agent Queue
- *
- * Thực hiện 1 chu kỳ xử lý:
- * 1. Kiểm tra ngân sách token tại Organization (Fail-closed nếu null / vượt hạn mức)
- * 2. reapExpired thu hồi task running treo
- * 3. claimDue nhận task đến hạn
- * 4. Thực thi handler tương ứng và complete/fail
- *
- * Không chứa setInterval, không hook vào Fastify bootstrap.
- */
-
 import { prisma } from '../../../shared/database/prisma-client.js';
-import { claimDue, complete, fail, reapExpired } from './tasks.js';
+import { claimDue, complete, fail, reschedule, reapExpired, LeaseLostError } from './tasks.js';
 import { noopHandler, type TaskHandler, type PreparedTaskResult, type TaskHandlerContext } from './handlers/noop.js';
 import { checkAndResetMonthlyBudget, consumeTokens } from './budget.js';
 
@@ -30,12 +18,38 @@ export interface RunOnceResult {
   claimedCount: number;
   completedCount: number;
   failedCount: number;
+  abandonedCount: number;
+  lostLeaseCount: number;
 }
 
 const DEFAULT_HANDLERS: Record<string, TaskHandler<any>> = {
   noop: noopHandler,
   test: noopHandler,
 };
+
+// ── Bịt #52: Phân loại lỗi bằng mã đóng, không dùng chuỗi ──────────────────────
+const INFRA_PRISMA_CODES = new Set(['P1001', 'P1002', 'P1008', 'P1017', 'P2024']);
+const INFRA_SQLSTATE_CODES = new Set(['57014', '57P01', '08006', '08003', '08001']);
+
+export function isDatabaseInfrastructureError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+
+  if ('code' in err && typeof (err as { code: unknown }).code === 'string') {
+    const code = (err as { code: string }).code;
+    if (INFRA_PRISMA_CODES.has(code) || INFRA_SQLSTATE_CODES.has(code)) {
+      return true;
+    }
+  }
+
+  if ('pgCode' in err && typeof (err as { pgCode: unknown }).pgCode === 'string') {
+    const pgCode = (err as { pgCode: string }).pgCode;
+    if (INFRA_SQLSTATE_CODES.has(pgCode)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /**
  * runOnce: Một lượt quét và xử lý hàng đợi cho một tổ chức (tenant)
@@ -57,6 +71,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       claimedCount: 0,
       completedCount: 0,
       failedCount: 0,
+      abandonedCount: 0,
+      lostLeaseCount: 0,
     };
   }
 
@@ -71,6 +87,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       claimedCount: 0,
       completedCount: 0,
       failedCount: 0,
+      abandonedCount: 0,
+      lostLeaseCount: 0,
     };
   }
 
@@ -83,6 +101,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       claimedCount: 0,
       completedCount: 0,
       failedCount: 0,
+      abandonedCount: 0,
+      lostLeaseCount: 0,
     };
   }
 
@@ -94,6 +114,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       claimedCount: 0,
       completedCount: 0,
       failedCount: 0,
+      abandonedCount: 0,
+      lostLeaseCount: 0,
     };
   }
 
@@ -106,6 +128,10 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
 
   let completedCount = 0;
   let failedCount = 0;
+  let abandonedCount = 0;
+  let lostLeaseCount = 0;
+
+  let runningTokensUsed = org.agentTokenUsedThisMonth;
 
   const ctx: TaskHandlerContext = {
     orgId,
@@ -114,15 +140,42 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   };
 
   // 4. Xử lý từng task qua handler hai pha (prepare ngoài giao dịch, apply + complete trong 1 giao dịch)
-  for (const task of tasks) {
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+
+    // Bịt #53: Kiểm tra ngân sách trước mỗi lượt prepare. Vượt trần thì reschedule các task còn lại và dừng vòng lặp
+    if (runningTokensUsed >= org.agentTokenBudgetMonthly) {
+      for (let j = i; j < tasks.length; j++) {
+        try {
+          await reschedule({
+            orgId,
+            taskId: tasks[j].id,
+            runAt: new Date(Date.now() + 60_000),
+            reason: 'TOKEN_BUDGET_EXHAUSTED',
+          });
+        } catch (reschedErr) {
+          console.error(`[WARN] [dispatcher] Failed to reschedule task ${tasks[j].id} due to budget exhaustion:`, reschedErr);
+        }
+      }
+      break;
+    }
+
     const handler = handlers[task.kind] || handlers['noop'];
     if (!handler) {
-      await fail({
-        orgId,
-        taskId: task.id,
-        error: `No handler registered for kind '${task.kind}'`,
-      });
-      failedCount++;
+      try {
+        await fail({
+          orgId,
+          taskId: task.id,
+          workerId,
+          error: `No handler registered for kind '${task.kind}'`,
+        });
+        failedCount++;
+      } catch (fErr) {
+        if (fErr instanceof LeaseLostError) {
+          console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
+          lostLeaseCount++;
+        }
+      }
       continue;
     }
 
@@ -131,15 +184,27 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     try {
       prepared = await handler.prepare(task, ctx);
     } catch (prepareErr: unknown) {
+      if (prepareErr instanceof LeaseLostError) {
+        console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
+        lostLeaseCount++;
+        continue;
+      }
+
       const errorMsg = prepareErr instanceof Error ? prepareErr.message : String(prepareErr);
       try {
         await fail({
           orgId,
           taskId: task.id,
+          workerId,
           error: errorMsg,
         });
-      } catch {}
-      failedCount++;
+        failedCount++;
+      } catch (fErr) {
+        if (fErr instanceof LeaseLostError) {
+          console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
+          lostLeaseCount++;
+        }
+      }
       continue;
     }
 
@@ -149,14 +214,21 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         await fail({
           orgId,
           taskId: task.id,
+          workerId,
           error: prepared.error || 'Handler prepare returned failure',
         });
-      } catch {}
-      failedCount++;
+        failedCount++;
+      } catch (fErr) {
+        if (fErr instanceof LeaseLostError) {
+          console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
+          lostLeaseCount++;
+        }
+      }
 
       // Vẫn consume token nếu prepare đã gọi LLM/network và tiêu thụ token
       const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
       if (totalTokens > 0) {
+        runningTokensUsed += totalTokens;
         try {
           await consumeTokens({
             orgId,
@@ -179,41 +251,45 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         await complete({
           orgId,
           taskId: task.id,
+          workerId,
           result: prepared.result,
           tx,
         });
       });
       completedCount++;
     } catch (txErr: unknown) {
-      const errorMsg = txErr instanceof Error ? txErr.message : String(txErr);
-      // Phân biệt 2 lớp lỗi:
-      // - Lỗi hạ tầng giao dịch DB (P1001, P1017, P2024, timeout, connection drop...) -> KHÔNG gọi fail(), ghi log CRITICAL để lease hết hạn cho reapExpired thu về
-      // - Lỗi từ logic/validation trong apply -> fail() và tính vào attempts
-      const isDbInfraError =
-        (txErr && typeof txErr === 'object' && 'code' in txErr && typeof txErr.code === 'string' &&
-          (txErr.code.startsWith('P1') || txErr.code === 'P2024' || txErr.code === 'P2028' || txErr.code === '57014')) ||
-        errorMsg.includes('Connection') ||
-        errorMsg.includes('timeout') ||
-        errorMsg.includes('closed') ||
-        errorMsg.includes('ECONNREFUSED');
-
-      if (isDbInfraError) {
+      if (txErr instanceof LeaseLostError) {
+        // Bịt #51: Bắt LeaseLostError tách riêng, không gọi fail(), không tính failedCount
+        console.warn(`[LEASE-LOST] Lease lost for task ${task.id} during transaction (worker: ${workerId})`);
+        lostLeaseCount++;
+      } else if (isDatabaseInfrastructureError(txErr)) {
+        // Bịt #52: Lỗi hạ tầng database (P1001, P1017, SQLSTATE...) -> KHÔNG gọi fail(), ghi log CRITICAL, tăng abandonedCount
         console.error(`[CRITICAL] [dispatcher] Database transaction infrastructure error for task ${task.id} (org ${orgId}):`, txErr);
+        abandonedCount++;
       } else {
+        // Lỗi logic từ apply -> gọi fail() và tính vào failedCount
+        const errorMsg = txErr instanceof Error ? txErr.message : String(txErr);
         try {
           await fail({
             orgId,
             taskId: task.id,
+            workerId,
             error: errorMsg,
           });
-        } catch {}
+          failedCount++;
+        } catch (fErr) {
+          if (fErr instanceof LeaseLostError) {
+            console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
+            lostLeaseCount++;
+          }
+        }
       }
-      failedCount++;
     }
 
     // ── BƯỚC 3: consumeTokens gọi SAU giao dịch (kể cả khi tx rollback vì token LLM/mạng trong prepare đã tiêu thật) ──
     const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
     if (totalTokens > 0) {
+      runningTokensUsed += totalTokens;
       try {
         await consumeTokens({
           orgId,
@@ -232,5 +308,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     claimedCount: tasks.length,
     completedCount,
     failedCount,
+    abandonedCount,
+    lostLeaseCount,
   };
 }

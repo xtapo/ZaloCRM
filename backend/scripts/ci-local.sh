@@ -74,6 +74,11 @@ echo "==> 5. Drift Check 2 (migrations -> schema)..."
 echo "========================================================"
 DATABASE_URL="${TEST_DATABASE_URL}" SHADOW_DATABASE_URL="${SHADOW_DATABASE_URL}" npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
 
+echo "========================================================"
+echo "==> 6. Pure-SQL Objects Integrity Check (CHECKs & Indexes)..."
+echo "========================================================"
+DATABASE_URL="${TEST_DATABASE_URL}" npx tsx scripts/verify-pure-sql-objects.ts
+
 # Ghi con dau sau khi tat ca cac cong deu xanh
 GIT_DIR="${REPO_ROOT}/.git"
 HEAD_COMMIT="$(git rev-parse HEAD)"

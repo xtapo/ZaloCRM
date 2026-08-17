@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { AgentTask } from '@prisma/client';
 import { prisma, type PrismaTx } from '../../src/shared/database/prisma-client.js';
-import { claimDue, complete, fail, reschedule, reapExpired } from '../../src/modules/agent/queue/tasks.js';
+import { claimDue, complete, fail, reschedule, reapExpired, LeaseLostError } from '../../src/modules/agent/queue/tasks.js';
 import { runOnce } from '../../src/modules/agent/queue/dispatcher.js';
 import { consumeTokens, checkAndResetMonthlyBudget, getNextMonthResetDate } from '../../src/modules/agent/queue/budget.js';
 import type { PreparedTaskResult } from '../../src/modules/agent/queue/handlers/noop.js';
@@ -324,6 +324,7 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     expect(reaped?.leasedUntil).toBeNull();
     expect(reaped?.leasedBy).toBeNull();
     expect(reaped?.attempts).toBe(1); // Attempts giữ nguyên không tăng!
+    expect(reaped?.lastError).toBe('[REAPED] lease expired');
   });
 
   // ── 4. Dead Letter: Fail liên tiếp vượt max_attempts ─────────────────────────
@@ -339,27 +340,31 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
         subjectId: 'contact_dead',
         dueAt: new Date(),
         status: 'running',
-        attempts: 2,
+        leasedBy: 'worker_dead_letter',
+        leasedUntil: new Date(Date.now() + 60_000),
+        attempts: 1,
         maxAttempts: 3,
       },
     });
 
-    // Lần fail thứ nhất: attempts (2) < maxAttempts (3) -> pending với backoff
-    const fail1 = await fail({ orgId: orgAId, taskId, error: 'Transient network failure' });
+    // Lần fail thứ nhất: attempts tăng lên 2 < maxAttempts (3) -> pending với backoff
+    const fail1 = await fail({ orgId: orgAId, taskId, workerId: 'worker_dead_letter', error: 'Transient network failure' });
     expect(fail1).not.toBeNull();
     expect(fail1?.status).toBe('pending');
+    expect(fail1?.attempts).toBe(2);
     expect(fail1?.lastError).toBe('Transient network failure');
 
-    // Giả lập worker claim lại (attempts tăng lên 3)
+    // Giả lập worker claim lại (running với attempts = 2)
     await prisma.agentTask.update({
       where: { id: taskId },
-      data: { status: 'running', attempts: 3 },
+      data: { status: 'running', leasedBy: 'worker_dead_letter', leasedUntil: new Date(Date.now() + 60_000) },
     });
 
-    // Lần fail thứ hai: attempts (3) >= maxAttempts (3) -> dead
-    const fail2 = await fail({ orgId: orgAId, taskId, error: 'Permanent fatal failure' });
+    // Lần fail thứ hai: attempts tăng lên 3 >= maxAttempts (3) -> dead
+    const fail2 = await fail({ orgId: orgAId, taskId, workerId: 'worker_dead_letter', error: 'Permanent fatal failure' });
     expect(fail2).not.toBeNull();
     expect(fail2?.status).toBe('dead');
+    expect(fail2?.attempts).toBe(3);
     expect(fail2?.lastError).toBe('Permanent fatal failure');
     expect(fail2?.leasedUntil).toBeNull();
   });
@@ -407,15 +412,13 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     expect(batchBIds).not.toContain(taskAId);
     expect(batchB[0].leasedBy).toBe('worker_tenant_b');
 
-    // Cross-tenant mutation: Org A cố complete task của Org B -> Bị từ chối (null)
-    const crossComplete = await complete({ orgId: orgAId, taskId: taskBId });
-    expect(crossComplete).toBeNull();
+    // Cross-tenant mutation: Org A cố complete task của Org B -> Ném LeaseLostError
+    await expect(complete({ orgId: orgAId, taskId: taskBId, workerId: 'worker_tenant_a' })).rejects.toThrow(LeaseLostError);
 
-    // Cross-tenant mutation: Org A cố fail task của Org B -> Bị từ chối (null)
-    const crossFail = await fail({ orgId: orgAId, taskId: taskBId, error: 'hack' });
-    expect(crossFail).toBeNull();
+    // Cross-tenant mutation: Org A cố fail task của Org B -> Ném LeaseLostError
+    await expect(fail({ orgId: orgAId, taskId: taskBId, workerId: 'worker_tenant_a', error: 'hack' })).rejects.toThrow(LeaseLostError);
 
-    // Cross-tenant mutation: Org A cố reschedule task của Org B -> Bị từ chối (null)
+    // Cross-tenant mutation: Org A cố reschedule task của Org B -> Trả về null
     const crossReschedule = await reschedule({
       orgId: orgAId,
       taskId: taskBId,
@@ -781,5 +784,372 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     // Token vẫn bị tiêu thụ vì pha prepare đã thực hiện xong ngoài tx
     const orgInDb = await prisma.organization.findUnique({ where: { id: orgAtomicId } });
     expect(orgInDb?.agentTokenUsedThisMonth).toBe(150);
+  });
+
+  // ── 9. Bịt #51: LeaseLostError & Rollback khi mất quyền lease ────────────────
+  it('9. LeaseLostError: Worker A hoàn thành sau khi lease hết hạn và task bị Worker B claim -> rollback và task vẫn thuộc Worker B', async () => {
+    const orgLeaseTestId = `${TEST_PREFIX}_org_lease_lost`;
+    await prisma.organization.create({
+      data: { id: orgLeaseTestId, name: 'Org Lease Lost Test', agentTokenBudgetMonthly: 10_000 },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_lease_lost`;
+    const contactRollbackId = `${TEST_PREFIX}_contact_worker_a_rollback`;
+
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgLeaseTestId,
+        kind: 'custom_slow_worker',
+        subjectType: 'contact',
+        subjectId: 'contact_dummy',
+        dueAt: new Date(Date.now() - 10_000),
+        status: 'pending',
+      },
+    });
+
+    // 1. Worker A claim task với leaseMs rất ngắn (50ms)
+    const claimedByA = await claimDue({ orgId: orgLeaseTestId, workerId: 'worker_A', limit: 1, leaseMs: 50 });
+    expect(claimedByA).toHaveLength(1);
+    expect(claimedByA[0].id).toBe(taskId);
+
+    // 2. Chờ 100ms cho lease của Worker A hết hạn
+    await new Promise((r) => setTimeout(r, 100));
+
+    // 3. reapExpired thu hồi task về pending
+    const reaped = await reapExpired({ orgId: orgLeaseTestId, leaseGraceMs: 0 });
+    expect(reaped.count).toBe(1);
+
+    // 4. Worker B claim task
+    const claimedByB = await claimDue({ orgId: orgLeaseTestId, workerId: 'worker_B', limit: 1, leaseMs: 60_000 });
+    expect(claimedByB).toHaveLength(1);
+    expect(claimedByB[0].leasedBy).toBe('worker_B');
+
+    // 5. Worker A cố tình gọi complete trong 1 transaction (kèm ghi DB Contact)
+    let leaseLostThrown = false;
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.contact.create({
+          data: {
+            id: contactRollbackId,
+            orgId: orgLeaseTestId,
+            fullName: 'Contact by Worker A',
+          },
+        });
+        await complete({
+          orgId: orgLeaseTestId,
+          taskId,
+          workerId: 'worker_A',
+          result: { doneBy: 'worker_A' },
+          tx,
+        });
+      });
+    } catch (err) {
+      if (err instanceof LeaseLostError) {
+        leaseLostThrown = true;
+      }
+    }
+    expect(leaseLostThrown).toBe(true);
+
+    // Khẳng định: Contact do Worker A ghi bị rollback hoàn toàn khỏi DB
+    const contactInDb = await prisma.contact.findUnique({ where: { id: contactRollbackId } });
+    expect(contactInDb).toBeNull();
+
+    // Khẳng định: Task vẫn thuộc về Worker B, đang running
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).toBe('running');
+    expect(taskInDb?.leasedBy).toBe('worker_B');
+  });
+
+  // ── 10. Bịt #51 (1e): Partial unique index trên created_by_task_id ───────────
+  it('10. Partial unique index created_by_task_id: chống ghi trùng fact/suggestion từ cùng một task', async () => {
+    const orgDedupId = `${TEST_PREFIX}_org_dedup_facts`;
+    const contactDedupId = `${TEST_PREFIX}_contact_dedup`;
+    await prisma.organization.create({
+      data: { id: orgDedupId, name: 'Org Dedup Facts Test', agentTokenBudgetMonthly: 10_000 },
+    });
+    await prisma.contact.create({
+      data: { id: contactDedupId, orgId: orgDedupId, fullName: 'Dedup Contact' },
+    });
+
+    const sourceTaskId = `${TEST_PREFIX}_source_task_001`;
+
+    // 10a. Facts partial unique
+    await prisma.fact.create({
+      data: {
+        id: `${TEST_PREFIX}_fact_1`,
+        orgId: orgDedupId,
+        contactId: contactDedupId,
+        field: 'interest',
+        value: 'AI Automation',
+        source: 'zalo.chat',
+        strength: 'strong',
+        createdByTaskId: sourceTaskId,
+      },
+    });
+
+    // Fact thứ 2 cùng createdByTaskId -> Từ chối (unique index violation)
+    await expect(
+      prisma.fact.create({
+        data: {
+          id: `${TEST_PREFIX}_fact_2`,
+          orgId: orgDedupId,
+          contactId: contactDedupId,
+          field: 'budget',
+          value: '50tr',
+          source: 'zalo.chat',
+          strength: 'medium',
+          createdByTaskId: sourceTaskId,
+        },
+      })
+    ).rejects.toThrow();
+
+    // Fact với createdByTaskId = null -> Cho phép nhiều bản ghi null
+    const nullFact1 = await prisma.fact.create({
+      data: {
+        id: `${TEST_PREFIX}_fact_null_1`,
+        orgId: orgDedupId,
+        contactId: contactDedupId,
+        field: 'notes',
+        value: 'Note 1',
+        source: 'zalo.chat',
+        strength: 'weak',
+        createdByTaskId: null,
+      },
+    });
+    const nullFact2 = await prisma.fact.create({
+      data: {
+        id: `${TEST_PREFIX}_fact_null_2`,
+        orgId: orgDedupId,
+        contactId: contactDedupId,
+        field: 'notes',
+        value: 'Note 2',
+        source: 'zalo.chat',
+        strength: 'weak',
+        createdByTaskId: null,
+      },
+    });
+    expect(nullFact1.id).toBeDefined();
+    expect(nullFact2.id).toBeDefined();
+
+    // 10b. FactSuggestion partial unique
+    await prisma.factSuggestion.create({
+      data: {
+        id: `${TEST_PREFIX}_sug_1`,
+        orgId: orgDedupId,
+        contactId: contactDedupId,
+        field: 'title',
+        proposedValue: 'Manager',
+        source: 'zalo.chat',
+        strength: 'strong',
+        reason: 'Khách xưng Trưởng phòng',
+        excerpt: 'Tôi là trưởng phòng',
+        status: 'pending',
+        createdByTaskId: sourceTaskId,
+      },
+    });
+
+    // FactSuggestion thứ 2 cùng createdByTaskId -> Từ chối
+    await expect(
+      prisma.factSuggestion.create({
+        data: {
+          id: `${TEST_PREFIX}_sug_2`,
+          orgId: orgDedupId,
+          contactId: contactDedupId,
+          field: 'title',
+          proposedValue: 'Director',
+          source: 'zalo.chat',
+          strength: 'strong',
+          reason: 'Duplicate',
+          excerpt: 'Duplicate',
+          status: 'pending',
+          createdByTaskId: sourceTaskId,
+        },
+      })
+    ).rejects.toThrow();
+  });
+
+  // ── 11. Bịt #52: Phân loại lỗi bằng mã đóng (không dùng chuỗi) ───────────────
+  it('11. Phân loại lỗi bằng mã đóng: (i) handler ném Error("Request timeout after 30s") -> fail() và attempts tăng; (ii) lỗi P1017 -> không gọi fail(), tăng abandonedCount', async () => {
+    const orgErrId = `${TEST_PREFIX}_org_err_classify`;
+    await prisma.organization.create({
+      data: { id: orgErrId, name: 'Org Error Classify Test', agentTokenBudgetMonthly: 10_000 },
+    });
+
+    const taskTimeoutId = `${TEST_PREFIX}_task_timeout`;
+    const taskInfraId = `${TEST_PREFIX}_task_infra_p1017`;
+
+    // (i) Handler ném Error('Request timeout after 30s') -> Lỗi nghiệp vụ, KHÔNG PHẢI lỗi hạ tầng DB
+    await prisma.agentTask.create({
+      data: {
+        id: taskTimeoutId,
+        orgId: orgErrId,
+        kind: 'custom_timeout_task',
+        subjectType: 'contact',
+        subjectId: 'contact_timeout',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    const customTimeoutHandlers = {
+      custom_timeout_task: {
+        prepare: async () => {
+          throw new Error('Request timeout after 30s');
+        },
+      },
+    };
+
+    const resTimeout = await runOnce({ orgId: orgErrId, customHandlers: customTimeoutHandlers });
+    expect(resTimeout.failedCount).toBe(1);
+    expect(resTimeout.abandonedCount).toBe(0);
+
+    const taskTimeoutInDb = await prisma.agentTask.findUnique({ where: { id: taskTimeoutId } });
+    expect(taskTimeoutInDb?.status).toBe('pending');
+    expect(taskTimeoutInDb?.attempts).toBe(1);
+    expect(taskTimeoutInDb?.lastError).toBe('Request timeout after 30s');
+
+    // (ii) Mô phỏng lỗi có code = 'P1017' (Server has closed the connection) trong transaction apply
+    await prisma.agentTask.create({
+      data: {
+        id: taskInfraId,
+        orgId: orgErrId,
+        kind: 'custom_infra_task',
+        subjectType: 'contact',
+        subjectId: 'contact_infra',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    const infraError = new Error('Server has closed the connection');
+    (infraError as any).code = 'P1017';
+
+    const customInfraHandlers = {
+      custom_infra_task: {
+        prepare: async (task: AgentTask) => ({
+          success: true,
+          result: { ok: true },
+        }),
+        apply: async () => {
+          throw infraError;
+        },
+      },
+    };
+
+    const resInfra = await runOnce({ orgId: orgErrId, customHandlers: customInfraHandlers });
+    expect(resInfra.failedCount).toBe(0);
+    expect(resInfra.abandonedCount).toBe(1);
+
+    // Task vẫn ở trạng thái running (không gọi fail(), attempts không tăng do fail())
+    const taskInfraInDb = await prisma.agentTask.findUnique({ where: { id: taskInfraId } });
+    expect(taskInfraInDb?.status).toBe('running');
+    expect(taskInfraInDb?.attempts).toBe(0); // attempts không bị tăng khi hạ tầng lỗi
+  });
+
+  // ── 12. Bịt #53: Ngân sách fail-closed thật trong vòng lặp runOnce ──────────
+  it('12. Real-time budget limit in runOnce: trần 1000, used 900, handler tiêu 500, gieo 3 task limit 3 -> chỉ 1 task chạy, 2 task reschedule pending, used = 1400', async () => {
+    const orgBudgetCheckId = `${TEST_PREFIX}_org_realtime_budget`;
+    await prisma.organization.create({
+      data: {
+        id: orgBudgetCheckId,
+        name: 'Org Realtime Budget Test',
+        agentTokenBudgetMonthly: 1_000,
+        agentTokenUsedThisMonth: 900,
+        agentBudgetResetAt: getNextMonthResetDate(),
+      },
+    });
+
+    const task1Id = `${TEST_PREFIX}_rt_task_1`;
+    const task2Id = `${TEST_PREFIX}_rt_task_2`;
+    const task3Id = `${TEST_PREFIX}_rt_task_3`;
+
+    await prisma.agentTask.createMany({
+      data: [
+        { id: task1Id, orgId: orgBudgetCheckId, kind: 'consume_500', subjectType: 'contact', subjectId: 'c1', dueAt: new Date(), status: 'pending' },
+        { id: task2Id, orgId: orgBudgetCheckId, kind: 'consume_500', subjectType: 'contact', subjectId: 'c2', dueAt: new Date(), status: 'pending' },
+        { id: task3Id, orgId: orgBudgetCheckId, kind: 'consume_500', subjectType: 'contact', subjectId: 'c3', dueAt: new Date(), status: 'pending' },
+      ],
+    });
+
+    const customHandlers = {
+      consume_500: {
+        prepare: async (task: AgentTask) => ({
+          success: true,
+          result: { taskId: task.id },
+          tokensIn: 300,
+          tokensOut: 200,
+        }),
+      },
+    };
+
+    const res = await runOnce({ orgId: orgBudgetCheckId, limit: 3, customHandlers });
+    expect(res.status).toBe('ok');
+    expect(res.claimedCount).toBe(3);
+    expect(res.completedCount).toBe(1);
+    expect(res.failedCount).toBe(0);
+
+    // Task 1 hoàn thành
+    const task1 = await prisma.agentTask.findUnique({ where: { id: task1Id } });
+    expect(task1?.status).toBe('completed');
+
+    // Task 2 và Task 3 bị reschedule về pending với reason = 'TOKEN_BUDGET_EXHAUSTED'
+    const task2 = await prisma.agentTask.findUnique({ where: { id: task2Id } });
+    expect(task2?.status).toBe('pending');
+    expect(task2?.reason).toBe('TOKEN_BUDGET_EXHAUSTED');
+
+    const task3 = await prisma.agentTask.findUnique({ where: { id: task3Id } });
+    expect(task3?.status).toBe('pending');
+    expect(task3?.reason).toBe('TOKEN_BUDGET_EXHAUSTED');
+
+    // used = 900 + 500 = 1400 (và không hơn!)
+    const orgInDb = await prisma.organization.findUnique({ where: { id: orgBudgetCheckId } });
+    expect(orgInDb?.agentTokenUsedThisMonth).toBe(1_400);
+  });
+
+  // ── 13. Quyết định 0.10: Hai bộ đếm claim_count và attempts ─────────────────
+  it('13. Hai bộ đếm Quyết định 0.10: task bị reap 4 lần liên tiếp -> vẫn pending, attempts = 0, claim_count = 4', async () => {
+    const orgCountersId = `${TEST_PREFIX}_org_two_counters`;
+    await prisma.organization.create({
+      data: { id: orgCountersId, name: 'Org Two Counters Test', agentTokenBudgetMonthly: 10_000 },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_reap_4_times`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgCountersId,
+        kind: 'noop',
+        subjectType: 'contact',
+        subjectId: 'contact_dummy',
+        dueAt: new Date(Date.now() - 60_000),
+        status: 'pending',
+      },
+    });
+
+    // Lặp 4 chu kỳ: claim -> hết hạn lease -> reap
+    for (let c = 1; c <= 4; c++) {
+      const claimed = await claimDue({ orgId: orgCountersId, workerId: `worker_crash_${c}`, limit: 1, leaseMs: 1 });
+      expect(claimed).toHaveLength(1);
+      expect(claimed[0].claimCount).toBe(c);
+      expect(claimed[0].attempts).toBe(0); // attempts KHÔNG TĂNG khi claim
+
+      // Chờ 10ms cho lease hết hạn
+      await new Promise((r) => setTimeout(r, 10));
+
+      const reaped = await reapExpired({ orgId: orgCountersId, leaseGraceMs: 0 });
+      expect(reaped.count).toBe(1);
+
+      const inDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+      expect(inDb?.status).toBe('pending');
+      expect(inDb?.attempts).toBe(0); // attempts giữ nguyên 0
+      expect(inDb?.claimCount).toBe(c); // claim_count = c
+      expect(inDb?.lastError).toBe('[REAPED] lease expired');
+    }
+
+    const finalInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(finalInDb?.status).toBe('pending');
+    expect(finalInDb?.attempts).toBe(0);
+    expect(finalInDb?.claimCount).toBe(4);
   });
 });
