@@ -1,13 +1,14 @@
 /**
  * tasks.ts — Durable Work Queue operations for Agent Tasks
  *
- * Cung cấp 6 thao tác cốt lõi cho hàng đợi tác vụ:
+ * Cung cấp các thao tác cốt lõi cho hàng đợi tác vụ:
  * 1. claimDue: Atomic pick & lock task đến hạn qua PostgreSQL FOR UPDATE SKIP LOCKED
  * 2. complete: Đánh dấu task hoàn thành (kiểm chứng lease)
  * 3. fail: Xử lý lỗi (chuyển pending với backoff mũ, hoặc dead nếu vượt maxAttempts)
- * 4. renewLease: Gia hạn lease trong lúc prepare chạy lâu (Heartbeat)
- * 5. reschedule: Lên lịch lại tác vụ có kiểm chứng lease
- * 6. reapExpired: Thu hồi các task running bị treo / quá hạn lease về pending
+ * 4. renewLease: Gia hạn lease đơn lẻ
+ * 5. renewLeases: Gia hạn lease toàn bộ lô task chưa xử lý (Heartbeat batch #66)
+ * 6. reschedule: Lên lịch lại tác vụ có kiểm chứng lease (Ghi deferReason)
+ * 7. reapExpired: Thu hồi các task running bị treo / quá hạn lease về pending
  */
 
 import { prisma, type PrismaTx } from '../../../shared/database/prisma-client.js';
@@ -46,6 +47,14 @@ export interface FailOptions {
 export interface RenewLeaseOptions {
   orgId: string;
   taskId: string;
+  workerId: string;
+  leaseMs?: number;
+  tx?: PrismaTx;
+}
+
+export interface RenewLeasesOptions {
+  orgId: string;
+  taskIds: string[];
   workerId: string;
   leaseMs?: number;
   tx?: PrismaTx;
@@ -128,6 +137,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
       "max_attempts" AS "maxAttempts",
       "status",
       "reason",
+      "defer_reason" AS "deferReason",
       "payload",
       "result",
       "last_error" AS "lastError",
@@ -147,7 +157,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
 /**
  * 2. complete: Đánh dấu task hoàn thành (chỉ thành công nếu lease còn sống và thuộc workerId)
  */
-export async function complete(options: CompleteOptions): Promise<AgentTask> {
+export async function complete(options: CompleteOptions): Promise<{ count: number }> {
   const { orgId, taskId, workerId, result, tx } = options;
   if (!orgId || !taskId || !workerId) {
     throw new Error('orgId, taskId and workerId are required for complete');
@@ -177,14 +187,13 @@ export async function complete(options: CompleteOptions): Promise<AgentTask> {
     throw new LeaseLostError(taskId, workerId);
   }
 
-  const updated = await db.agentTask.findUnique({ where: { id: taskId } });
-  return updated!;
+  return { count: res.count };
 }
 
 /**
  * 3. fail: Xử lý lỗi tác vụ (tăng attempts, backoff mũ hoặc đánh dấu dead; kiểm chứng lease)
  */
-export async function fail(options: FailOptions): Promise<AgentTask> {
+export async function fail(options: FailOptions): Promise<{ count: number }> {
   const { orgId, taskId, workerId, error, tx } = options;
   if (!orgId || !taskId || !workerId) {
     throw new Error('orgId, taskId and workerId are required for fail');
@@ -230,6 +239,7 @@ export async function fail(options: FailOptions): Promise<AgentTask> {
       },
     });
     if (res.count === 0) throw new LeaseLostError(taskId, workerId);
+    return { count: res.count };
   } else {
     // Backoff lũy thừa: 2s, 4s, 8s...
     const backoffMs = Math.min(1000 * Math.pow(2, newAttempts), 3_600_000);
@@ -254,16 +264,14 @@ export async function fail(options: FailOptions): Promise<AgentTask> {
       },
     });
     if (res.count === 0) throw new LeaseLostError(taskId, workerId);
+    return { count: res.count };
   }
-
-  const updated = await db.agentTask.findUnique({ where: { id: taskId } });
-  return updated!;
 }
 
 /**
- * 4. renewLease: Gia hạn lease cho tác vụ đang chạy trong lúc xử lý lâu (Heartbeat)
+ * 4. renewLease: Gia hạn lease cho một tác vụ đơn lẻ (Heartbeat đơn)
  */
-export async function renewLease(options: RenewLeaseOptions): Promise<AgentTask> {
+export async function renewLease(options: RenewLeaseOptions): Promise<{ count: number }> {
   const { orgId, taskId, workerId, leaseMs = 60_000, tx } = options;
   if (!orgId || !taskId || !workerId) {
     throw new Error('orgId, taskId and workerId are required for renewLease');
@@ -291,14 +299,48 @@ export async function renewLease(options: RenewLeaseOptions): Promise<AgentTask>
     throw new LeaseLostError(taskId, workerId);
   }
 
-  const updated = await db.agentTask.findUnique({ where: { id: taskId } });
-  return updated!;
+  return { count: res.count };
 }
 
 /**
- * 5. reschedule: Lên lịch lại tác vụ có kiểm chứng lease (Ghi lý do defer vào last_error không đè reason gốc)
+ * 5. renewLeases: Gia hạn lease toàn bộ các id còn lại trong lô task chưa xử lý (#66)
+ * Nếu res.count < taskIds.length thì log cảnh báo chênh lệch, KHÔNG ném lỗi để tránh giết cả batch.
  */
-export async function reschedule(options: RescheduleOptions): Promise<AgentTask> {
+export async function renewLeases(options: RenewLeasesOptions): Promise<{ count: number }> {
+  const { orgId, taskIds, workerId, leaseMs = 60_000, tx } = options;
+  if (!orgId || !workerId || !taskIds || taskIds.length === 0) {
+    return { count: 0 };
+  }
+
+  const db = tx || prisma;
+  const now = new Date();
+  const newLeaseUntil = new Date(Date.now() + leaseMs);
+
+  const res = await db.agentTask.updateMany({
+    where: {
+      id: { in: taskIds },
+      orgId,
+      status: 'running',
+      leasedBy: workerId,
+      leasedUntil: { gt: now },
+    },
+    data: {
+      leasedUntil: newLeaseUntil,
+      updatedAt: now,
+    },
+  });
+
+  if (res.count < taskIds.length) {
+    console.warn(`[WARN] [tasks] renewLeases renewed ${res.count}/${taskIds.length} tasks for worker ${workerId} in org ${orgId}`);
+  }
+
+  return { count: res.count };
+}
+
+/**
+ * 6. reschedule: Lên lịch lại tác vụ có kiểm chứng lease (Ghi lý do hoãn vào cột deferReason, không đè reason gốc)
+ */
+export async function reschedule(options: RescheduleOptions): Promise<{ count: number }> {
   const { orgId, taskId, workerId, runAt, reason, tx } = options;
   if (!orgId || !taskId || !workerId) {
     throw new Error('orgId, taskId and workerId are required for reschedule');
@@ -321,7 +363,7 @@ export async function reschedule(options: RescheduleOptions): Promise<AgentTask>
     data: {
       status: 'pending',
       dueAt: runAt,
-      lastError: `[DEFER] ${reason.trim()}`,
+      deferReason: reason.trim(),
       leasedUntil: null,
       leasedBy: null,
       updatedAt: now,
@@ -332,15 +374,12 @@ export async function reschedule(options: RescheduleOptions): Promise<AgentTask>
     throw new LeaseLostError(taskId, workerId);
   }
 
-  const updated = await db.agentTask.findUnique({ where: { id: taskId } });
-  return updated!;
+  return { count: res.count };
 }
 
 /**
- * 6. reapExpired: Thu hồi các task running có lease đã quá hạn về pending (không tăng counters, ghi last_error [REAPED])
- * Lưu ý về nhãn lỗi (Việc 2f): Task chết vì chậm hơn lease KHÔNG mang nhãn [INFRA],
- * vì với cơ chế renewLease chủ động trong dispatcher, tác vụ hợp lệ sẽ không bị mất lease giữa chừng;
- * chỉ tác vụ bị sập/chết đột ngột hoặc mất kết nối mới bị thu hồi về pending.
+ * 7. reapExpired: Thu hồi các task running có lease đã quá hạn về pending (không tăng counters, ghi last_error [REAPED])
+ * Lưu ý về nhãn lỗi: Task chết vì chậm hơn lease KHÔNG mang nhãn [INFRA].
  */
 export async function reapExpired(options: ReapExpiredOptions = {}): Promise<{ count: number }> {
   const { orgId, leaseGraceMs = 0 } = options;

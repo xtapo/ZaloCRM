@@ -135,6 +135,7 @@ Nếu cơ sở dữ liệu production trước đây được tạo bằng `db p
 4. `20260817030000_check_constraints_hardening`
 5. `20260817040000_repair_pure_sql_objects`
 6. `20260817050000_repair_rbac_privacy_checks`
+7. `20260817060000_add_defer_reason_to_agent_tasks`
 
 ---
 
@@ -151,7 +152,24 @@ Kiểm tra lại toàn bộ bằng script verify:
 DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/verify-pure-sql-objects.ts
 ```
 
-Khi script trả về `🎉 [GATE 6 HOÀN TẤT] Toàn bộ 15/15 object thuần-SQL đều toàn vẹn và khớp biểu thức`:
+---
+
+## Bước 6: Nghiệm Thu Bắt Buộc Khi Thêm Object Thuần-SQL Mới (`verify-self-heal.sh`)
+
+Mỗi khi thêm một CHECK constraint hoặc Partial Index mới vào codebase:
+1. Cập nhật định nghĩa và biểu thức vào [pure-sql-inventory.ts](file:///backend/src/shared/database/pure-sql-inventory.ts).
+2. Tạo migration tự phục hồi idempotent (`CREATE INDEX IF NOT EXISTS`, `IF NOT EXISTS ... ADD CONSTRAINT`).
+3. Chạy script kiểm thử kịch bản tự phục hồi:
+   ```bash
+   bash scripts/verify-self-heal.sh
+   ```
+   Script sẽ tự động dựng database nháp, xóa sạch 15 object, khẳng định Gate 6 chặn (ĐỎ), áp dụng migration tự chữa và khẳng định Gate 6 xanh (XANH).
+
+---
+
+## Bước 7: Khởi Động Container Production
+
+Khi script trả về `🎉 [GATE 6 HOÀN TẤT] Toàn bộ 15/15 object thuần-SQL đều toàn vẹn theo đẳng thức hai chiều`:
 
 1. Khởi động lại container Production (với CMD `npx prisma migrate deploy && node dist/app.js` đã đóng gói trong `docker/Dockerfile`):
    ```bash

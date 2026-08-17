@@ -1,5 +1,5 @@
 import { prisma } from '../../../shared/database/prisma-client.js';
-import { claimDue, complete, fail, renewLease, reschedule, reapExpired, LeaseLostError } from './tasks.js';
+import { claimDue, complete, fail, renewLease, renewLeases, reschedule, reapExpired, LeaseLostError } from './tasks.js';
 import { noopHandler, type TaskHandler, type PreparedTaskResult, type TaskHandlerContext } from './handlers/noop.js';
 import { checkAndResetMonthlyBudget, consumeTokens } from './budget.js';
 
@@ -8,6 +8,7 @@ export interface RunOnceOptions {
   workerId?: string;
   now?: Date;
   limit?: number;
+  leaseMs?: number;
   customHandlers?: Record<string, TaskHandler<any>>;
 }
 
@@ -22,10 +23,35 @@ export interface RunOnceResult {
   lostLeaseCount: number;
 }
 
+export interface LeaseTiming {
+  leaseMs: number;
+  leaseRenewIntervalMs: number;
+}
+
 const DEFAULT_HANDLERS: Record<string, TaskHandler<any>> = {
   noop: noopHandler,
   test: noopHandler,
 };
+
+/**
+ * #67: Tính toán leaseMs và chu kỳ renewLease (leaseRenewIntervalMs) dựa trên các handler đã đăng ký.
+ * - leaseMs = Math.max(60_000, maxHandlerDurationMs * 2)
+ * - leaseRenewIntervalMs = Math.max(Math.floor(leaseMs / 3), 50)
+ */
+export function computeLeaseTiming(
+  handlers: Record<string, TaskHandler<any>>,
+  overrideLeaseMs?: number
+): LeaseTiming {
+  const registeredHandlers = Object.values(handlers);
+  const maxHandlerDurationMs = Math.max(
+    0,
+    ...registeredHandlers.map((h) => (h && typeof h.maxDurationMs === 'number' ? h.maxDurationMs : 30_000))
+  );
+  const calculatedLeaseMs = Math.max(60_000, maxHandlerDurationMs * 2);
+  const leaseMs = overrideLeaseMs ?? calculatedLeaseMs;
+  const leaseRenewIntervalMs = Math.max(Math.floor(leaseMs / 3), 50);
+  return { leaseMs, leaseRenewIntervalMs };
+}
 
 // ── Bịt #52: Phân loại lỗi bằng mã đóng, không dùng chuỗi ──────────────────────
 const INFRA_PRISMA_CODES = new Set(['P1001', 'P1002', 'P1008', 'P1017', 'P2024']);
@@ -122,9 +148,11 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   // 2. Thu hồi lease quá hạn
   const { count: reapedCount } = await reapExpired({ orgId });
 
-  // 3. Claim tasks đến hạn
-  const tasks = await claimDue({ orgId, workerId, limit });
+  // 3. Tính toán nhịp lease (#67) & Claim tasks đến hạn
   const handlers = { ...DEFAULT_HANDLERS, ...customHandlers };
+  const { leaseMs, leaseRenewIntervalMs } = computeLeaseTiming(handlers, options.leaseMs);
+
+  const tasks = await claimDue({ orgId, workerId, limit, leaseMs });
 
   let completedCount = 0;
   let failedCount = 0;
@@ -143,7 +171,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i];
 
-    // Bịt #53: Kiểm tra ngân sách trước mỗi lượt prepare. Vượt trần thì reschedule các task còn lại và dừng vòng lặp
+    // Bịt #53 & 5a: Kiểm tra ngân sách trước mỗi lượt prepare. Vượt trần thì reschedule các task còn lại và dừng vòng lặp
     if (runningTokensUsed >= org.agentTokenBudgetMonthly) {
       for (let j = i; j < tasks.length; j++) {
         try {
@@ -155,7 +183,12 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
             reason: 'TOKEN_BUDGET_EXHAUSTED',
           });
         } catch (reschedErr) {
-          console.error(`[WARN] [dispatcher] Failed to reschedule task ${tasks[j].id} due to budget exhaustion:`, reschedErr);
+          if (reschedErr instanceof LeaseLostError) {
+            console.warn(`[LEASE-LOST] Lease lost while rescheduling task ${tasks[j].id} (worker: ${workerId})`);
+            lostLeaseCount++;
+          } else {
+            console.error(`[WARN] [dispatcher] Failed to reschedule task ${tasks[j].id} due to budget exhaustion:`, reschedErr);
+          }
         }
       }
       break;
@@ -180,29 +213,32 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       continue;
     }
 
-    // ── PHA 1: prepare chạy NGOÀI giao dịch database kèm renewLease heartbeat (Việc 2d) ──
-    const maxDurationMs = handler.maxDurationMs || 30_000;
-    const leaseRenewIntervalMs = Math.max(Math.floor(maxDurationMs / 2), 50);
-    const leaseDurationMs = Math.max(maxDurationMs * 2, 60_000);
-
+    // ── PHA 1: prepare chạy NGOÀI giao dịch database kèm renewLeases heartbeat cả lô (#66, #67) ──
     let heartbeatTimer: NodeJS.Timeout | null = null;
     let heartbeatLeaseLost = false;
 
-    heartbeatTimer = setInterval(async () => {
+    const renewBatch = async () => {
       try {
-        await renewLease({
+        const remainingTaskIds = tasks.slice(i).map((t) => t.id);
+        await renewLeases({
           orgId,
-          taskId: task.id,
+          taskIds: remainingTaskIds,
           workerId,
-          leaseMs: leaseDurationMs,
+          leaseMs,
         });
       } catch (renewErr) {
         if (renewErr instanceof LeaseLostError) {
           heartbeatLeaseLost = true;
           if (heartbeatTimer) clearInterval(heartbeatTimer);
+        } else {
+          console.error(`[LEASE-RENEW-ERR] Unexpected error renewing leases for batch starting at task ${task.id}:`, renewErr);
         }
       }
-    }, leaseRenewIntervalMs);
+    };
+
+    // 2b. Beat đầu tiên chạy NGAY khi vào prepare, không chờ hết chu kỳ đầu
+    await renewBatch();
+    heartbeatTimer = setInterval(renewBatch, leaseRenewIntervalMs);
 
     let prepared: PreparedTaskResult;
     try {
@@ -290,34 +326,51 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       completedCount++;
     } catch (txErr: unknown) {
       if (txErr instanceof LeaseLostError) {
-        // Bịt #51: Bắt LeaseLostError tách riêng, không gọi fail(), không tính failedCount
-        console.warn(`[LEASE-LOST] Lease lost for task ${task.id} during transaction (worker: ${workerId})`);
+        console.warn(`[LEASE-LOST] Lease lost during transaction for task ${task.id} (worker: ${workerId})`);
         lostLeaseCount++;
-      } else if (isDatabaseInfrastructureError(txErr)) {
-        // Bịt #52: Lỗi hạ tầng database (P1001, P1017, SQLSTATE...) -> KHÔNG gọi fail(), ghi log CRITICAL, tăng abandonedCount
+        continue;
+      }
+
+      if (isDatabaseInfrastructureError(txErr)) {
         console.error(`[CRITICAL] [dispatcher] Database transaction infrastructure error for task ${task.id} (org ${orgId}):`, txErr);
         abandonedCount++;
-      } else {
-        // Lỗi logic từ apply -> gọi fail() và tính vào failedCount
-        const errorMsg = txErr instanceof Error ? txErr.message : String(txErr);
-        try {
-          await fail({
-            orgId,
-            taskId: task.id,
-            workerId,
-            error: errorMsg,
-          });
-          failedCount++;
-        } catch (fErr) {
-          if (fErr instanceof LeaseLostError) {
-            console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
-            lostLeaseCount++;
-          }
+        continue;
+      }
+
+      const applyErrorMsg = txErr instanceof Error ? txErr.message : String(txErr);
+      try {
+        await fail({
+          orgId,
+          taskId: task.id,
+          workerId,
+          error: applyErrorMsg,
+        });
+        failedCount++;
+      } catch (fErr) {
+        if (fErr instanceof LeaseLostError) {
+          console.warn(`[LEASE-LOST] Lease lost while failing task ${task.id} (worker: ${workerId})`);
+          lostLeaseCount++;
         }
       }
+
+      // Vẫn consume token nếu prepare đã tiêu thụ token trước khi apply ném lỗi logic
+      const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
+      if (totalTokens > 0) {
+        runningTokensUsed += totalTokens;
+        try {
+          await consumeTokens({
+            orgId,
+            tokensIn: prepared.tokensIn || 0,
+            tokensOut: prepared.tokensOut || 0,
+          });
+        } catch (tokenErr) {
+          console.error(`[WARN] [dispatcher] Failed to consume tokens on apply failure for task ${task.id}:`, tokenErr);
+        }
+      }
+      continue;
     }
 
-    // ── BƯỚC 3: consumeTokens gọi SAU giao dịch (kể cả khi tx rollback vì token LLM/mạng trong prepare đã tiêu thật) ──
+    // Sau khi apply và complete thành công, consume token trong quota của org
     const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
     if (totalTokens > 0) {
       runningTokensUsed += totalTokens;

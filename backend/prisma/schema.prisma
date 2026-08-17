@@ -2169,6 +2169,7 @@ model AgentTask {
   maxAttempts Int       @default(3) @map("max_attempts")
   status      String    @default("pending")
   reason      String?
+  deferReason String?   @map("defer_reason")
   payload     Json?
   result      Json?
   lastError   String?   @map("last_error")
