@@ -29,12 +29,14 @@ export interface CollectMergedContactIdsOptions {
 export interface CanonicalContactResult {
   id: string;
   truncated: boolean;
+  dangling: boolean;
   depth: number;
 }
 
 export interface MergedContactIdsResult {
   ids: string[];
   truncated: boolean;
+  dangling: boolean;
   depth: number;
 }
 
@@ -45,7 +47,7 @@ export async function resolveCanonicalContactId(
   options: ResolveCanonicalContactOptions,
 ): Promise<CanonicalContactResult> {
   const { orgId, contactId } = options;
-  if (!orgId || !contactId) return { id: contactId, truncated: false, depth: 0 };
+  if (!orgId || !contactId) return { id: contactId, truncated: false, dangling: false, depth: 0 };
 
   // 1. Kiểm tra node khởi đầu có tồn tại trong orgId không
   const initial = await prisma.contact.findFirst({
@@ -53,7 +55,7 @@ export async function resolveCanonicalContactId(
     select: { id: true, mergedInto: true },
   });
   if (!initial || !initial.mergedInto) {
-    return { id: contactId, truncated: false, depth: 0 };
+    return { id: contactId, truncated: false, dangling: false, depth: 0 };
   }
 
   let currentId = contactId;
@@ -64,12 +66,12 @@ export async function resolveCanonicalContactId(
   while (nextId && depth < MAX_MERGE_CHAIN_DEPTH) {
     if (nextId === currentId) {
       console.warn(`[WARN] [merge-chain] Self-referencing loop detected at contact ${currentId} in org ${orgId}`);
-      return { id: currentId, truncated: true, depth };
+      return { id: currentId, truncated: true, dangling: false, depth };
     }
 
     if (visited.has(nextId)) {
       console.warn(`[WARN] [merge-chain] Merge cycle detected at contact ${currentId} -> ${nextId} in org ${orgId}`);
-      return { id: currentId, truncated: true, depth };
+      return { id: currentId, truncated: true, dangling: false, depth };
     }
 
     // Kiểm tra node tiếp theo có thuộc orgId không (ngăn rò rỉ sang Org khác)
@@ -79,8 +81,9 @@ export async function resolveCanonicalContactId(
     });
 
     if (!nextContact) {
-      // Node trỏ sang ID không tồn tại hoặc thuộc Org khác -> dừng lại tại node hợp lệ cuối cùng trong org
-      return { id: currentId, truncated: false, depth };
+      // Node trỏ sang ID không tồn tại hoặc thuộc Org khác (dangling link) -> dừng lại tại node hợp lệ cuối cùng trong org
+      console.warn(`[WARN] [merge-chain] Dangling merge target ${nextId} referenced by contact ${currentId} in org ${orgId}`);
+      return { id: currentId, truncated: false, dangling: true, depth };
     }
 
     visited.add(nextId);
@@ -94,7 +97,7 @@ export async function resolveCanonicalContactId(
     console.warn(`[WARN] [merge-chain] Max depth ${MAX_MERGE_CHAIN_DEPTH} exceeded resolving canonical for contact ${contactId} in org ${orgId}`);
   }
 
-  return { id: currentId, truncated, depth };
+  return { id: currentId, truncated, dangling: false, depth };
 }
 
 /**
@@ -104,7 +107,7 @@ export async function collectMergedContactIds(
   options: CollectMergedContactIdsOptions,
 ): Promise<MergedContactIdsResult> {
   const { orgId, canonicalId } = options;
-  if (!orgId || !canonicalId) return { ids: [], truncated: false, depth: 0 };
+  if (!orgId || !canonicalId) return { ids: [], truncated: false, dangling: false, depth: 0 };
 
   const visited = new Set<string>([canonicalId]);
   const mergedIds: string[] = [];
@@ -144,5 +147,5 @@ export async function collectMergedContactIds(
     truncated = true;
   }
 
-  return { ids: mergedIds, truncated, depth };
+  return { ids: mergedIds, truncated, dangling: false, depth };
 }

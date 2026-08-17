@@ -1,12 +1,13 @@
 /**
  * tasks.ts — Durable Work Queue operations for Agent Tasks
  *
- * Cung cấp 5 thao tác cốt lõi cho hàng đợi tác vụ:
+ * Cung cấp 6 thao tác cốt lõi cho hàng đợi tác vụ:
  * 1. claimDue: Atomic pick & lock task đến hạn qua PostgreSQL FOR UPDATE SKIP LOCKED
- * 2. complete: Đánh dấu task hoàn thành
+ * 2. complete: Đánh dấu task hoàn thành (kiểm chứng lease)
  * 3. fail: Xử lý lỗi (chuyển pending với backoff mũ, hoặc dead nếu vượt maxAttempts)
- * 4. reschedule: Lên lịch lại tác vụ với reason bắt buộc
- * 5. reapExpired: Thu hồi các task running bị treo / quá hạn lease về pending
+ * 4. renewLease: Gia hạn lease trong lúc prepare chạy lâu (Heartbeat)
+ * 5. reschedule: Lên lịch lại tác vụ có kiểm chứng lease
+ * 6. reapExpired: Thu hồi các task running bị treo / quá hạn lease về pending
  */
 
 import { prisma, type PrismaTx } from '../../../shared/database/prisma-client.js';
@@ -42,9 +43,18 @@ export interface FailOptions {
   tx?: PrismaTx;
 }
 
+export interface RenewLeaseOptions {
+  orgId: string;
+  taskId: string;
+  workerId: string;
+  leaseMs?: number;
+  tx?: PrismaTx;
+}
+
 export interface RescheduleOptions {
   orgId: string;
   taskId: string;
+  workerId: string;
   runAt: Date;
   reason: string;
   tx?: PrismaTx;
@@ -59,7 +69,8 @@ export const MAX_CLAIMS = 10;
 
 /**
  * 1. claimDue: Atomic claim các task đến hạn trong tenant qua SELECT ... FOR UPDATE SKIP LOCKED
- * Quyết định 0.10: Tăng claim_count (KHÔNG tăng attempts). Nếu claim_count >= 10 -> dead với [INFRA].
+ * - Bước 1: Khai tử các task pending đã chạm trần MAX_CLAIMS (10)
+ * - Bước 2: Claim các task pending có claim_count < 10 (RETURNING không bao giờ chứa hàng dead)
  */
 export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
   const { orgId, workerId, limit = 10, leaseMs = 60_000 } = options;
@@ -68,20 +79,35 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
   const leaseUntil = new Date(Date.now() + leaseMs);
   const now = new Date();
 
+  // 1a. Tách riêng câu khai tử trước khi pick task (Việc 2a)
+  await prisma.$executeRaw`
+    UPDATE "agent_tasks"
+    SET 
+      "status" = 'dead',
+      "leased_by" = NULL,
+      "leased_until" = NULL,
+      "last_error" = '[INFRA] Max claim count exceeded',
+      "updated_at" = ${now}
+    WHERE "org_id" = ${orgId}
+      AND "status" = 'pending'
+      AND "claim_count" >= ${MAX_CLAIMS};
+  `;
+
+  // 1b. Claim các task pending đến hạn (claim_count < MAX_CLAIMS)
   return prisma.$queryRaw<AgentTask[]>`
     UPDATE "agent_tasks"
     SET 
-      "status" = CASE WHEN "claim_count" + 1 >= ${MAX_CLAIMS} THEN 'dead' ELSE 'running' END,
-      "leased_by" = CASE WHEN "claim_count" + 1 >= ${MAX_CLAIMS} THEN NULL ELSE ${workerId} END,
-      "leased_until" = CASE WHEN "claim_count" + 1 >= ${MAX_CLAIMS} THEN NULL ELSE ${leaseUntil}::timestamp END,
+      "status" = 'running',
+      "leased_by" = ${workerId},
+      "leased_until" = ${leaseUntil},
       "claim_count" = "claim_count" + 1,
-      "last_error" = CASE WHEN "claim_count" + 1 >= ${MAX_CLAIMS} THEN '[INFRA] Max claim count exceeded' ELSE "last_error" END,
-      "updated_at" = ${now}::timestamp
+      "updated_at" = ${now}
     WHERE "id" IN (
       SELECT "id"
       FROM "agent_tasks"
       WHERE "org_id" = ${orgId}
         AND "status" = 'pending'
+        AND "claim_count" < ${MAX_CLAIMS}
         AND "due_at" <= ${now}
       ORDER BY "priority" DESC, "due_at" ASC
       FOR UPDATE SKIP LOCKED
@@ -227,35 +253,86 @@ export async function fail(options: FailOptions): Promise<AgentTask> {
 }
 
 /**
- * 4. reschedule: Lên lịch lại tác vụ với reason bắt buộc
+ * 4. renewLease: Gia hạn lease cho tác vụ đang chạy trong lúc xử lý lâu (Heartbeat)
  */
-export async function reschedule(options: RescheduleOptions): Promise<AgentTask | null> {
-  const { orgId, taskId, runAt, reason, tx } = options;
-  if (!orgId || !taskId) return null;
+export async function renewLease(options: RenewLeaseOptions): Promise<AgentTask> {
+  const { orgId, taskId, workerId, leaseMs = 60_000, tx } = options;
+  if (!orgId || !taskId || !workerId) {
+    throw new Error('orgId, taskId and workerId are required for renewLease');
+  }
+
+  const db = tx || prisma;
+  const now = new Date();
+  const newLeaseUntil = new Date(Date.now() + leaseMs);
+
+  const res = await db.agentTask.updateMany({
+    where: {
+      id: taskId,
+      orgId,
+      status: 'running',
+      leasedBy: workerId,
+      leasedUntil: { gt: now },
+    },
+    data: {
+      leasedUntil: newLeaseUntil,
+      updatedAt: now,
+    },
+  });
+
+  if (res.count === 0) {
+    throw new LeaseLostError(taskId, workerId);
+  }
+
+  const updated = await db.agentTask.findUnique({ where: { id: taskId } });
+  return updated!;
+}
+
+/**
+ * 5. reschedule: Lên lịch lại tác vụ có kiểm chứng lease (Ghi lý do defer vào last_error không đè reason gốc)
+ */
+export async function reschedule(options: RescheduleOptions): Promise<AgentTask> {
+  const { orgId, taskId, workerId, runAt, reason, tx } = options;
+  if (!orgId || !taskId || !workerId) {
+    throw new Error('orgId, taskId and workerId are required for reschedule');
+  }
   if (!reason || !reason.trim()) {
     throw new Error('reason is required and cannot be empty for reschedule');
   }
 
   const db = tx || prisma;
-  const task = await db.agentTask.findFirst({
-    where: { id: taskId, orgId },
-  });
-  if (!task) return null;
+  const now = new Date();
 
-  return db.agentTask.update({
-    where: { id: taskId },
+  const res = await db.agentTask.updateMany({
+    where: {
+      id: taskId,
+      orgId,
+      status: 'running',
+      leasedBy: workerId,
+      leasedUntil: { gt: now },
+    },
     data: {
       status: 'pending',
       dueAt: runAt,
-      reason: reason.trim(),
+      lastError: `[DEFER] ${reason.trim()}`,
       leasedUntil: null,
       leasedBy: null,
+      updatedAt: now,
     },
   });
+
+  if (res.count === 0) {
+    throw new LeaseLostError(taskId, workerId);
+  }
+
+  const updated = await db.agentTask.findUnique({ where: { id: taskId } });
+  return updated!;
 }
 
 /**
- * 5. reapExpired: Thu hồi các task running có lease đã quá hạn về pending (không tăng counters, ghi last_error [REAPED])
+ * 6. reapExpired: Thu hồi các task running có lease đã quá hạn về pending (không tăng counters, ghi last_error [REAPED])
+ * Lưu ý về nhãn lỗi (Việc 2f): Task chết vì chậm hơn lease KHÔNG mang nhãn [INFRA],
+ * vì với cơ chế renewLease chủ động trong dispatcher, tác vụ hợp lệ sẽ không bị mất lease giữa chừng;
+ * chỉ tác vụ bị sập/chết đột ngột hoặc mất kết nối mới bị thu hồi về pending.
  */
 export async function reapExpired(options: ReapExpiredOptions = {}): Promise<{ count: number }> {
   const { orgId, leaseGraceMs = 0 } = options;

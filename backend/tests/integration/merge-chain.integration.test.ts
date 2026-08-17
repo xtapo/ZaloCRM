@@ -62,17 +62,18 @@ describe('Contact Merge Chain Integration Tests (Real DB without mock)', () => {
 
     // 1. Đi LÊN: resolveCanonicalContactId
     const canonicalFromC = await resolveCanonicalContactId({ orgId: orgAId, contactId: contactC });
-    expect(canonicalFromC).toEqual({ id: contactA, truncated: false, depth: 2 });
+    expect(canonicalFromC).toEqual({ id: contactA, truncated: false, dangling: false, depth: 2 });
 
     const canonicalFromB = await resolveCanonicalContactId({ orgId: orgAId, contactId: contactB });
-    expect(canonicalFromB).toEqual({ id: contactA, truncated: false, depth: 1 });
+    expect(canonicalFromB).toEqual({ id: contactA, truncated: false, dangling: false, depth: 1 });
 
     const canonicalFromA = await resolveCanonicalContactId({ orgId: orgAId, contactId: contactA });
-    expect(canonicalFromA).toEqual({ id: contactA, truncated: false, depth: 0 });
+    expect(canonicalFromA).toEqual({ id: contactA, truncated: false, dangling: false, depth: 0 });
 
     // 2. Đi XUỐNG: collectMergedContactIds
     const mergedUnderA = await collectMergedContactIds({ orgId: orgAId, canonicalId: contactA });
     expect(mergedUnderA.truncated).toBe(false);
+    expect(mergedUnderA.dangling).toBe(false);
     expect(mergedUnderA.ids).toHaveLength(2);
     expect(new Set(mergedUnderA.ids)).toEqual(new Set([contactB, contactC]));
   });
@@ -168,12 +169,12 @@ describe('Contact Merge Chain Integration Tests (Real DB without mock)', () => {
       },
     });
 
-    // 1. Đi LÊN trong Org A: Do contactOrgB không thuộc Org A, hàm dừng ngay tại contactOrgA
+    // 1. Đi LÊN trong Org A: Do contactOrgB không thuộc Org A, hàm dừng ngay tại contactOrgA (dangling link)
     const canonicalInOrgA = await resolveCanonicalContactId({
       orgId: orgAId,
       contactId: contactOrgA,
     });
-    expect(canonicalInOrgA).toEqual({ id: contactOrgA, truncated: false, depth: 0 });
+    expect(canonicalInOrgA).toEqual({ id: contactOrgA, truncated: false, dangling: true, depth: 0 });
 
     // 2. Đi XUỐNG trong Org B: Không bao giờ thu nạp contact thuộc Org A
     const mergedInOrgB = await collectMergedContactIds({
@@ -183,5 +184,6 @@ describe('Contact Merge Chain Integration Tests (Real DB without mock)', () => {
     expect(mergedInOrgB.ids).not.toContain(contactOrgA);
     expect(mergedInOrgB.ids).toHaveLength(0);
     expect(mergedInOrgB.truncated).toBe(false);
+    expect(mergedInOrgB.dangling).toBe(false);
   });
 });

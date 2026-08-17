@@ -53,57 +53,53 @@ npx prisma migrate diff \
 ```
 
 > [!WARNING]
-> **CẢNH BÁO MÙNG DRIFF (PRISMA MIGRATE DIFF LÀ "MÙ" VỚI THUẦN-SQL)**:
+> **CẢNH BÁO MÙ DRIFT (PRISMA MIGRATE DIFF LÀ "MÙ" VỚI THUẦN-SQL)**:
 > `prisma migrate diff` hoàn toàn không nhận diện được `CHECK constraints` và mệnh đề `WHERE` của `Partial Unique Indexes`.
 > Do đó, **nếu lệnh diff trả về 0 ("No difference detected"), điều đó KHÔNG CÓ NGHĨA là database production đã đầy đủ bảo vệ dữ liệu!** Bắt buộc phải thực hiện Bước 2b bên dưới.
 
 ---
 
-## Bước 2b: Bảng Checklist Các Object Thuần-SQL (Bắt Buộc)
+## Bước 2b: Bảng Checklist 15 Object Thuần-SQL (Bắt Buộc)
 
-Chạy truy vấn SQL trực tiếp trên database Production để kiểm tra sự tồn tại của toàn bộ 11 object thuần-SQL:
+> **MỘT NGUỒN SỰ THẬT (Single Source of Truth)**: Toàn bộ danh mục 15 object và biểu thức SQL định nghĩa được lưu trữ duy nhất tại file mã nguồn [pure-sql-inventory.ts](file:///backend/src/shared/database/pure-sql-inventory.ts) và được tự động kiểm thử tại Cổng 6 (`verify-pure-sql-objects.ts`).
+
+Chạy truy vấn SQL trực tiếp trên database Production để kiểm tra sự tồn tại của toàn bộ 15 object thuần-SQL:
 
 ```sql
--- 1. Kiểm tra 6 CHECK constraints
-SELECT conname, pg_get_constraintdef(oid) 
+-- 1. Kiểm tra 10 CHECK constraints
+SELECT conname::text, pg_get_constraintdef(oid)::text AS def 
 FROM pg_constraint 
-WHERE contype = 'c' 
-  AND conname IN (
-    'facts_strength_check',
-    'facts_source_not_bank_card_check',
-    'fact_suggestions_status_check',
-    'fact_suggestions_source_not_bank_card_check',
-    'agent_tasks_status_check',
-    'contacts_no_self_merge_check'
-  );
+WHERE contype::text = 'c' 
+  AND connamespace = 'public'::regnamespace
+ORDER BY conname;
 
 -- 2. Kiểm tra 5 Partial Unique Indexes
-SELECT indexname, indexdef 
+SELECT indexname::text, indexdef::text AS def 
 FROM pg_indexes 
-WHERE indexname IN (
-  'uniq_one_leader_per_dept',
-  'uniq_one_deputy_per_dept',
-  'agent_tasks_active_dedup_key',
-  'facts_created_by_task_id_uniq',
-  'fact_suggestions_created_by_task_id_uniq'
-);
+WHERE schemaname = 'public' 
+  AND indexdef LIKE '%WHERE%'
+ORDER BY indexname;
 ```
 
-### Bảng Đối Chiếu 11 Object Thuần-SQL
+### Danh Mục 15 Object Thuần-SQL Cần Hiện Diện
 
-| Loại Object | Tên Constraint / Index | Bảng Áp Dụng | Biểu Thức Định Nghĩa (Predicate / Rule) |
+| STT | Loại Object | Tên Constraint / Index | Bảng Áp Dụng |
 |---|---|---|---|
-| CHECK | `facts_strength_check` | `facts` | `CHECK ("strength" IN ('strong', 'medium', 'weak'))` |
-| CHECK | `facts_source_not_bank_card_check` | `facts` | `CHECK ("source" <> 'zalo.bank-card')` |
-| CHECK | `fact_suggestions_status_check` | `fact_suggestions` | `CHECK ("status" IN ('pending', 'accepted', 'rejected'))` |
-| CHECK | `fact_suggestions_source_not_bank_card_check` | `fact_suggestions` | `CHECK ("source" <> 'zalo.bank-card')` |
-| CHECK | `agent_tasks_status_check` | `agent_tasks` | `CHECK ("status" IN ('pending', 'running', 'completed', 'dead'))` |
-| CHECK | `contacts_no_self_merge_check` | `contacts` | `CHECK ("merged_into" IS DISTINCT FROM "id")` |
-| PARTIAL INDEX | `uniq_one_leader_per_dept` | `department_members` | `("department_id") WHERE ("dept_role" = 'leader')` |
-| PARTIAL INDEX | `uniq_one_deputy_per_dept` | `department_members` | `("department_id") WHERE ("dept_role" = 'deputy')` |
-| PARTIAL INDEX | `agent_tasks_active_dedup_key` | `agent_tasks` | `("org_id", "kind", "subject_type", "subject_id") WHERE ("status" IN ('pending', 'running'))` |
-| PARTIAL INDEX | `facts_created_by_task_id_uniq` | `facts` | `("created_by_task_id") WHERE ("created_by_task_id" IS NOT NULL)` |
-| PARTIAL INDEX | `fact_suggestions_created_by_task_id_uniq` | `fact_suggestions` | `("created_by_task_id") WHERE ("created_by_task_id" IS NOT NULL)` |
+| 1 | CHECK | `agent_tasks_status_check` | `agent_tasks` |
+| 2 | CHECK | `chk_dept_depth_max` | `departments` |
+| 3 | CHECK | `chk_dept_no_self_parent` | `departments` |
+| 4 | CHECK | `chk_dept_role` | `department_members` |
+| 5 | CHECK | `chk_zalo_privacy_mode` | `zalo_accounts` |
+| 6 | CHECK | `contacts_no_self_merge_check` | `contacts` |
+| 7 | CHECK | `fact_suggestions_source_not_bank_card_check` | `fact_suggestions` |
+| 8 | CHECK | `fact_suggestions_status_check` | `fact_suggestions` |
+| 9 | CHECK | `facts_source_not_bank_card_check` | `facts` |
+| 10 | CHECK | `facts_strength_check` | `facts` |
+| 11 | PARTIAL UNIQUE INDEX | `agent_tasks_active_dedup_key` | `agent_tasks` |
+| 12 | PARTIAL UNIQUE INDEX | `fact_suggestions_created_by_task_id_uniq` | `fact_suggestions` |
+| 13 | PARTIAL UNIQUE INDEX | `facts_created_by_task_id_uniq` | `facts` |
+| 14 | PARTIAL UNIQUE INDEX | `uniq_one_deputy_per_dept` | `department_members` |
+| 15 | PARTIAL UNIQUE INDEX | `uniq_one_leader_per_dept` | `department_members` |
 
 ---
 
@@ -125,22 +121,26 @@ Nếu cơ sở dữ liệu production trước đây được tạo bằng `db p
 
 > [!CAUTION]
 > **QUY TẮC NGHIÊM NGẶT VỀ CUSTOM SQL (BẮT BUỘC TUÂN THỦ)**:
-> **MỌI MIGRATION CHỨA CUSTOM SQL (CHECK CONSTRAINTS, PARTIAL INDEXES, BACKFILL DỮ LIỆU) TUYỆT ĐỐI KHÔNG ĐƯỢC DÙNG `migrate resolve --applied` MÀ BẮT BUỘC PHẢI CHẠY THẬT QUA `prisma migrate deploy` HOẶC CÓ MIGRATION TỰ CHỮA.**
-> 
-> Nếu `resolve --applied` các migration này, bảng `_prisma_migrations` sẽ ghi nhận đã chạy nhưng database Production thực tế sẽ THIẾU TOÀN BỘ các ràng buộc bảo vệ dữ liệu!
+> - **Các migration thuần tự chữa custom SQL TUYỆT ĐỐI KHÔNG ĐƯỢC DÙNG `migrate resolve --applied`** mà bắt buộc phải để `prisma migrate deploy` chạy thật ở Bước 5.
+> - **Các migration vừa tạo bảng vừa chứa custom SQL ban đầu BUỘC PHẢI `resolve --applied`** (để tránh lỗi bảng đã tồn tại), phần custom SQL của chúng đã được các migration tự chữa `20260817040000` và `20260817050000` phủ lại 100%.
 
-### Danh Sách Các Migration Chứa Custom SQL (CẤM `resolve --applied`):
-1. `20260522000000_rbac_partial_unique_leader_deputy` (Partial Unique Indexes cho Leader / Deputy)
-2. `20260817000000_agent_tasks_partial_unique` (Partial Unique Index dedup active tasks)
-3. `20260817020000_add_check_constraints` (CHECK constraints Phase 8b/8c)
-4. `20260817030000_check_constraints_hardening` (Idempotent CHECK constraints)
-5. `20260817040000_repair_pure_sql_objects` (Idempotent self-healing toàn bộ 11 object thuần-SQL và backfill claim_count)
+### 1. Nhóm Migration Vừa Tạo Bảng Vừa Chứa Custom SQL (Được phép `resolve --applied` vì đã có migration tự chữa phủ lại):
+- `20260521020000_rbac_phase_phan_quyen` (Tạo bảng phòng ban + CHECK constraints RBAC)
+- `20260522010000_privacy_phase_rieng_tu` (Tạo bảng phân quyền riêng tư + CHECK privacy mode)
+
+### 2. Nhóm Migration Thuần Custom SQL & Tự Chữa (CẤM `resolve --applied`, Bắt buộc chạy thật ở Bước 5):
+1. `20260522000000_rbac_partial_unique_leader_deputy`
+2. `20260817000000_agent_tasks_partial_unique`
+3. `20260817020000_add_check_constraints`
+4. `20260817030000_check_constraints_hardening`
+5. `20260817040000_repair_pure_sql_objects`
+6. `20260817050000_repair_rbac_privacy_checks`
 
 ---
 
 ## Bước 5: Chạy `migrate deploy` và Đổi CMD Dockerfile Production
 
-Chạy migration deploy để tự động áp dụng và tự chữa toàn bộ schema thuần-SQL trên Production:
+Chạy migration deploy để tự động áp dụng và tự chữa toàn bộ 15 object thuần-SQL trên Production:
 
 ```bash
 npx prisma migrate deploy --url "$PROD_DATABASE_URL"
@@ -151,7 +151,7 @@ Kiểm tra lại toàn bộ bằng script verify:
 DATABASE_URL="$PROD_DATABASE_URL" npx tsx scripts/verify-pure-sql-objects.ts
 ```
 
-Khi script trả về `🎉 [GATE 6 HOÀN TẤT] Toàn bộ 11 object thuần-SQL đều toàn vẹn`:
+Khi script trả về `🎉 [GATE 6 HOÀN TẤT] Toàn bộ 15/15 object thuần-SQL đều toàn vẹn và khớp biểu thức`:
 
 1. Khởi động lại container Production (với CMD `npx prisma migrate deploy && node dist/app.js` đã đóng gói trong `docker/Dockerfile`):
    ```bash

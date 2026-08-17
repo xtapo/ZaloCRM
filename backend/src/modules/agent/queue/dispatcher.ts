@@ -1,5 +1,5 @@
 import { prisma } from '../../../shared/database/prisma-client.js';
-import { claimDue, complete, fail, reschedule, reapExpired, LeaseLostError } from './tasks.js';
+import { claimDue, complete, fail, renewLease, reschedule, reapExpired, LeaseLostError } from './tasks.js';
 import { noopHandler, type TaskHandler, type PreparedTaskResult, type TaskHandlerContext } from './handlers/noop.js';
 import { checkAndResetMonthlyBudget, consumeTokens } from './budget.js';
 
@@ -150,6 +150,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
           await reschedule({
             orgId,
             taskId: tasks[j].id,
+            workerId,
             runAt: new Date(Date.now() + 60_000),
             reason: 'TOKEN_BUDGET_EXHAUSTED',
           });
@@ -179,11 +180,39 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       continue;
     }
 
-    // ── PHA 1: prepare chạy NGOÀI giao dịch database ──
+    // ── PHA 1: prepare chạy NGOÀI giao dịch database kèm renewLease heartbeat (Việc 2d) ──
+    const maxDurationMs = handler.maxDurationMs || 30_000;
+    const leaseRenewIntervalMs = Math.max(Math.floor(maxDurationMs / 2), 50);
+    const leaseDurationMs = Math.max(maxDurationMs * 2, 60_000);
+
+    let heartbeatTimer: NodeJS.Timeout | null = null;
+    let heartbeatLeaseLost = false;
+
+    heartbeatTimer = setInterval(async () => {
+      try {
+        await renewLease({
+          orgId,
+          taskId: task.id,
+          workerId,
+          leaseMs: leaseDurationMs,
+        });
+      } catch (renewErr) {
+        if (renewErr instanceof LeaseLostError) {
+          heartbeatLeaseLost = true;
+          if (heartbeatTimer) clearInterval(heartbeatTimer);
+        }
+      }
+    }, leaseRenewIntervalMs);
+
     let prepared: PreparedTaskResult;
     try {
       prepared = await handler.prepare(task, ctx);
+      if (heartbeatLeaseLost) {
+        throw new LeaseLostError(task.id, workerId);
+      }
     } catch (prepareErr: unknown) {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
+
       if (prepareErr instanceof LeaseLostError) {
         console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
         lostLeaseCount++;
@@ -206,6 +235,8 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         }
       }
       continue;
+    } finally {
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
 
     // Nếu prepare trả về thất bại logic

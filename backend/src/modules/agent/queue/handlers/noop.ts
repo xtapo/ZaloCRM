@@ -18,6 +18,13 @@ export interface PreparedTaskResult<TWrites = unknown> {
 
 export interface TaskHandler<TWrites = unknown> {
   /**
+   * Thời lượng ước tính tối đa của tác vụ (ms).
+   * Dùng để định thời hạn lease ban đầu và chu kỳ gọi renewLease tự động.
+   * Mặc định là 30_000ms (30s) nếu không khai báo.
+   */
+  maxDurationMs?: number;
+
+  /**
    * Pha 1: prepare chạy NGOÀI giao dịch database.
    * Gọi LLM, Zalo API, tính toán...
    * TUYỆT ĐỐI KHÔNG GHI DATABASE TRONG PHA NÀY.
