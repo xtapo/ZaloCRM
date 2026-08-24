@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 
@@ -31,6 +31,14 @@ const error = ref('');
 const success = ref(false);
 const router = useRouter();
 const authStore = useAuthStore();
+
+onMounted(async () => {
+  // Đã có user trong DB → setup xong rồi, đá về login
+  try {
+    const needs = await authStore.checkSetup();
+    if (!needs) router.replace('/login');
+  } catch {}
+});
 
 async function handleSetup() {
   loading.value = true;
