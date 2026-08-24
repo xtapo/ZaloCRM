@@ -7,7 +7,7 @@ const loggerMock = vi.hoisted(() => ({
   debug: vi.fn(),
 }));
 
-vi.mock('../src/shared/database/prisma-client.js', () => ({
+vi.mock('../../src/shared/database/prisma-client.js', () => ({
   prisma: {
     contact: {
       updateMany: vi.fn(),
@@ -15,11 +15,11 @@ vi.mock('../src/shared/database/prisma-client.js', () => ({
   },
 }));
 
-vi.mock('../src/shared/utils/logger.js', () => ({
+vi.mock('../../src/shared/utils/logger.js', () => ({
   logger: loggerMock,
 }));
 
-const { detectContentType } = await import('../src/modules/zalo/zalo-message-helpers.js');
+const { detectContentType } = await import('../../src/modules/zalo/zalo-message-helpers.js');
 
 beforeEach(() => {
   vi.clearAllMocks();

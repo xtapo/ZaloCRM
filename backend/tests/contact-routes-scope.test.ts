@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { prisma } from '../src/shared/database/prisma-client.js';
+import type { Prisma } from '@prisma/client';
 
 const mockUser = { id: 'u1', orgId: 'o1', role: 'member' };
 const mockScope = { accessibleIds: ['acc1'], isOrgAdmin: false };
@@ -16,7 +17,7 @@ vi.mock('../src/shared/database/prisma-client.js', () => ({
 }));
 
 vi.mock('../src/modules/auth/auth-middleware.js', () => ({
-  authMiddleware: async (req: any) => { req.user = mockUser; },
+  authMiddleware: async (req: { user?: typeof mockUser }) => { req.user = mockUser; },
 }));
 
 vi.mock('../src/modules/chat/chat-security-hooks.js', () => ({
@@ -34,7 +35,7 @@ vi.mock('../src/modules/privacy/redact.js', () => {
 });
 
 describe('contact-routes scope and privacy', () => {
-  let app: any;
+  let app: ReturnType<typeof Fastify>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -56,10 +57,14 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts' });
     expect(res.statusCode).toBe(200);
     expect(res.json().total).toBe(0);
-    const callArgs = vi.mocked(prisma.contact.findMany).mock.calls[0]?.[0];
-    const where = callArgs?.where as any;
-    expect(where?.AND?.[0]?.OR).toContainEqual({ friends: { some: { zaloAccountId: { in: ['acc1'] } } } });
-    expect(where?.AND?.[0]?.OR).toContainEqual({ friends: { none: {} } });
+    const callArgs = vi.mocked(prisma.contact.findMany).mock.calls[0]?.[0] as Prisma.ContactFindManyArgs;
+    const where = callArgs?.where;
+    expect(where?.orgId).toBe('o1');
+    const andClauses = Array.isArray(where?.AND) ? where?.AND : [where?.AND];
+    const orClause = andClauses[0]?.OR;
+    const orList = Array.isArray(orClause) ? orClause : [orClause];
+    expect(orList).toContainEqual({ friends: { some: { zaloAccountId: { in: ['acc1'] } } } });
+    expect(orList).toContainEqual({ friends: { none: {} } });
   });
 
   // 2. List: contact tạo tay (friends rỗng) → vẫn xuất hiện.
@@ -83,13 +88,13 @@ describe('contact-routes scope and privacy', () => {
     expect(vi.mocked(getRedactableContactIds)).toHaveBeenCalledTimes(1);
     expect(json.contacts.length).toBe(2);
     
-    const c1 = json.contacts.find((c: any) => c.id === 'c1');
+    const c1 = json.contacts.find((c: { id: string }) => c.id === 'c1');
     expect(c1.redacted).toBe(true);
     expect(c1.fullName).toBe('▒▒▒▒▒▒▒▒');
     expect(c1.phone).toBeUndefined();
     expect(c1.friends).toBeUndefined();
     
-    const c2 = json.contacts.find((c: any) => c.id === 'c2');
+    const c2 = json.contacts.find((c: { id: string }) => c.id === 'c2');
     expect(c2.redacted).toBeUndefined();
     expect(c2.fullName).toBe('Normal Contact');
   });
@@ -108,9 +113,10 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts' });
     const json = res.json();
     
-    const callArgs = vi.mocked(prisma.contact.findMany).mock.calls[0]?.[0];
-    const where = callArgs?.where as any;
-    expect(where?.AND).toBeUndefined();
+    const callArgs = vi.mocked(prisma.contact.findMany).mock.calls[0]?.[0] as Prisma.ContactFindManyArgs;
+    const where = callArgs?.where;
+    // Khẳng định dương tính thay vì .toBeUndefined()
+    expect(where).toEqual({ orgId: 'o1', mergedInto: null });
     
     expect(json.contacts[0].redacted).toBe(true);
   });
@@ -145,9 +151,9 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts/stats' });
     expect(res.statusCode).toBe(200);
     
-    const callArgs = vi.mocked(prisma.contact.count).mock.calls[0]?.[0];
-    const where = callArgs?.where as any;
-    expect(where?.AND).toBeDefined();
+    const callArgs = vi.mocked(prisma.contact.count).mock.calls[0]?.[0] as Prisma.ContactCountArgs;
+    const where = callArgs?.where;
+    expect(where).toEqual(expect.objectContaining({ orgId: 'o1', mergedInto: null, AND: expect.any(Array) }));
   });
   
   it('Stats skips scope filter for admin', async () => {
@@ -158,9 +164,10 @@ describe('contact-routes scope and privacy', () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/contacts/stats' });
     expect(res.statusCode).toBe(200);
     
-    const callArgs = vi.mocked(prisma.contact.count).mock.calls[0]?.[0];
-    const where = callArgs?.where as any;
-    expect(where?.AND).toBeUndefined();
+    const callArgs = vi.mocked(prisma.contact.count).mock.calls[0]?.[0] as Prisma.ContactCountArgs;
+    const where = callArgs?.where;
+    // Khẳng định dương tính thay vì .toBeUndefined()
+    expect(where).toEqual({ orgId: 'o1', mergedInto: null });
   });
 
   // 9. Friendships: chỉ trả rows thuộc nick trong scope.
@@ -170,8 +177,8 @@ describe('contact-routes scope and privacy', () => {
     
     await app.inject({ method: 'GET', url: '/api/v1/contacts/c1/friendships' });
     
-    const callArgs = vi.mocked(prisma.friend.findMany).mock.calls[0]?.[0];
-    const where = callArgs?.where as any;
+    const callArgs = vi.mocked(prisma.friend.findMany).mock.calls[0]?.[0] as Prisma.FriendFindManyArgs;
+    const where = callArgs?.where;
     expect(where?.zaloAccountId).toEqual({ in: ['acc1'] });
   });
 

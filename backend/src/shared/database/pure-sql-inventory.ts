@@ -1,7 +1,7 @@
 /**
  * pure-sql-inventory.ts — Single Source of Truth for Pure-SQL Objects
  *
- * Danh mục 15 object thuần-SQL (10 CHECK Constraints + 5 Partial Unique Indexes)
+ * Danh mục 16 object thuần-SQL (10 CHECK Constraints + 6 Partial Unique Indexes)
  * không thể quản lý tự động qua Prisma schema file và cần kiểm thử bảo vệ ở Cổng 6.
  *
  * LƯU Ý VỀ PHIÊN BẢN POSTGRESQL (Việc 6 / #71):
@@ -110,14 +110,19 @@ export const REQUIRED_PARTIAL_INDEXES: PureSqlIndexSpec[] = [
     table: 'department_members',
     expectedDef: "CREATE UNIQUE INDEX uniq_one_leader_per_dept ON public.department_members USING btree (department_id) WHERE (dept_role = 'leader'::text)",
   },
+  {
+    name: 'zalo_account_status_log_one_open_per_account_idx',
+    table: 'zalo_account_status_log',
+    expectedDef: 'CREATE UNIQUE INDEX zalo_account_status_log_one_open_per_account_idx ON public.zalo_account_status_log USING btree (account_id) WHERE (ended_at IS NULL)',
+  },
 ];
 
 /**
- * Danh sách loại trừ tường minh cho các partial index thuộc migration cũ hoặc hệ thống (Việc 4 / #69)
+ * Danh sách loại trừ tường minh cho các partial index thuộc migration cũ hoặc tối ưu hiệu năng (Việc 4 / #69, #75)
+ * - user_privacy_sessions_active_idx: index không unique, chỉ tối ưu tốc độ hot path, mất không làm sai dữ liệu
  */
 export const EXCLUDED_PARTIAL_INDEXES: Set<string> = new Set([
   'user_privacy_sessions_active_idx',
-  'zalo_account_status_log_one_open_per_account_idx',
 ]);
 
 /**

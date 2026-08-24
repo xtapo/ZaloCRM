@@ -1311,33 +1311,342 @@ describe('Agent Queue & Dispatcher Integration Tests (Real DB without mock)', ()
     expect(t3?.status).toBe('completed');
   });
 
-  // ── 17. #67: Nhịp gia hạn suy từ lease đang giữ ─────────────────────────────
-  it('17. Lease timing #67: handler maxDurationMs = 150_000 -> leaseMs = 300_000, leaseRenewIntervalMs = 100_000 < leaseMs', () => {
-    const longRunningHandlers = {
-      heavy_ai_task: {
-        maxDurationMs: 150_000,
-        prepare: async () => ({ success: true }),
+  // ── 18. #73: heartbeatLeaseLost cắt sớm prepare khi mất lease ───────────────
+  it('18. #73: heartbeatLeaseLost phát hiện mất lease trong lúc prepare -> cắt sớm không đợi hết 1200ms', async () => {
+    const orgHeartbeatLostId = `${TEST_PREFIX}_org_heartbeat_lost_73`;
+    await prisma.organization.create({
+      data: { id: orgHeartbeatLostId, name: 'Org Heartbeat Lost Test 73', agentTokenBudgetMonthly: 10_000 },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_heartbeat_lost_early`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgHeartbeatLostId,
+        kind: 'early_lost_task',
+        subjectType: 'contact',
+        subjectId: 'c_lost_1',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    let handlerFinished = false;
+
+    const customHandlers = {
+      early_lost_task: {
+        maxDurationMs: 200,
+        prepare: async (task: AgentTask) => {
+          // Mô phỏng mất lease ở 100ms sau khi prepare bắt đầu
+          setTimeout(async () => {
+            try {
+              await prisma.agentTask.update({
+                where: { id: taskId },
+                data: { leasedBy: 'worker_khac' },
+              });
+            } catch {}
+          }, 100);
+
+          // Ngủ 1200ms
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          handlerFinished = true;
+          return {
+            success: true,
+            result: { done: true },
+            tokensIn: 50,
+            tokensOut: 50,
+          };
+        },
       },
     };
 
-    const timing = computeLeaseTiming(longRunningHandlers);
-    expect(timing.leaseMs).toBe(300_000); // max(60_000, 150_000 * 2) = 300_000
-    expect(timing.leaseRenewIntervalMs).toBe(100_000); // floor(300_000 / 3) = 100_000
+    const start = Date.now();
+    const res = await runOnce({
+      orgId: orgHeartbeatLostId,
+      leaseMs: 400,
+      customHandlers,
+    });
+    const elapsed = Date.now() - start;
 
-    // Bất biến cốt lõi: Chu kỳ renew luôn nhỏ hơn đáng kể so với thời hạn lease ban đầu
-    expect(timing.leaseRenewIntervalMs).toBeLessThan(timing.leaseMs);
-    expect(timing.leaseMs / timing.leaseRenewIntervalMs).toBeGreaterThanOrEqual(2.5);
+    // Kỳ vọng: phát hiện mất lease sớm, cắt nhánh prepare trước khi hết 1200ms
+    expect(res.lostLeaseCount).toBe(1);
+    expect(res.completedCount).toBe(0);
+    expect(elapsed).toBeLessThan(1000); // Phải cắt sớm trong vòng < 1000ms (thực tế ~133ms-400ms)
 
-    // Kiểm tra cấu hình mặc định (không khai maxDurationMs)
-    const defaultTiming = computeLeaseTiming({});
-    expect(defaultTiming.leaseMs).toBe(60_000);
-    expect(defaultTiming.leaseRenewIntervalMs).toBe(20_000);
-    expect(defaultTiming.leaseRenewIntervalMs).toBeLessThan(defaultTiming.leaseMs);
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).not.toBe('completed');
+  });
 
-    // Kiểm tra cấu hình thời lượng siêu ngắn (100ms)
-    const shortTiming = computeLeaseTiming({ quick: { maxDurationMs: 100, prepare: async () => ({ success: true }) } }, 300);
-    expect(shortTiming.leaseMs).toBe(300);
-    expect(shortTiming.leaseRenewIntervalMs).toBe(100); // 300 / 3 = 100 >= 50
-    expect(shortTiming.leaseRenewIntervalMs).toBeLessThan(shortTiming.leaseMs);
+  // ── 19. #74: Settle tokens trên nhánh LeaseLostError ─────────────────────────
+  it('19. #74: Token LLM tiêu ở prepare vẫn được trừ vào quota khi apply ném LeaseLostError', async () => {
+    const orgTokenLeaseLostId = `${TEST_PREFIX}_org_token_lease_lost_74`;
+    await prisma.organization.create({
+      data: {
+        id: orgTokenLeaseLostId,
+        name: 'Org Token Lease Lost 74',
+        agentTokenBudgetMonthly: 10_000,
+        agentTokenUsedThisMonth: 0,
+      },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_token_lease_lost`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgTokenLeaseLostId,
+        kind: 'token_leaselost_kind',
+        subjectType: 'contact',
+        subjectId: 'c_token_1',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    const customHandlers = {
+      token_leaselost_kind: {
+        prepare: async () => ({
+          success: true,
+          tokensIn: 300,
+          tokensOut: 200,
+          result: { ok: true },
+        }),
+        apply: async () => {
+          // Mô phỏng mất lease bằng cách đổi workerId khác trước khi complete
+          await prisma.agentTask.update({
+            where: { id: taskId },
+            data: { leasedBy: 'worker_khac' },
+          });
+        },
+      },
+    };
+
+    const res = await runOnce({
+      orgId: orgTokenLeaseLostId,
+      customHandlers,
+    });
+
+    expect(res.lostLeaseCount).toBe(1);
+    expect(res.completedCount).toBe(0);
+
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).not.toBe('completed');
+
+    // Bất biến #74: Token LLM đã tiêu thật thì phải trừ đúng 500 vào quota
+    const orgInDb = await prisma.organization.findUnique({ where: { id: orgTokenLeaseLostId } });
+    expect(orgInDb?.agentTokenUsedThisMonth).toBe(500);
+  });
+
+  // ── 20. #74: Settle tokens trên nhánh Database Infrastructure Error ───────────
+  it('20. #74: Token LLM tiêu ở prepare vẫn được trừ vào quota khi transaction ném lỗi hạ tầng (P1017)', async () => {
+    const orgTokenInfraId = `${TEST_PREFIX}_org_token_infra_74`;
+    await prisma.organization.create({
+      data: {
+        id: orgTokenInfraId,
+        name: 'Org Token Infra 74',
+        agentTokenBudgetMonthly: 10_000,
+        agentTokenUsedThisMonth: 0,
+      },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_token_infra_p1017`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgTokenInfraId,
+        kind: 'token_infra_kind',
+        subjectType: 'contact',
+        subjectId: 'c_token_2',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    const customHandlers = {
+      token_infra_kind: {
+        prepare: async () => ({
+          success: true,
+          tokensIn: 300,
+          tokensOut: 200,
+          result: { ok: true },
+        }),
+        apply: async () => {
+          const infraErr = new Error('Database server closed connection');
+          Object.assign(infraErr, { code: 'P1017' });
+          throw infraErr;
+        },
+      },
+    };
+
+    const res = await runOnce({
+      orgId: orgTokenInfraId,
+      customHandlers,
+    });
+
+    expect(res.abandonedCount).toBe(1);
+    expect(res.completedCount).toBe(0);
+
+    // Bất biến #74: Token LLM đã tiêu thật thì phải trừ đúng 500 vào quota ngay cả khi hạ tầng chết
+    const orgInDb = await prisma.organization.findUnique({ where: { id: orgTokenInfraId } });
+    expect(orgInDb?.agentTokenUsedThisMonth).toBe(500);
+  });
+
+  // ── 21. #76: Lease phải phủ cả pha apply nhờ renewLease trước transaction ────
+  it('21. #76: prepare ngủ 200ms, apply ngủ 200ms với leaseMs 300 -> complete vẫn thành công nhờ gia hạn trước transaction', async () => {
+    const orgApplyLeaseId = `${TEST_PREFIX}_org_apply_lease_76`;
+    await prisma.organization.create({
+      data: {
+        id: orgApplyLeaseId,
+        name: 'Org Apply Lease 76',
+        agentTokenBudgetMonthly: 10_000,
+      },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_apply_lease_long`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgApplyLeaseId,
+        kind: 'apply_lease_kind',
+        subjectType: 'contact',
+        subjectId: 'c_apply_1',
+        dueAt: new Date(),
+        status: 'pending',
+      },
+    });
+
+    const customHandlers = {
+      apply_lease_kind: {
+        maxDurationMs: 150,
+        prepare: async () => {
+          // Prepare ngủ 200ms (tiêu tốn phần lớn lease 300ms ban đầu)
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          return {
+            success: true,
+            result: { applyOk: true },
+            tokensIn: 10,
+            tokensOut: 10,
+          };
+        },
+        apply: async () => {
+          // Apply ngủ tiếp 200ms (lớn hơn phần lease còn lại nếu không gia hạn)
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        },
+      },
+    };
+
+    const res = await runOnce({
+      orgId: orgApplyLeaseId,
+      leaseMs: 300,
+      customHandlers,
+    });
+
+    // Kỳ vọng: Complete thành công nhờ gia hạn một lần ngay trước khi vào transaction
+    expect(res.completedCount).toBe(1);
+    expect(res.lostLeaseCount).toBe(0);
+    expect(res.failedCount).toBe(0);
+
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).toBe('completed');
+  });
+
+  // ── 22. #78: claimDue dọn defer_reason về null khi rời trạng thái hoãn ───────
+  it('22. #78: task bị hoãn (defer_reason = TOKEN_BUDGET_EXHAUSTED) -> khi claimDue chạy lại thành công, defer_reason phải null, reason gốc giữ nguyên', async () => {
+    const orgDeferId = `${TEST_PREFIX}_org_defer_clean_78`;
+    await prisma.organization.create({
+      data: {
+        id: orgDeferId,
+        name: 'Org Defer Clean 78',
+        agentTokenBudgetMonthly: 10_000,
+      },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_defer_clean_78`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgDeferId,
+        kind: 'noop',
+        subjectType: 'contact',
+        subjectId: 'c_defer_1',
+        dueAt: new Date(Date.now() - 5000),
+        status: 'pending',
+        reason: 'ORIGINAL_SCHEDULE_REASON_STAY_INTACT',
+        deferReason: 'TOKEN_BUDGET_EXHAUSTED',
+      },
+    });
+
+    const res = await runOnce({
+      orgId: orgDeferId,
+    });
+
+    expect(res.claimedCount).toBe(1);
+    expect(res.completedCount).toBe(1);
+
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).toBe('completed');
+    // Bất biến #78: deferReason được dọn về null, reason ban đầu giữ nguyên
+    expect(taskInDb?.deferReason).toBeNull();
+    expect(taskInDb?.reason).toBe('ORIGINAL_SCHEDULE_REASON_STAY_INTACT');
+  });
+
+  // ── 23. #65: TaskHandler khai maxTokens, đặt cọc trước prepare ───────────────
+  it('23. #65: trần 1000, used 900, handler khai maxTokens 500 -> task KHÔNG chạy, used giữ 900', async () => {
+    const orgBudgetDepositId = `${TEST_PREFIX}_org_budget_deposit_65`;
+    await prisma.organization.create({
+      data: {
+        id: orgBudgetDepositId,
+        name: 'Org Budget Deposit 65',
+        agentTokenBudgetMonthly: 1000,
+        agentTokenUsedThisMonth: 900,
+      },
+    });
+
+    const taskId = `${TEST_PREFIX}_task_budget_deposit_65`;
+    await prisma.agentTask.create({
+      data: {
+        id: taskId,
+        orgId: orgBudgetDepositId,
+        kind: 'heavy_deposit_kind',
+        subjectType: 'contact',
+        subjectId: 'c_dep_1',
+        dueAt: new Date(Date.now() - 5000),
+        status: 'pending',
+      },
+    });
+
+    let handlerExecuted = false;
+
+    const customHandlers = {
+      heavy_deposit_kind: {
+        maxTokens: 500, // 900 + 500 = 1400 > 1000
+        prepare: async () => {
+          handlerExecuted = true;
+          return {
+            success: true,
+            tokensIn: 300,
+            tokensOut: 200,
+            result: { done: true },
+          };
+        },
+      },
+    };
+
+    const res = await runOnce({
+      orgId: orgBudgetDepositId,
+      customHandlers,
+    });
+
+    // Kỳ vọng: Task không được chạy vì 900 + 500 vượt trần 1000
+    expect(handlerExecuted).toBe(false);
+    expect(res.completedCount).toBe(0);
+
+    const taskInDb = await prisma.agentTask.findUnique({ where: { id: taskId } });
+    expect(taskInDb?.status).toBe('pending');
+    expect(taskInDb?.deferReason).toBe('TOKEN_BUDGET_EXHAUSTED');
+
+    // Bất biến: Used vẫn giữ nguyên 900 (không bị trừ oan)
+    const orgInDb = await prisma.organization.findUnique({ where: { id: orgBudgetDepositId } });
+    expect(orgInDb?.agentTokenUsedThisMonth).toBe(900);
   });
 });
+

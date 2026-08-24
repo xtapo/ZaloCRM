@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { prisma } from '../src/shared/database/prisma-client.js';
+import type { Prisma } from '@prisma/client';
 
 const mockUser = { id: 'u1', orgId: 'o1', role: 'member' };
 const mockScope = { accessibleIds: ['acc1'], isOrgAdmin: false };
@@ -13,7 +14,7 @@ vi.mock('../src/shared/database/prisma-client.js', () => ({
 }));
 
 vi.mock('../src/modules/auth/auth-middleware.js', () => ({
-  authMiddleware: async (req: any) => { req.user = mockUser; },
+  authMiddleware: async (req: { user?: typeof mockUser }) => { req.user = mockUser; },
 }));
 
 vi.mock('../src/modules/chat/chat-security-hooks.js', () => ({
@@ -21,7 +22,7 @@ vi.mock('../src/modules/chat/chat-security-hooks.js', () => ({
 }));
 
 describe('chat-routes scope filters', () => {
-  let app: any;
+  let app: ReturnType<typeof Fastify>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -45,8 +46,8 @@ describe('chat-routes scope filters', () => {
     const json = res.json();
     expect(json.conversations).toEqual([]);
     expect(json.total).toBe(0);
-    const callArgs1 = vi.mocked(prisma.conversation.findMany).mock.calls[0]?.[0];
-    expect((callArgs1?.where as any)?.zaloAccountId).toEqual({ in: [] });
+    const callArgs1 = vi.mocked(prisma.conversation.findMany).mock.calls[0]?.[0] as Prisma.ConversationFindManyArgs;
+    expect(callArgs1?.where?.zaloAccountId).toEqual({ in: [] });
   });
 
   it('user with role NOT member and NOT org admin -> filtered by scope', async () => {
@@ -56,8 +57,8 @@ describe('chat-routes scope filters', () => {
 
     const res = await app.inject({ method: 'GET', url: '/api/v1/conversations' });
     expect(res.statusCode).toBe(200);
-    const callArgs2 = vi.mocked(prisma.conversation.findMany).mock.calls[0]?.[0];
-    expect((callArgs2?.where as any)?.zaloAccountId).toEqual({ in: ['acc2'] });
+    const callArgs2 = vi.mocked(prisma.conversation.findMany).mock.calls[0]?.[0] as Prisma.ConversationFindManyArgs;
+    expect(callArgs2?.where?.zaloAccountId).toEqual({ in: ['acc2'] });
   });
 
   it('out of scope accountId to /conversations -> 403', async () => {

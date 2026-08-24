@@ -59,11 +59,11 @@ npx prisma migrate diff \
 
 ---
 
-## Bước 2b: Bảng Checklist 15 Object Thuần-SQL (Bắt Buộc)
+## Bước 2b: Bảng Checklist 16 Object Thuần-SQL (Bắt Buộc)
 
-> **MỘT NGUỒN SỰ THẬT (Single Source of Truth)**: Toàn bộ danh mục 15 object và biểu thức SQL định nghĩa được lưu trữ duy nhất tại file mã nguồn [pure-sql-inventory.ts](file:///backend/src/shared/database/pure-sql-inventory.ts) và được tự động kiểm thử tại Cổng 6 (`verify-pure-sql-objects.ts`).
+> **MỘT NGUỒN SỰ THẬT (Single Source of Truth)**: Toàn bộ danh mục 16 object và biểu thức SQL định nghĩa được lưu trữ duy nhất tại file mã nguồn [pure-sql-inventory.ts](file:///backend/src/shared/database/pure-sql-inventory.ts) và được tự động kiểm thử tại Cổng 6 (`verify-pure-sql-objects.ts`).
 
-Chạy truy vấn SQL trực tiếp trên database Production để kiểm tra sự tồn tại của toàn bộ 15 object thuần-SQL:
+Chạy truy vấn SQL trực tiếp trên database Production để kiểm tra sự tồn tại của toàn bộ 16 object thuần-SQL:
 
 ```sql
 -- 1. Kiểm tra 10 CHECK constraints
@@ -73,7 +73,7 @@ WHERE contype::text = 'c'
   AND connamespace = 'public'::regnamespace
 ORDER BY conname;
 
--- 2. Kiểm tra 5 Partial Unique Indexes
+-- 2. Kiểm tra 6 Partial Unique Indexes
 SELECT indexname::text, indexdef::text AS def 
 FROM pg_indexes 
 WHERE schemaname = 'public' 
@@ -81,7 +81,7 @@ WHERE schemaname = 'public'
 ORDER BY indexname;
 ```
 
-### Danh Mục 15 Object Thuần-SQL Cần Hiện Diện
+### Danh Mục 16 Object Thuần-SQL Cần Hiện Diện
 
 | STT | Loại Object | Tên Constraint / Index | Bảng Áp Dụng |
 |---|---|---|---|
@@ -100,6 +100,7 @@ ORDER BY indexname;
 | 13 | PARTIAL UNIQUE INDEX | `facts_created_by_task_id_uniq` | `facts` |
 | 14 | PARTIAL UNIQUE INDEX | `uniq_one_deputy_per_dept` | `department_members` |
 | 15 | PARTIAL UNIQUE INDEX | `uniq_one_leader_per_dept` | `department_members` |
+| 16 | PARTIAL UNIQUE INDEX | `zalo_account_status_log_one_open_per_account_idx` | `zalo_account_status_log` |
 
 ---
 
@@ -122,7 +123,7 @@ Nếu cơ sở dữ liệu production trước đây được tạo bằng `db p
 > [!CAUTION]
 > **QUY TẮC NGHIÊM NGẶT VỀ CUSTOM SQL (BẮT BUỘC TUÂN THỦ)**:
 > - **Các migration thuần tự chữa custom SQL TUYỆT ĐỐI KHÔNG ĐƯỢC DÙNG `migrate resolve --applied`** mà bắt buộc phải để `prisma migrate deploy` chạy thật ở Bước 5.
-> - **Các migration vừa tạo bảng vừa chứa custom SQL ban đầu BUỘC PHẢI `resolve --applied`** (để tránh lỗi bảng đã tồn tại), phần custom SQL của chúng đã được các migration tự chữa `20260817040000` và `20260817050000` phủ lại 100%.
+> - **Các migration vừa tạo bảng vừa chứa custom SQL ban đầu BUỘC PHẢI `resolve --applied`** (để tránh lỗi bảng đã tồn tại), phần custom SQL của chúng đã được các migration tự chữa `20260817040000`, `20260817050000` và `20260817070000` phủ lại 100%.
 
 ### 1. Nhóm Migration Vừa Tạo Bảng Vừa Chứa Custom SQL (Được phép `resolve --applied` vì đã có migration tự chữa phủ lại):
 - `20260521020000_rbac_phase_phan_quyen` (Tạo bảng phòng ban + CHECK constraints RBAC)
@@ -136,12 +137,13 @@ Nếu cơ sở dữ liệu production trước đây được tạo bằng `db p
 5. `20260817040000_repair_pure_sql_objects`
 6. `20260817050000_repair_rbac_privacy_checks`
 7. `20260817060000_add_defer_reason_to_agent_tasks`
+8. `20260817070000_repair_uptime_unique_index`
 
 ---
 
 ## Bước 5: Chạy `migrate deploy` và Đổi CMD Dockerfile Production
 
-Chạy migration deploy để tự động áp dụng và tự chữa toàn bộ 15 object thuần-SQL trên Production:
+Chạy migration deploy để tự động áp dụng và tự chữa toàn bộ 16 object thuần-SQL trên Production:
 
 ```bash
 npx prisma migrate deploy --url "$PROD_DATABASE_URL"
@@ -163,13 +165,13 @@ Mỗi khi thêm một CHECK constraint hoặc Partial Index mới vào codebase:
    ```bash
    bash scripts/verify-self-heal.sh
    ```
-   Script sẽ tự động dựng database nháp, xóa sạch 15 object, khẳng định Gate 6 chặn (ĐỎ), áp dụng migration tự chữa và khẳng định Gate 6 xanh (XANH).
+   Script sẽ tự động dựng database nháp, xóa sạch 16 object, khẳng định Gate 6 chặn (ĐỎ), áp dụng migration tự chữa và khẳng định Gate 6 xanh (XANH).
 
 ---
 
 ## Bước 7: Khởi Động Container Production
 
-Khi script trả về `🎉 [GATE 6 HOÀN TẤT] Toàn bộ 15/15 object thuần-SQL đều toàn vẹn theo đẳng thức hai chiều`:
+Khi script trả về `🎉 [GATE 6 HOÀN TẤT] Toàn bộ 16/16 object thuần-SQL đều toàn vẹn theo đẳng thức hai chiều`:
 
 1. Khởi động lại container Production (với CMD `npx prisma migrate deploy && node dist/app.js` đã đóng gói trong `docker/Dockerfile`):
    ```bash

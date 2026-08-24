@@ -12,7 +12,7 @@ import {
   CONTACT_LITE_SELECT,
   toFriendDto,
   buildFriendUpdatedPayload,
-} from '../src/shared/friend-serializer.js';
+} from '../../src/shared/friend-serializer.js';
 
 describe('FRIEND_INCLUDE shape', () => {
   it('includes statusRef and zaloAccount relations', () => {

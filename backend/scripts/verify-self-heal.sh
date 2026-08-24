@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# verify-self-heal.sh — Kiểm thử kịch bản tự phục hồi (Self-Healing) cho 15 object thuần-SQL (#68)
+# verify-self-heal.sh — Kiểm thử kịch bản tự phục hồi (Self-Healing) cho 16 object thuần-SQL (#68, #75)
 #
 # Quy trình:
 # 1. Dựng database nháp zalocrm_repairtest và chạy migrate deploy.
-# 2. Xóa sạch cả 15 object (10 CHECK + 5 Partial Unique Indexes).
-# 3. Chạy Gate 6 -> Khẳng định ĐỎ (thiếu 15 object).
-# 4. Chạy thủ công các migration tự phục hồi (20260817040000, 20260817050000).
+# 2. Xóa sạch cả 16 object (10 CHECK + 6 Partial Unique Indexes).
+# 3. Chạy Gate 6 -> Khẳng định ĐỎ (thiếu 16 object).
+# 4. Chạy thủ công các migration tự phục hồi (20260817040000, 20260817050000, 20260817070000).
 # 5. Chạy Gate 6 -> Khẳng định XANH (khớp 100% biểu thức).
 # 6. Dọn dẹp database nháp.
 
@@ -65,7 +65,7 @@ echo "========================================================"
 DATABASE_URL="${REPAIR_DB_URL}" npx prisma migrate deploy
 
 echo "========================================================"
-echo "==> 3. Giả lập mất mát: Xóa toàn bộ 15 object thuần-SQL..."
+echo "==> 3. Giả lập mất mát: Xóa toàn bộ 16 object thuần-SQL..."
 echo "========================================================"
 run_sql "${TEST_DB_NAME}" << 'EOF'
 ALTER TABLE agent_tasks DROP CONSTRAINT IF EXISTS agent_tasks_status_check;
@@ -84,10 +84,11 @@ DROP INDEX IF EXISTS fact_suggestions_created_by_task_id_uniq;
 DROP INDEX IF EXISTS facts_created_by_task_id_uniq;
 DROP INDEX IF EXISTS uniq_one_deputy_per_dept;
 DROP INDEX IF EXISTS uniq_one_leader_per_dept;
+DROP INDEX IF EXISTS zalo_account_status_log_one_open_per_account_idx;
 EOF
 
 echo "========================================================"
-echo "==> 4. Kiểm tra Cổng 6 (Phải ĐỎ do thiếu 15 object)..."
+echo "==> 4. Kiểm tra Cổng 6 (Phải ĐỎ do thiếu 16 object)..."
 echo "========================================================"
 set +e
 DATABASE_URL="${REPAIR_DB_URL}" npx tsx scripts/verify-pure-sql-objects.ts
@@ -95,16 +96,17 @@ GATE6_EXIT=$?
 set -e
 
 if [ ${GATE6_EXIT} -eq 0 ]; then
-  echo "❌ [LỖI] Gate 6 đáng lẽ phải ĐỎ khi thiếu 15 object nhưng lại XANH!"
+  echo "❌ [LỖI] Gate 6 đáng lẽ phải ĐỎ khi thiếu 16 object nhưng lại XANH!"
   exit 1
 fi
-echo "✅ Gate 6 đã chặn đúng khi 15 object bị xóa."
+echo "✅ Gate 6 đã chặn đúng khi 16 object bị xóa."
 
 echo "========================================================"
 echo "==> 5. Chạy SQL tự phục hồi (Self-Healing migrations)..."
 echo "========================================================"
 run_sql_file "${TEST_DB_NAME}" prisma/migrations/20260817040000_repair_pure_sql_objects/migration.sql
 run_sql_file "${TEST_DB_NAME}" prisma/migrations/20260817050000_repair_rbac_privacy_checks/migration.sql
+run_sql_file "${TEST_DB_NAME}" prisma/migrations/20260817070000_repair_uptime_unique_index/migration.sql
 
 echo "========================================================"
 echo "==> 6. Kiểm tra Cổng 6 sau khi phục hồi (Phải XANH)..."
@@ -116,4 +118,5 @@ echo "==> 7. Dọn dẹp database nháp..."
 echo "========================================================"
 run_sql postgres "DROP DATABASE IF EXISTS ${TEST_DB_NAME};"
 
-echo "🎉 [THÀNH CÔNG] Cơ chế tự phục hồi (Self-Healing) cho 15 object thuần-SQL hoạt động hoàn hảo!"
+echo "🎉 [THÀNH CÔNG] Cơ chế tự phục hồi (Self-Healing) cho 16 object thuần-SQL hoạt động hoàn hảo!"
+

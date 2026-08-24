@@ -9,6 +9,7 @@ export interface RunOnceOptions {
   now?: Date;
   limit?: number;
   leaseMs?: number;
+  kindFilter?: string[] | string;
   customHandlers?: Record<string, TaskHandler<any>>;
 }
 
@@ -37,6 +38,10 @@ const DEFAULT_HANDLERS: Record<string, TaskHandler<any>> = {
  * #67: Tính toán leaseMs và chu kỳ renewLease (leaseRenewIntervalMs) dựa trên các handler đã đăng ký.
  * - leaseMs = Math.max(60_000, maxHandlerDurationMs * 2)
  * - leaseRenewIntervalMs = Math.max(Math.floor(leaseMs / 3), 50)
+ *
+ * Ghi chú đánh đổi kiến trúc #77:
+ * leaseMs lấy theo handler chậm nhất kéo dài thời gian phục hồi của mọi task trong lô nếu có sự cố.
+ * Có thể sử dụng tùy chọn `kindFilter` trong RunOnceOptions để phân luồng/nhóm hàng đợi theo kind.
  */
 export function computeLeaseTiming(
   handlers: Record<string, TaskHandler<any>>,
@@ -86,6 +91,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
     workerId = process.env.WORKER_ID || `dispatcher-${process.pid}`,
     now = new Date(),
     limit = 10,
+    kindFilter,
     customHandlers = {},
   } = options;
 
@@ -152,7 +158,7 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   const handlers = { ...DEFAULT_HANDLERS, ...customHandlers };
   const { leaseMs, leaseRenewIntervalMs } = computeLeaseTiming(handlers, options.leaseMs);
 
-  const tasks = await claimDue({ orgId, workerId, limit, leaseMs });
+  const tasks = await claimDue({ orgId, workerId, limit, leaseMs, kindFilter });
 
   let completedCount = 0;
   let failedCount = 0;
@@ -171,8 +177,28 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
   for (let i = 0; i < tasks.length; i++) {
     const task = tasks[i];
 
-    // Bịt #53 & 5a: Kiểm tra ngân sách trước mỗi lượt prepare. Vượt trần thì reschedule các task còn lại và dừng vòng lặp
-    if (runningTokensUsed >= org.agentTokenBudgetMonthly) {
+    const handler = handlers[task.kind] || handlers['noop'];
+    if (!handler) {
+      try {
+        await fail({
+          orgId,
+          taskId: task.id,
+          workerId,
+          error: `No handler registered for kind '${task.kind}'`,
+        });
+        failedCount++;
+      } catch (fErr) {
+        if (fErr instanceof LeaseLostError) {
+          console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
+          lostLeaseCount++;
+        }
+      }
+      continue;
+    }
+
+    // Bịt #53, 5a & #65: Đặt cọc maxTokens trước khi vào prepare. Vượt trần thì reschedule các task còn lại và dừng vòng lặp
+    const estimatedTokens = typeof handler.maxTokens === 'number' ? handler.maxTokens : 0;
+    if (runningTokensUsed + estimatedTokens > org.agentTokenBudgetMonthly || runningTokensUsed >= org.agentTokenBudgetMonthly) {
       for (let j = i; j < tasks.length; j++) {
         try {
           await reschedule({
@@ -194,55 +220,58 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       break;
     }
 
-    const handler = handlers[task.kind] || handlers['noop'];
-    if (!handler) {
-      try {
-        await fail({
-          orgId,
-          taskId: task.id,
-          workerId,
-          error: `No handler registered for kind '${task.kind}'`,
-        });
-        failedCount++;
-      } catch (fErr) {
-        if (fErr instanceof LeaseLostError) {
-          console.warn(`[LEASE-LOST] Lease lost for task ${task.id} (worker: ${workerId})`);
-          lostLeaseCount++;
-        }
-      }
-      continue;
-    }
-
-    // ── PHA 1: prepare chạy NGOÀI giao dịch database kèm renewLeases heartbeat cả lô (#66, #67) ──
+    // ── PHA 1: prepare chạy NGOÀI giao dịch database kèm renewLeases heartbeat cả lô (#66, #67, #73) ──
     let heartbeatTimer: NodeJS.Timeout | null = null;
     let heartbeatLeaseLost = false;
+    let abortPrepare: ((err: Error) => void) | null = null;
+    const leaseLostPromise = new Promise<never>((_, reject) => {
+      abortPrepare = reject;
+    });
 
     const renewBatch = async () => {
       try {
-        const remainingTaskIds = tasks.slice(i).map((t) => t.id);
-        await renewLeases({
+        // 1. Task đang chạy: kiểm tra và gia hạn nghiêm ngặt (#73)
+        await renewLease({
           orgId,
-          taskIds: remainingTaskIds,
+          taskId: task.id,
           workerId,
           leaseMs,
         });
+
+        // 2. Các task còn lại trong lô: gia hạn khoan dung (#66)
+        const waitingTaskIds = tasks.slice(i + 1).map((t) => t.id);
+        if (waitingTaskIds.length > 0) {
+          await renewLeases({
+            orgId,
+            taskIds: waitingTaskIds,
+            workerId,
+            leaseMs,
+          });
+        }
       } catch (renewErr) {
         if (renewErr instanceof LeaseLostError) {
           heartbeatLeaseLost = true;
           if (heartbeatTimer) clearInterval(heartbeatTimer);
+          if (abortPrepare) abortPrepare(renewErr);
         } else {
           console.error(`[LEASE-RENEW-ERR] Unexpected error renewing leases for batch starting at task ${task.id}:`, renewErr);
         }
       }
     };
 
-    // 2b. Beat đầu tiên chạy NGAY khi vào prepare, không chờ hết chu kỳ đầu
-    await renewBatch();
+    // #79: Beat đầu tiên chạy NGAY ở task đầu tiên (i === 0). Các task thứ hai trở đi (i > 0)
+    // không cần beat đồng bộ lặp lại vì setInterval của task trước đã phủ chu kỳ gia hạn.
+    if (i === 0) {
+      await renewBatch();
+    }
     heartbeatTimer = setInterval(renewBatch, leaseRenewIntervalMs);
 
     let prepared: PreparedTaskResult;
     try {
-      prepared = await handler.prepare(task, ctx);
+      prepared = await Promise.race([
+        handler.prepare(task, ctx),
+        leaseLostPromise,
+      ]);
       if (heartbeatLeaseLost) {
         throw new LeaseLostError(task.id, workerId);
       }
@@ -275,6 +304,27 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
     }
 
+    // #74: Helper settleTokens trừ token vào quota của org và cập nhật runningTokensUsed
+    // token LLM đã tiêu thật trước khi biết giao dịch thành công hay không
+    let tokensSettled = false;
+    const settleTokens = async (prep?: PreparedTaskResult) => {
+      if (tokensSettled || !prep) return;
+      tokensSettled = true;
+      const totalTokens = (prep.tokensIn || 0) + (prep.tokensOut || 0);
+      if (totalTokens > 0) {
+        runningTokensUsed += totalTokens;
+        try {
+          await consumeTokens({
+            orgId,
+            tokensIn: prep.tokensIn || 0,
+            tokensOut: prep.tokensOut || 0,
+          });
+        } catch (tokenErr) {
+          console.error(`[WARN] [dispatcher] Failed to consume tokens for task ${task.id}:`, tokenErr);
+        }
+      }
+    };
+
     // Nếu prepare trả về thất bại logic
     if (!prepared.success) {
       try {
@@ -292,24 +342,31 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         }
       }
 
-      // Vẫn consume token nếu prepare đã gọi LLM/network và tiêu thụ token
-      const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
-      if (totalTokens > 0) {
-        runningTokensUsed += totalTokens;
-        try {
-          await consumeTokens({
-            orgId,
-            tokensIn: prepared.tokensIn || 0,
-            tokensOut: prepared.tokensOut || 0,
-          });
-        } catch (tokenErr) {
-          console.error(`[WARN] [dispatcher] Failed to consume tokens on prepare failure for task ${task.id}:`, tokenErr);
-        }
-      }
+      // Vẫn consume token nếu prepare đã gọi LLM/network và tiêu thụ token (#74)
+      await settleTokens(prepared);
       continue;
     }
 
-    // ── PHA 2: MỘT prisma.$transaction gồm apply(tx) + complete(tx) ──
+    // ── PHA 2: MỘT prisma.$transaction gồm apply(tx) + complete(tx) (#76) ──
+    // 4a. Gia hạn lease một lần ngay TRƯỚC khi vào $transaction (ngoài transaction)
+    try {
+      await renewLease({
+        orgId,
+        taskId: task.id,
+        workerId,
+        leaseMs,
+      });
+    } catch (renewBeforeTxErr) {
+      if (renewBeforeTxErr instanceof LeaseLostError) {
+        console.warn(`[LEASE-LOST] Lease lost before entering transaction for task ${task.id} (worker: ${workerId})`);
+        lostLeaseCount++;
+        // #74: token LLM đã tiêu thật trước khi biết giao dịch thành công hay không
+        await settleTokens(prepared);
+        continue;
+      }
+      console.error(`[LEASE-RENEW-ERR] Unexpected error renewing lease before transaction for task ${task.id}:`, renewBeforeTxErr);
+    }
+
     try {
       await prisma.$transaction(async (tx) => {
         if (handler.apply) {
@@ -324,16 +381,22 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         });
       });
       completedCount++;
+      // Sau khi apply và complete thành công, consume token trong quota của org (#74)
+      await settleTokens(prepared);
     } catch (txErr: unknown) {
       if (txErr instanceof LeaseLostError) {
         console.warn(`[LEASE-LOST] Lease lost during transaction for task ${task.id} (worker: ${workerId})`);
         lostLeaseCount++;
+        // #74: token LLM đã tiêu thật trước khi biết giao dịch thành công hay không
+        await settleTokens(prepared);
         continue;
       }
 
       if (isDatabaseInfrastructureError(txErr)) {
         console.error(`[CRITICAL] [dispatcher] Database transaction infrastructure error for task ${task.id} (org ${orgId}):`, txErr);
         abandonedCount++;
+        // #74: token LLM đã tiêu thật trước khi biết giao dịch thành công hay không
+        await settleTokens(prepared);
         continue;
       }
 
@@ -353,36 +416,9 @@ export async function runOnce(options: RunOnceOptions): Promise<RunOnceResult> {
         }
       }
 
-      // Vẫn consume token nếu prepare đã tiêu thụ token trước khi apply ném lỗi logic
-      const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
-      if (totalTokens > 0) {
-        runningTokensUsed += totalTokens;
-        try {
-          await consumeTokens({
-            orgId,
-            tokensIn: prepared.tokensIn || 0,
-            tokensOut: prepared.tokensOut || 0,
-          });
-        } catch (tokenErr) {
-          console.error(`[WARN] [dispatcher] Failed to consume tokens on apply failure for task ${task.id}:`, tokenErr);
-        }
-      }
+      // Vẫn consume token nếu prepare đã tiêu thụ token trước khi apply ném lỗi logic (#74)
+      await settleTokens(prepared);
       continue;
-    }
-
-    // Sau khi apply và complete thành công, consume token trong quota của org
-    const totalTokens = (prepared.tokensIn || 0) + (prepared.tokensOut || 0);
-    if (totalTokens > 0) {
-      runningTokensUsed += totalTokens;
-      try {
-        await consumeTokens({
-          orgId,
-          tokensIn: prepared.tokensIn || 0,
-          tokensOut: prepared.tokensOut || 0,
-        });
-      } catch (tokenErr) {
-        console.error(`[WARN] [dispatcher] Failed to consume tokens for task ${task.id}:`, tokenErr);
-      }
     }
   }
 

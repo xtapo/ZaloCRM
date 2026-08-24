@@ -9,7 +9,7 @@ import {
   checkCrossNickRecency,
   checkBlockArchived,
   checkRuleEnabled,
-} from '../src/modules/automation/engine/gate-evaluator.js';
+} from '../../src/modules/automation/engine/gate-evaluator.js';
 
 const at = (hour: number) => {
   const d = new Date(2026, 4, 20, hour, 0, 0); // May 20, 2026 — middle of project

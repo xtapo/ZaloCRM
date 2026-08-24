@@ -25,6 +25,13 @@ export interface TaskHandler<TWrites = unknown> {
   maxDurationMs?: number;
 
   /**
+   * Số lượng token ước tính tối đa (#65).
+   * Dùng để đặt cọc kiểm tra trần ngân sách trước khi vào prepare.
+   * Nếu runningTokensUsed + maxTokens > trần tháng -> hoãn task và dừng batch.
+   */
+  maxTokens?: number;
+
+  /**
    * Pha 1: prepare chạy NGOÀI giao dịch database.
    * Gọi LLM, Zalo API, tính toán...
    * TUYỆT ĐỐI KHÔNG GHI DATABASE TRONG PHA NÀY.

@@ -9,7 +9,7 @@ import {
   validateSteps,
   validateRuntimeRules,
   DEFAULT_RUNTIME_RULES,
-} from '../src/modules/automation/sequences/types.js';
+} from '../../src/modules/automation/sequences/types.js';
 
 describe('validateSteps', () => {
   it('accepts a valid 3-step sequence', () => {

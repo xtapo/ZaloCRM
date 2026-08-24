@@ -1,9 +1,9 @@
 /**
  * verify-pure-sql-objects.ts — CI Gate 6: Kiểm tra toàn vẹn các object thuần-SQL
  *
- * Kiểm tra 10 CHECK constraints và 5 Partial Unique Indexes (Tổng cộng 15 objects).
+ * Kiểm tra 10 CHECK constraints và 6 Partial Unique Indexes (Tổng cộng 16 objects).
  * - So khớp chính xác cả tên và biểu thức định nghĩa từ pure-sql-inventory.ts (chuẩn hóa khoảng trắng).
- * - Đẳng thức tập hợp hai chiều (Việc 4 / #69): Không thiếu object nào và không có object rác nào ngoài danh mục.
+ * - Đẳng thức tập hợp hai chiều (Việc 4 / #69, #75): Không thiếu object nào và không có object rác nào ngoài danh mục.
  */
 
 import { prisma } from '../src/shared/database/prisma-client.js';
@@ -25,7 +25,7 @@ interface IndexDefRow {
 }
 
 async function main() {
-  console.log('🔍 [GATE 6] Đang kiểm tra 15 object thuần-SQL trên database (Đẳng thức hai chiều)...');
+  console.log('🔍 [GATE 6] Đang kiểm tra 16 object thuần-SQL trên database (Đẳng thức hai chiều)...');
 
   let hasError = false;
 
@@ -167,8 +167,8 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`✅ [GATE 6] 5/5 Partial Unique Indexes đã hiện diện, khớp 100% biểu thức và không có index rác.`);
-  console.log('🎉 [GATE 6 HOÀN TẤT] Toàn bộ 15/15 object thuần-SQL đều toàn vẹn theo đẳng thức hai chiều.');
+  console.log(`✅ [GATE 6] 6/6 Partial Unique Indexes đã hiện diện, khớp 100% biểu thức và không có index rác.`);
+  console.log('🎉 [GATE 6 HOÀN TẤT] Toàn bộ 16/16 object thuần-SQL đều toàn vẹn theo đẳng thức hai chiều.');
 }
 
 main()

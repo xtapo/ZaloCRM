@@ -9,7 +9,7 @@ import {
   validateEventFilter,
   TRIGGER_CATALOG,
   SUPPORTED_EVENT_TYPES,
-} from '../src/modules/automation/triggers/types.js';
+} from '../../src/modules/automation/triggers/types.js';
 
 describe('event type guards', () => {
   it('accepts the catalog event types', () => {

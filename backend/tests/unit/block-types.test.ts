@@ -8,7 +8,7 @@ import {
   validateBlockContent,
   isSupportedActionType,
   SUPPORTED_ACTION_TYPES,
-} from '../src/modules/automation/blocks/types.js';
+} from '../../src/modules/automation/blocks/types.js';
 
 describe('isSupportedActionType', () => {
   it('accepts the 3 phase-7 action types', () => {

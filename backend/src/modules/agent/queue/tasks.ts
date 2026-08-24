@@ -12,7 +12,7 @@
  */
 
 import { prisma, type PrismaTx } from '../../../shared/database/prisma-client.js';
-import type { Prisma, AgentTask } from '@prisma/client';
+import { Prisma, type AgentTask } from '@prisma/client';
 
 export class LeaseLostError extends Error {
   constructor(taskId: string, workerId?: string) {
@@ -26,6 +26,7 @@ export interface ClaimDueOptions {
   workerId: string;
   limit?: number;
   leaseMs?: number;
+  kindFilter?: string[] | string;
 }
 
 export interface CompleteOptions {
@@ -82,11 +83,12 @@ export const MAX_CLAIMS = 10;
  * - Bước 2: Claim các task pending có claim_count < 10 (RETURNING không bao giờ chứa hàng dead)
  */
 export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
-  const { orgId, workerId, limit = 10, leaseMs = 60_000 } = options;
+  const { orgId, workerId, limit = 10, leaseMs = 60_000, kindFilter } = options;
   if (!orgId || !workerId) return [];
 
   const leaseUntil = new Date(Date.now() + leaseMs);
   const now = new Date();
+  const kinds = kindFilter ? (Array.isArray(kindFilter) ? kindFilter : [kindFilter]) : null;
 
   // 1a. Tách riêng câu khai tử trước khi pick task (Việc 2a)
   await prisma.$executeRaw`
@@ -99,7 +101,8 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
       "updated_at" = ${now}
     WHERE "org_id" = ${orgId}
       AND "status" = 'pending'
-      AND "claim_count" >= ${MAX_CLAIMS};
+      AND "claim_count" >= ${MAX_CLAIMS}
+      ${kinds ? Prisma.sql`AND "kind" = ANY(${kinds})` : Prisma.empty};
   `;
 
   // 1b. Claim các task pending đến hạn (claim_count < MAX_CLAIMS)
@@ -110,6 +113,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
       "leased_by" = ${workerId},
       "leased_until" = ${leaseUntil},
       "claim_count" = "claim_count" + 1,
+      "defer_reason" = NULL,
       "updated_at" = ${now}
     WHERE "id" IN (
       SELECT "id"
@@ -118,6 +122,7 @@ export async function claimDue(options: ClaimDueOptions): Promise<AgentTask[]> {
         AND "status" = 'pending'
         AND "claim_count" < ${MAX_CLAIMS}
         AND "due_at" <= ${now}
+        ${kinds ? Prisma.sql`AND "kind" = ANY(${kinds})` : Prisma.empty}
       ORDER BY "priority" DESC, "due_at" ASC
       FOR UPDATE SKIP LOCKED
       LIMIT ${limit}
