@@ -1,5 +1,5 @@
 <template>
-  <v-menu offset-y :close-on-content-click="false" max-width="380">
+  <v-menu v-model="menuOpen" offset-y :close-on-content-click="false" max-width="380">
     <template #activator="{ props: menuProps }">
       <v-btn icon variant="text" v-bind="menuProps" class="mr-1">
         <v-badge
@@ -63,11 +63,13 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useNotifications, type NotificationItem } from '@/composables/use-notifications';
 
 const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
 const router = useRouter();
+const menuOpen = ref(false);
 
 function iconColor(type: string): string {
   return type === 'error' ? 'red' : type === 'warning' ? 'orange' : 'blue';
@@ -80,7 +82,10 @@ function iconFor(type: string): string {
 async function handleClick(n: NotificationItem) {
   await markRead(n);
   // Backend persist sẵn `link` theo từng loại thông báo — hết if-chain phía FE.
-  if (n.link) router.push(n.link);
+  if (n.link) {
+    menuOpen.value = false; // đóng đè menu trước khi điều hướng tới nội dung
+    router.push(n.link);
+  }
 }
 
 /** Thời gian tương đối tiếng Việt (vd "5 phút trước"). */

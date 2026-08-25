@@ -261,7 +261,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
         priority: 'high',
         title: `Nhóm "${profile?.crmName || conv.groupName || 'nhóm'}" chưa xử lý`,
         detail: 'Bạn phụ trách nhóm này — có tin nhắn chưa phản hồi quá 30 phút',
-        link: '/chat',
+        link: `/chat/${conv.id}`,
         createdAt: conv.lastMessageAt ?? new Date(),
       });
     }
@@ -304,7 +304,8 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
       priority: 'medium',
       title: `${name} vừa nhắn tin`,
       detail: preview || `[${msg.contentType || 'tin nhắn'}]`,
-      link: '/chat',
+      // Deep-link thẳng vào hội thoại — ChatView hỗ trợ /chat/:convId sẵn.
+      link: `/chat/${conv.id}`,
       createdAt: msg.sentAt,
     });
   }

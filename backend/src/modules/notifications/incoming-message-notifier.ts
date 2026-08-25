@@ -27,6 +27,8 @@ export async function notifyIncomingMessage(input: {
     });
     // Nhóm có nguồn group_pending riêng; hội thoại lạ → bỏ qua.
     if (!conv || conv.threadType !== 'user') return;
+    // Deep-link thẳng vào hội thoại (ChatView hỗ trợ /chat/:convId).
+    const link = `/chat/${conv.id}`;
 
     const contact = await prisma.contact.findFirst({
       where: { conversations: { some: { id: conv.id } } },
@@ -64,7 +66,7 @@ export async function notifyIncomingMessage(input: {
             priority: 'medium',
             title: `${displayName} vừa nhắn tin`,
             detail,
-            link: '/chat',
+            link,
           },
         ], prefs));
       } catch (err) {

@@ -88,7 +88,7 @@ describe('incoming-message-notifier', () => {
       expect(row.dedupeKey).toBe('inmsg-msgX');
       expect(row.title).toContain('CRM Shop'); // crmName ưu tiên trước fullName
       expect(row.detail).toBe('Cho mình hỏi giá');
-      expect(row.link).toBe('/chat');
+      expect(row.link).toBe('/chat/convA'); // deep-link thẳng vào hội thoại
       expect(row.resolvedAt).toBeNull();
     }
   });
