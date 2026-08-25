@@ -14,6 +14,10 @@ import { backfillMissingFriends } from './backfill-missing-friends.js';
 import { backfillFriendDisplayName } from './backfill-friend-display-name.js';
 import { migrateStatusTable } from './status-migration.js';
 import { computeAggregateDisplay, AGGREGATE_INCLUDE } from './contact-aggregate-display.js';
+// FRIEND_INCLUDE — canonical include shape cho mọi endpoint trả Friend row
+// (xem friend-serializer.ts). Trước đây /friendships tự viết include thiếu
+// statusRef → FE child row mất chip trạng thái per-pair so với /contacts/:id.
+import { FRIEND_INCLUDE } from '../../shared/friend-serializer.js';
 import { runAutomationRules } from '../automation/automation-service.js';
 import { normalizePhone } from '../../shared/utils/phone.js';
 import { logActivity, computeDiff } from '../activity/activity-logger.js';
@@ -839,18 +843,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
 
       const friendships = await prisma.friend.findMany({
         where,
-        include: {
-          zaloAccount: {
-            select: {
-              id: true,
-              displayName: true,
-              phone: true,
-              zaloUid: true,
-              avatarUrl: true,
-              owner: { select: { id: true, fullName: true } },
-            },
-          },
-        },
+        include: FRIEND_INCLUDE,
         orderBy: { lastInboundAt: { sort: 'desc', nulls: 'last' } },
       });
       return { friendships };

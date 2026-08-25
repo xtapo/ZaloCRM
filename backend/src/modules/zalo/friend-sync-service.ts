@@ -154,23 +154,36 @@ export async function syncFriendsForAccount(
   // không phân biệt với "0 friends" thật, sale không biết sync fail.
   // Defensive Array.isArray normalize giữ nguyên (cho shape variants), nhưng lỗi SDK
   // (rate limit, network) bubble lên outer try/catch.
+  //
+  // 2026-08-25 — TÁCH 2 lời gọi SDK: getAllFriends là dữ liệu CHÍNH (fail → abort),
+  // nhưng getSentFriendRequests là dữ liệu PHỤ (pending_sent invitations). Zalo trả
+  // [zalo:112] cho endpoint này trên một số nick → trước đây fail cả sync → Friend
+  // table trống hoàn toàn dù danh sách bạn bè fetch được bình thường → KH có badge
+  // Zalo nhưng không mở được chat ("chưa có hội thoại"). Giờ: lỗi phụ chỉ log +
+  // continue với sentRequests=[], sync chính vẫn chạy.
   try {
     const liveRaw: any = await zaloOps.getAllFriends(accountId);
-    const sentRaw: any = await zaloOps.getSentFriendRequests(accountId);
     liveFriends = Array.isArray(liveRaw) ? liveRaw
       : Array.isArray(liveRaw?.data) ? liveRaw.data
       : Array.isArray(liveRaw?.items) ? liveRaw.items
       : [];
+  } catch (err) {
+    result.errors++;
+    logger.warn(`[friend-sync:${accountId}] SDK fetch friends failed:`, err);
+    await logSyncError(orgId, accountId, opts.trigger, err, { phase: 'sdk_fetch' });
+    result.durationMs = Date.now() - startedAt;
+    return result;
+  }
+  try {
+    const sentRaw: any = await zaloOps.getSentFriendRequests(accountId);
     sentRequests = Array.isArray(sentRaw) ? sentRaw
       : Array.isArray(sentRaw?.data) ? sentRaw.data
       : Array.isArray(sentRaw?.items) ? sentRaw.items
       : [];
   } catch (err) {
-    result.errors++;
-    logger.warn(`[friend-sync:${accountId}] SDK fetch failed:`, err);
-    await logSyncError(orgId, accountId, opts.trigger, err, { phase: 'sdk_fetch' });
-    result.durationMs = Date.now() - startedAt;
-    return result;
+    // Non-fatal: pending_sent list thiếu vẫn sync được accepted friends.
+    logger.warn(`[friend-sync:${accountId}] getSentFriendRequests failed (non-fatal, skip pending_sent):`, err);
+    await logSyncError(orgId, accountId, opts.trigger, err, { phase: 'sdk_fetch_pending' });
   }
 
   result.liveCount = liveFriends.length + sentRequests.length;

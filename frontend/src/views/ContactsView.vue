@@ -758,12 +758,14 @@ function onRowClick(e: MouseEvent, id: string) {
 async function fetchFriendships(contact: Contact) {
   friendshipLoading.value[contact.id] = true;
   try {
-    // GET /contacts/:id trả friends include statusRef per-pair (model B).
-    const res = await api.get<Contact & { friends?: ApiFriendship[] }>(`/contacts/${contact.id}`);
-    friendshipCache.value[contact.id] = (res.data.friends || []).map(f => mapFriendshipToChildRow(f, contact));
+    // GET /contacts/:id/friendships trả full Friend rows (FRIEND_INCLUDE chuẩn,
+    // không qua privacy redaction của GET /contacts/:id). Expand KH main-nick
+    // non-owned vẫn thấy child rows → nút chat hoạt động đúng.
+    const res = await api.get<{ friendships?: ApiFriendship[] }>(`/contacts/${contact.id}/friendships`);
+    friendshipCache.value[contact.id] = (res.data.friendships || []).map(f => mapFriendshipToChildRow(f, contact));
   } catch (err) {
-    console.error('[contact-detail] fetch error:', err);
-    friendshipCache.value[contact.id] = [];
+    console.error('[contact-detail] friendships fetch error:', err);
+    // Không cache mảng rỗng khi lỗi — goChat/toggleExpand sẽ refetch lần sau.
   } finally {
     friendshipLoading.value[contact.id] = false;
   }
@@ -1011,13 +1013,20 @@ function openDetail(c: Contact) {
  *  loại ra (bug cũ: chỉ push /chat?contactId → ChatView resolve được chỉ khi conv
  *  nằm trong list hiện tại → KH mới kết bạn/sync không mở được chat).
  *
- *  Nick ưu tiên: đang có conversation → đã KB (friend) → đang nhắn lạ → đầu list. */
+ *  Nick ưu tiên: đang có conversation → đã KB (friend) → đang nhắn lạ → đầu list.
+ *
+ *  Lấy friend rows qua GET /contacts/:id/friendships thay vì GET /contacts/:id:
+ *  detail endpoint áp privacy redaction (redactContact allowlist DROP mảng friends
+ *  khi KH có friend thuộc main-nick non-owned/unlock-PIN) → goChat nhìn thấy KH
+ *  như không có nick nào dù badge Zalo vẫn hiện → toast "chưa có hội thoại" sai.
+ *  /friendships trả full Friend rows (cùng FRIEND_INCLUDE chuẩn BE). */
 async function goChat(c: Contact) {
   let rows = friendshipCache.value[c.id];
-  if (!rows) {
+  // Cache rỗng có thể là cache lỗi/lưu trừu trước đây — luôn refetch khi trống.
+  if (!rows || rows.length === 0) {
     try {
-      const res = await api.get<Contact & { friends?: ApiFriendship[] }>(`/contacts/${c.id}`);
-      rows = (res.data.friends || []).map(f => mapFriendshipToChildRow(f, c));
+      const res = await api.get<{ friendships?: ApiFriendship[] }>(`/contacts/${c.id}/friendships`);
+      rows = (res.data.friendships || []).map(f => mapFriendshipToChildRow(f, c));
       friendshipCache.value[c.id] = rows;
     } catch {
       rows = [];
