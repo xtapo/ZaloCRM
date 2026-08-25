@@ -285,7 +285,17 @@ export function useChat() {
     // state đã được socket update → conv "tụt xuống xíu rồi nhảy lên top" flicker.
     if (cached) {
       logCacheEvent('hit', cacheKey);
-      conversations.value = mergeConvListPreserveDetail(conversations.value, cached.data);
+      let newConvs = mergeConvListPreserveDetail(conversations.value, cached.data);
+      if (selectedConvId.value) {
+        const isSelectedInNew = newConvs.some(c => c.id === selectedConvId.value);
+        if (!isSelectedInNew) {
+          const currentSelected = conversations.value.find(c => c.id === selectedConvId.value);
+          if (currentSelected) {
+            newConvs = [currentSelected, ...newConvs];
+          }
+        }
+      }
+      conversations.value = newConvs;
     } else {
       if (!opts?.bypassCache) logCacheEvent('miss', cacheKey);
       // Spinner chỉ hiện khi state thực sự rỗng (first load). bypassCache khi
@@ -303,7 +313,22 @@ export function useChat() {
       evictOldConvCacheIfNeeded();
       // Merge để giữ detail fields (Contact full ~50 field từ /conversations/:id)
       // không bị wipe bởi narrow list response (14 field).
-      conversations.value = mergeConvListPreserveDetail(conversations.value, fresh);
+      let newConvs = mergeConvListPreserveDetail(conversations.value, fresh);
+      
+      // Fix deep-link bug "không mở được chat ở mục khách hàng": 
+      // Nếu conv đang được select tồn tại trong state nhưng bị filter ra khỏi kết quả 
+      // của lần fetch này, ta phải giữ lại nó trong array để UI không bị blank.
+      if (selectedConvId.value) {
+        const isSelectedInNew = newConvs.some(c => c.id === selectedConvId.value);
+        if (!isSelectedInNew) {
+          const currentSelected = conversations.value.find(c => c.id === selectedConvId.value);
+          if (currentSelected) {
+            newConvs = [currentSelected, ...newConvs];
+          }
+        }
+      }
+      
+      conversations.value = newConvs;
     } catch (err) {
       console.error('Failed to fetch conversations:', err);
     } finally {
