@@ -23,7 +23,9 @@ export type ActivityCategory =
   | 'interaction'
   | 'system'
   | 'automation'
-  | 'security';
+  | 'security'
+  | 'auth'
+  | 'admin';
 
 export interface CategoryMeta {
   label: string;
@@ -43,6 +45,8 @@ export const CATEGORY_META: Record<ActivityCategory, CategoryMeta> = {
   system:        { label: 'Hệ thống',      icon: '⚙️', color: '#6b7280', defaultVisible: false },
   automation:    { label: 'Tự động (Bot)', icon: '🤖', color: '#0f6b34', defaultVisible: true }, // bao gồm auto_tag_change — sale cần thấy KH state change
   security:      { label: 'Bảo mật',       icon: '🛡️', color: '#ef4444', defaultVisible: true },
+  auth:          { label: 'Đăng nhập',     icon: '🔑', color: '#2563eb', defaultVisible: true },
+  admin:         { label: 'Quản trị',      icon: '🛠️', color: '#9333ea', defaultVisible: true },
 };
 
 /* Action-level metadata — icon đặc biệt + label động cho từng action.
@@ -118,6 +122,51 @@ export const ACTION_META: Record<string, ActionMeta> = {
   security_scope_regression: { label: 'Rò rỉ dữ liệu phát hiện', icon: '⚠️' },
   zalo_session_down:         { label: 'Zalo mất kết nối', icon: '🔴' },
   zalo_session_recovered:    { label: 'Zalo kết nối lại', icon: '🟢' },
+
+  // auth
+  auth_login:        { label: 'Đăng nhập', icon: '🔑' },
+  auth_login_failed: { label: 'Đăng nhập thất bại', icon: '⚠️' },
+  auth_setup:        { label: 'Khởi tạo hệ thống', icon: '🚀' },
+  password_change_self:   { label: 'Đổi mật khẩu (bản thân)', icon: '🔒' },
+  password_change_by_admin: { label: 'Admin đặt lại mật khẩu', icon: '🔑' },
+
+  // admin — users
+  user_create: { label: 'Tạo user', icon: '✨' },
+  user_update: { label: 'Cập nhật user' },
+  user_delete: { label: 'Vô hiệu hoá user', icon: '🚫' },
+  user_assign_permission_group: { label: 'Gán nhóm quyền', icon: '👤' },
+
+  // admin — permission groups
+  permission_group_create: { label: 'Tạo nhóm quyền', icon: '✨' },
+  permission_group_update: { label: 'Cập nhật nhóm quyền' },
+  permission_group_delete: { label: 'Xoá nhóm quyền', icon: '🗑️' },
+
+  // admin — departments
+  department_create:       { label: 'Tạo phòng ban', icon: '✨' },
+  department_update:       { label: 'Cập nhật phòng ban' },
+  department_delete:       { label: 'Xoá phòng ban', icon: '🗑️' },
+  department_member_add:    { label: 'Thêm thành viên phòng ban', icon: '➕' },
+  department_member_remove: { label: 'Gỡ thành viên phòng ban', icon: '➖' },
+
+  // admin — campaign & automation
+  campaign_create: { label: 'Tạo chiến dịch', icon: '✨' },
+  campaign_update: { label: 'Cập nhật chiến dịch' },
+  campaign_delete: { label: 'Xoá chiến dịch', icon: '🗑️' },
+  campaign_send:   { label: 'Gửi chiến dịch', icon: '📨' },
+  campaign_cancel: { label: 'Huỷ chiến dịch', icon: '❌' },
+  automation_rule_create: { label: 'Tạo rule tự động', icon: '✨' },
+  automation_rule_update: { label: 'Cập nhật rule tự động' },
+  automation_rule_delete: { label: 'Xoá rule tự động', icon: '🗑️' },
+
+  // integrations / zalo
+  integration_update:       { label: 'Cập nhật tích hợp', icon: '🔌' },
+  integration_delete:       { label: 'Xoá tích hợp', icon: '🗑️' },
+  zalo_account_connect:     { label: 'Kết nối Zalo', icon: '🟢' },
+  zalo_account_disconnect:  { label: 'Ngắt kết nối Zalo', icon: '🔴' },
+  zalo_credentials_export:  { label: 'Export credentials Zalo', icon: '⬆️' },
+  zalo_credentials_import:  { label: 'Import credentials Zalo', icon: '⬇️' },
+  zalo_access_grant: { label: 'Cấp quyền truy cập Zalo', icon: '🔓' },
+  zalo_access_revoke:{ label: 'Thu hồi quyền truy cập Zalo', icon: '🔐' },
 };
 
 export function categoryOf(action: string, fallback: ActivityCategory = 'system'): ActivityCategory {
@@ -146,6 +195,26 @@ export function categoryOf(action: string, fallback: ActivityCategory = 'system'
     security_scope_denied: 'security', privacy_locked_access: 'security',
     security_scope_regression: 'security', zalo_session_down: 'security',
     zalo_session_recovered: 'security',
+    // auth
+    auth_login: 'auth', auth_login_failed: 'auth', auth_setup: 'auth',
+    password_change_self: 'auth', password_change_by_admin: 'auth',
+    // admin — users & rbac
+    user_create: 'admin', user_update: 'admin', user_delete: 'admin',
+    user_assign_permission_group: 'admin',
+    permission_group_create: 'admin', permission_group_update: 'admin',
+    permission_group_delete: 'admin',
+    department_create: 'admin', department_update: 'admin', department_delete: 'admin',
+    department_member_add: 'admin', department_member_remove: 'admin',
+    // campaign & automation
+    campaign_create: 'admin', campaign_update: 'admin', campaign_delete: 'admin',
+    campaign_send: 'admin', campaign_cancel: 'admin',
+    automation_rule_create: 'admin', automation_rule_update: 'admin',
+    automation_rule_delete: 'admin',
+    // integrations / zalo
+    integration_update: 'admin', integration_delete: 'admin',
+    zalo_account_connect: 'admin', zalo_account_disconnect: 'admin',
+    zalo_credentials_export: 'security', zalo_credentials_import: 'admin',
+    zalo_access_grant: 'admin', zalo_access_revoke: 'admin',
   };
   return map[action] || fallback;
 }

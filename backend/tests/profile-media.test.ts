@@ -16,6 +16,9 @@ const prismaMock = {
   zaloAccountAccess: {
     findFirst: vi.fn(),
   },
+  activityLog: {
+    create: vi.fn(),
+  },
 };
 
 vi.mock('../src/shared/database/prisma-client.js', () => ({ prisma: prismaMock }));

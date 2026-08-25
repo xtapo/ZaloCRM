@@ -14,12 +14,39 @@
       </v-avatar>
       <div class="flex-1-1">
         <div class="text-subtitle-1 font-weight-medium">
-          {{ group.name || group.groupName || 'Nhóm không tên' }}
+          {{ displayName }}
         </div>
-        <div v-if="group.totalMember" class="text-caption text-grey">
-          {{ group.totalMember }} thành viên
+        <div class="d-flex align-center flex-wrap gap-1">
+          <span v-if="group.totalMember" class="text-caption text-grey mr-1">
+            {{ group.totalMember }} thành viên
+          </span>
+          <v-chip
+            v-if="profile?.crmName"
+            size="x-small" color="primary" variant="tonal" prepend-icon="mdi-tag-outline"
+            :title="`Tên Zalo: ${group.name || group.groupName || '?'}`"
+          >
+            {{ profile.crmName }}
+          </v-chip>
+          <v-chip
+            v-for="tag in (profile?.tags ?? [])" :key="tag"
+            size="x-small" variant="tonal"
+          >
+            {{ tag }}
+          </v-chip>
+          <v-chip
+            v-if="assignedUserName"
+            size="x-small" color="indigo" variant="tonal" prepend-icon="mdi-account-check"
+          >
+            {{ assignedUserName }}
+          </v-chip>
         </div>
       </div>
+      <v-btn
+        icon="mdi-tag-multiple-outline"
+        variant="text"
+        title="Quản lý CRM (tên, tag, ghi chú, phụ trách)"
+        @click="$emit('open-crm')"
+      />
       <v-btn
         icon="mdi-link-variant"
         variant="text"
@@ -48,6 +75,10 @@
         <v-icon size="16" class="mr-1">mdi-poll</v-icon>
         Bình chọn
         <v-badge v-if="polls.length" :content="polls.length" color="primary" inline class="ml-1" />
+      </v-tab>
+      <v-tab value="activity">
+        <v-icon size="16" class="mr-1">mdi-chart-box-outline</v-icon>
+        Hoạt động
       </v-tab>
     </v-tabs>
 
@@ -170,26 +201,45 @@
           </div>
         </div>
       </v-window-item>
+
+      <!-- Activity stats tab -->
+      <v-window-item value="activity">
+        <GroupStatsPanel v-if="detailStats" :stats="detailStats" />
+        <div v-else-if="statsLoading" class="d-flex justify-center pa-6">
+          <v-progress-circular indeterminate color="primary" size="28" />
+        </div>
+        <div v-else class="text-center text-grey pa-6 text-body-2">
+          Chưa có dữ liệu thống kê cho nhóm này
+        </div>
+      </v-window-item>
     </v-window>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import GroupMemberActions from './group-member-actions.vue';
 import PollVoter from './poll-voter.vue';
+import GroupStatsPanel from './group-stats-panel.vue';
+import type { CrmProfile } from '@/composables/use-groups';
+import type { GroupDetailStat } from '@/composables/use-group-stats';
 
-defineProps<{
+const props = defineProps<{
   group: any;
   members: any[];
   blocked: any[];
   pending: any[];
   polls: any[];
   loading: boolean;
+  profile?: CrmProfile | null;
+  assignedUserName?: string | null;
+  detailStats?: GroupDetailStat | null;
+  statsLoading?: boolean;
 }>();
 
 defineEmits<{
   'open-settings': [];
+  'open-crm': [];
   'open-invite-link': [];
   'add-deputy': [member: any];
   'remove-deputy': [member: any];
@@ -206,4 +256,8 @@ defineEmits<{
 }>();
 
 const tab = ref('members');
+
+const displayName = computed(() =>
+  props.profile?.crmName || props.group?.name || props.group?.groupName || 'Nhóm không tên',
+);
 </script>

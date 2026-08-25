@@ -37,6 +37,22 @@ export function registerZaloSocketHandlers(io: Server): void {
       logger.debug(`Socket ${socket.id} joined org:${data.orgId}`);
     });
 
+    // Persistent notifications (2026-08-25) — room riêng từng user để emit
+    // notification:new / notification:resolved. Chỉ được join room của CHÍNH MÌNH,
+    // đối chiếu danh tính handshake giống guard của org:join.
+    socket.on('user:join', (data: { userId: string }) => {
+      if (!data?.userId) return;
+      const user = userOf(socket);
+      if (!user || user.id !== data.userId) {
+        logger.warn(
+          `Socket ${socket.id} (user=${user?.id ?? 'anon'}) bị chặn join user:${data.userId}`,
+        );
+        return;
+      }
+      socket.join(`user:${data.userId}`);
+      logger.debug(`Socket ${socket.id} joined user:${data.userId}`);
+    });
+
     // Subscribe to QR/status updates for a specific Zalo account
     socket.on('zalo:subscribe', async (data: { accountId: string }) => {
       if (!data?.accountId) return;

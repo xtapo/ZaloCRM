@@ -9,6 +9,12 @@ import { authMiddleware } from './auth-middleware.js';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../../shared/utils/logger.js';
+import { logActivity, auditContext, computeDiff, AUDIT_LOGGED_HEADER } from '../activity/activity-logger.js';
+
+/** Set cờ để audit-middleware skip (đã log thủ công). */
+function markAudited(reply: FastifyReply): void {
+  reply.header(AUDIT_LOGGED_HEADER, '1');
+}
 
 export async function userRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
@@ -75,6 +81,16 @@ export async function userRoutes(app: FastifyInstance) {
     });
 
     logger.info(`User created: ${user.email} by ${currentUser.email}`);
+    logActivity({
+      orgId: currentUser.orgId,
+      userId: currentUser.id,
+      action: 'user_create',
+      entityType: 'user',
+      entityId: user.id,
+      details: { email: user.email, fullName: user.fullName, role: user.role },
+      ...auditContext(request),
+    });
+    markAudited(reply);
     return user;
   });
 
@@ -100,6 +116,12 @@ export async function userRoutes(app: FastifyInstance) {
     if (teamId !== undefined) updateData.teamId = teamId || null;
     if (isActive !== undefined && currentUser.role === 'owner') updateData.isActive = isActive;
 
+    const before = await prisma.user.findUnique({
+      where: { id, orgId: currentUser.orgId },
+      select: { id: true, fullName: true, email: true, role: true, isActive: true, teamId: true },
+    });
+    if (!before) return reply.status(404).send({ error: 'User không tồn tại' });
+
     const user = await prisma.user.update({
       where: { id, orgId: currentUser.orgId },
       data: updateData,
@@ -113,6 +135,16 @@ export async function userRoutes(app: FastifyInstance) {
       },
     });
 
+    logActivity({
+      orgId: currentUser.orgId,
+      userId: currentUser.id,
+      action: 'user_update',
+      entityType: 'user',
+      entityId: id,
+      details: { diff: computeDiff(before, user, ['fullName', 'email', 'role', 'isActive', 'teamId']) },
+      ...auditContext(request),
+    });
+    markAudited(reply);
     return user;
   });
 
@@ -135,6 +167,16 @@ export async function userRoutes(app: FastifyInstance) {
       data: { passwordHash, tokenVersion: { increment: 1 } },
     });
 
+    logActivity({
+      orgId: currentUser.orgId,
+      userId: currentUser.id,
+      action: 'password_change_by_admin',
+      entityType: 'user',
+      entityId: id,
+      details: { targetUserId: id, resetByAdmin: true },
+      ...auditContext(request),
+    });
+    markAudited(reply);
     return { success: true };
   });
 
@@ -150,11 +192,22 @@ export async function userRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'Không thể xóa chính mình' });
     }
 
-    await prisma.user.update({
+    const deactivated = await prisma.user.update({
       where: { id, orgId: currentUser.orgId },
       data: { isActive: false, tokenVersion: { increment: 1 } },
+      select: { id: true, email: true, fullName: true },
     });
 
+    logActivity({
+      orgId: currentUser.orgId,
+      userId: currentUser.id,
+      action: 'user_delete',
+      entityType: 'user',
+      entityId: id,
+      details: { email: deactivated.email, fullName: deactivated.fullName, deactivated: true },
+      ...auditContext(request),
+    });
+    markAudited(reply);
     return { success: true };
   });
 
@@ -175,7 +228,7 @@ export async function userRoutes(app: FastifyInstance) {
 
     const target = await prisma.user.findFirst({
       where: { id, orgId: currentUser.orgId },
-      select: { id: true },
+      select: { id: true, maxPrivacyNicks: true },
     });
     if (!target) return reply.status(404).send({ error: 'User không tồn tại trong org' });
 
@@ -184,6 +237,16 @@ export async function userRoutes(app: FastifyInstance) {
       data: { maxPrivacyNicks: max },
     });
 
+    logActivity({
+      orgId: currentUser.orgId,
+      userId: currentUser.id,
+      action: 'user_update',
+      entityType: 'user',
+      entityId: id,
+      details: { diff: { maxPrivacyNicks: { old: target.maxPrivacyNicks, new: max } } },
+      ...auditContext(request),
+    });
+    markAudited(reply);
     return { ok: true, userId: id, maxPrivacyNicks: max };
   });
 

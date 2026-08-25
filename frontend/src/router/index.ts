@@ -80,7 +80,7 @@ const routes = [
       // 🏢 Org
       { path: 'org/profile', name: 'Settings.OrgProfile', component: () => import('@/components/settings/OrgSettings.vue') },
       { path: 'org/billing', name: 'Settings.Billing',   component: () => import('@/views/settings/SettingsComingSoon.vue'), props: { feature: 'billing' } },
-      { path: 'org/audit',   name: 'Settings.Audit',     component: () => import('@/views/settings/SettingsComingSoon.vue'), props: { feature: 'audit' } },
+      { path: 'org/audit',   name: 'Settings.Audit',     component: () => import('@/views/AuditLogView.vue') },
 
       // 👥 Team — Variant C menu reorg 2026-05-22: legacy team/* redirect → rbac/*
       // Em giữ 3 route legacy nhưng redirect sang RBAC pages mới để không break deep link.

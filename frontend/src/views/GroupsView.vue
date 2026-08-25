@@ -43,6 +43,10 @@
           :groups="groups"
           :selected-id="selectedGroupId"
           :loading="loading"
+          :crm-profiles="crmProfiles"
+          :stats-by-group="statsByGroup"
+          :current-user-id="auth.user?.id ?? null"
+          :user-name-map="userNameMap"
           @select="onSelectGroup"
           @create="showCreateDialog = true"
           @open-chat="onOpenGroupChat"
@@ -58,6 +62,11 @@
           :pending="pending"
           :polls="polls"
           :loading="loading"
+          :profile="selectedGroupId ? crmProfiles[selectedGroupId] : null"
+          :assigned-user-name="selectedAssigneeName"
+          :detail-stats="detailStats"
+          :stats-loading="statsLoading"
+          @open-crm="showCrmDialog = true"
           @open-settings="showSettingsDialog = true"
           @add-deputy="m => runAction(() => addDeputy(selectedAccountId, selectedGroupId, m.id || m.uid))"
           @remove-deputy="m => runAction(() => removeDeputy(selectedAccountId, selectedGroupId, m.id || m.uid))"
@@ -80,6 +89,14 @@
     <GroupCreateDialog
       v-model="showCreateDialog"
       @create="onCreateGroup"
+    />
+
+    <GroupCrmDialog
+      v-model="showCrmDialog"
+      :group-id="selectedGroupId"
+      :group-name="selectedGroup?.name || selectedGroup?.groupName"
+      :profile="selectedGroupId ? crmProfiles[selectedGroupId] ?? null : null"
+      @save="onSaveCrmProfile"
     />
 
     <GroupSettingsDialog
@@ -130,20 +147,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { api } from '@/api/index';
 import { useSelectedAccount } from '@/composables/use-selected-account';
 import { useGroups } from '@/composables/use-groups';
 import { usePolls } from '@/composables/use-polls';
+import { useUsers } from '@/composables/use-users';
+import { useAuthStore } from '@/stores/auth';
+import { useGroupStats } from '@/composables/use-group-stats';
 import GroupList from '@/components/groups/group-list.vue';
 import GroupDetailPanel from '@/components/groups/group-detail-panel.vue';
 import GroupCreateDialog from '@/components/groups/group-create-dialog.vue';
 import GroupSettingsDialog from '@/components/groups/group-settings-dialog.vue';
+import GroupCrmDialog from '@/components/groups/group-crm-dialog.vue';
 import PollCreateDialog from '@/components/groups/poll-create-dialog.vue';
 import InviteLinkManager from '@/components/groups/invite-link-manager.vue';
 
 const router = useRouter();
+const auth = useAuthStore();
+const { users, fetchUsers } = useUsers();
+const { stats, detailStats, loading: statsLoading, fetchGroupStats, fetchGroupDetailStats } = useGroupStats();
 
 const { accounts, selectedAccountId, selectAccount, loading: accountLoading } = useSelectedAccount();
 const {
@@ -155,6 +179,7 @@ const {
   transferOwnership, blockMember, unblockMember,
   getInviteLink, enableInviteLink, disableInviteLink, joinByLink,
   leaveGroup, disperseGroup,
+  crmProfiles, fetchCrmProfiles, saveCrmProfile,
 } = useGroups();
 
 const { polls, createPoll, votePoll, lockPoll, sharePoll } = usePolls();
@@ -164,6 +189,26 @@ const showCreateDialog = ref(false);
 const showSettingsDialog = ref(false);
 const showPollDialog = ref(false);
 const showInviteLinkDialog = ref(false);
+const showCrmDialog = ref(false);
+
+// Map userId → fullName cho avatar người phụ trách trong list
+const userNameMap = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {};
+  for (const u of users.value) map[u.id] = u.fullName;
+  return map;
+});
+
+const selectedAssigneeName = computed(() => {
+  const id = selectedGroupId.value ? crmProfiles.value[selectedGroupId.value]?.assignedUserId : null;
+  return id ? userNameMap.value[id] ?? null : null;
+});
+
+// Stats theo groupId — dùng cho dot trạng thái trong list
+const statsByGroup = computed<Record<string, any>>(() => {
+  const map: Record<string, any> = {};
+  for (const s of stats.value) if (s.groupId) map[s.groupId] = s;
+  return map;
+});
 
 const snack = reactive({ show: false, message: '', color: 'success' });
 
@@ -178,12 +223,17 @@ async function onAccountChange(id: string) {
   selectedGroupId.value = '';
   selectedGroup.value = null;
   members.value = [];
-  if (id) await fetchGroups(id);
+  detailStats.value = null;
+  if (id) {
+    await Promise.all([fetchGroups(id), fetchCrmProfiles(id), fetchGroupStats(id)]);
+  }
 }
 
 async function onSelectGroup(groupId: string) {
   selectedGroupId.value = groupId;
   const acct = selectedAccountId.value;
+  // Stats chi tiết load song song — fail không chặn các tab khác
+  void fetchGroupDetailStats(acct, groupId).catch(() => {});
   await Promise.all([
     fetchGroup(acct, groupId),
     fetchMembers(acct, groupId),
@@ -211,12 +261,6 @@ async function onOpenGroupChat(groupId: string) {
     console.error('[GroupsView] ensure group conversation failed:', err);
     notify('Không mở được hội thoại nhóm', 'error');
   }
-}
-
-async function refresh() {
-  if (!selectedAccountId.value) return;
-  await fetchGroups(selectedAccountId.value);
-  if (selectedGroupId.value) await onSelectGroup(selectedGroupId.value);
 }
 
 async function runAction(fn: () => Promise<any>) {
@@ -290,4 +334,27 @@ async function onSharePoll(poll: { id?: string; pollId?: string }) {
   if (result !== null) notify('Đã chia sẻ bình chọn');
   else notify('Chia sẻ bình chọn thất bại', 'error');
 }
+
+async function onSaveCrmProfile(payload: { crmName: string | null; notes: string | null; tags: string[]; assignedUserId: string | null }) {
+  const result = await saveCrmProfile(selectedAccountId.value, selectedGroupId.value, payload);
+  if (result) {
+    showCrmDialog.value = false;
+    notify('Đã lưu thông tin CRM');
+    // Refresh stats để dot trạng thái + assignee avatar cập nhật
+    void fetchGroupStats(selectedAccountId.value);
+  } else {
+    notify('Lưu thông tin CRM thất bại', 'error');
+  }
+}
+
+async function refresh() {
+  if (!selectedAccountId.value) return;
+  await Promise.all([
+    fetchGroups(selectedAccountId.value),
+    fetchGroupStats(selectedAccountId.value),
+  ]);
+  if (selectedGroupId.value) await onSelectGroup(selectedGroupId.value);
+}
+
+void fetchUsers().catch(() => {});
 </script>

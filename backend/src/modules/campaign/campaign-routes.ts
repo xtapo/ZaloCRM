@@ -15,6 +15,7 @@ import { resolveAccount, checkAccess, handleError } from '../zalo/zalo-route-hel
 import { prisma } from '../../shared/database/prisma-client.js';
 import { logger } from '../../shared/utils/logger.js';
 import { executeRandomFriendRequest } from './campaign-service.js';
+import { logActivity, auditContext, AUDIT_LOGGED_HEADER } from '../activity/activity-logger.js';
 
 interface RandomFriendReqBody {
   zaloAccountId: string;
@@ -42,6 +43,16 @@ export async function campaignRoutes(app: FastifyInstance): Promise<void> {
           zaloAccountId,
           message,
         });
+        logActivity({
+          orgId: user.orgId,
+          userId: user.id,
+          action: 'campaign_send',
+          entityType: 'zalo_account',
+          entityId: zaloAccountId,
+          details: { type: 'random_friend_request', picked: result.picked, contactId: (result as { contactId?: string }).contactId ?? null },
+          ...auditContext(request),
+        });
+        reply.header(AUDIT_LOGGED_HEADER, '1');
         return reply.send(result);
       } catch (err) {
         logger.error('[campaign] random-friend-request error:', err);

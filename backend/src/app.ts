@@ -45,6 +45,7 @@ import { crmTagGroupRoutes } from './modules/contacts/crm-tag-group-routes.js';
 import { userPreferenceRoutes } from './modules/auth/user-preference-routes.js';
 import { timelineRoutes } from './modules/activity/timeline-routes.js';
 import { securityEventsRoutes } from './modules/activity/security-events-routes.js';
+import { auditLogRoutes } from './modules/activity/audit-log-routes.js';
 import { scoringRoutes } from './modules/scoring/scoring-routes.js';
 import { zaloLabelsRoutes, startLabelsBackgroundSync } from './modules/zalo/zalo-labels-routes.js';
 import { startAppointmentReminder } from './modules/contacts/appointment-reminder.js';
@@ -60,6 +61,8 @@ import { zaloDashboardRoutes } from './modules/zalo/zalo-dashboard-routes.js';
 import { zaloPool } from './modules/zalo/zalo-pool.js';
 import { registerZaloSocketHandlers } from './modules/zalo/zalo-socket.js';
 import { notificationRoutes } from './modules/notifications/notification-routes.js';
+import { setNotificationIO } from './modules/notifications/notification-service.js';
+import { startNotificationWorker } from './modules/notifications/notification-worker.js';
 import { searchRoutes } from './modules/search/search-routes.js';
 import { startZaloHealthCheck } from './modules/zalo/zalo-health-check.js';
 import { publicApiRoutes } from './modules/api/public-api-routes.js';
@@ -87,6 +90,7 @@ import { aiRoutes } from './modules/ai/ai-routes.js';
 import { chatOperationsRoutes, registerChatSocketHandlers } from './modules/chat/chat-operations-routes.js';
 import { groupRoutes } from './modules/zalo/group-routes.js';
 import { groupModerationRoutes } from './modules/zalo/group-moderation-routes.js';
+import { groupCrmRoutes } from './modules/zalo/group-crm-routes.js';
 import { friendRoutes } from './modules/zalo/friend-routes.js';
 import { profileRoutes } from './modules/zalo/profile-routes.js';
 import { credentialRoutes } from './modules/zalo/credential-routes.js';
@@ -94,6 +98,7 @@ import { eventBuffer } from './shared/event-buffer.js';
 // Phase Riêng Tư 2026-08-13 — cách ly tin nhắn theo nick (realtime + REST)
 import { installSocketPrivacyGuard } from './shared/realtime/socket-privacy.js';
 import { installChatSecurityHooks } from './modules/chat/chat-security-hooks.js';
+import { installAuditMiddleware } from './modules/activity/audit-middleware.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -154,6 +159,9 @@ async function bootstrap() {
   // Pass io to zalo pool for real-time event emission
   zaloPool.setIO(io);
 
+  // Persistent notifications (2026-08-25) — emit notification:new/resolved qua room user:<id>
+  setNotificationIO(io);
+
   io.on('connection', (socket) => {
     logger.info(`Socket connected: ${socket.id}`);
     socket.on('disconnect', () => {
@@ -172,6 +180,9 @@ async function bootstrap() {
   // Phase Riêng Tư 2026-08-13 — hook bảo mật hội thoại. PHẢI đăng ký trước mọi route
   // để hook root áp dụng được cho chat-routes.
   installChatSecurityHooks(app);
+
+  // Audit log đầy đủ 2026-08-25 — auto-log mọi mutation HTTP thành công (onResponse).
+  installAuditMiddleware(app);
 
   // CSRF Protection Hook (Commit B)
   app.addHook('preHandler', async (request, reply) => {
@@ -211,6 +222,7 @@ async function bootstrap() {
   await app.register(userPreferenceRoutes);
   await app.register(timelineRoutes);
   await app.register(securityEventsRoutes);
+  await app.register(auditLogRoutes);
   await app.register(scoringRoutes);
   // Phase 8 — Engagement heatmap timeline + admin recompute/backfill
   const { registerEngagementRoutes } = await import('./modules/engagement/engagement-routes.js');
@@ -259,6 +271,7 @@ async function bootstrap() {
   await app.register(chatOperationsRoutes);
   await app.register(groupRoutes);
   await app.register(groupModerationRoutes);
+  await app.register(groupCrmRoutes);
   await app.register(friendRoutes);
   await app.register(profileRoutes);
   await app.register(credentialRoutes);
@@ -305,6 +318,7 @@ async function bootstrap() {
     logger.info(`Environment: ${config.nodeEnv}`);
     startAppointmentReminder(io);
     startZaloHealthCheck(io);
+    startNotificationWorker(io); // thông báo persistent — push realtime qua room user:<id>
     startContactIntelligence();
     startLabelsBackgroundSync(60_000); // realtime-ish 2-way pull every 60s
     startInteractionCron(); // daily silent_30d detection (02:00 VN)

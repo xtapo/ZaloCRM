@@ -7,6 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import { authMiddleware } from '../auth/auth-middleware.js';
 import { prisma } from '../../shared/database/prisma-client.js';
 import { logger } from '../../shared/utils/logger.js';
+import { logActivity, auditContext, AUDIT_LOGGED_HEADER } from '../activity/activity-logger.js';
 
 /** Shape matching openzca StoredCredentials */
 interface StoredCredentials {
@@ -61,6 +62,17 @@ export async function credentialRoutes(app: FastifyInstance) {
     reply.header('Content-Type', 'application/json');
     reply.header('Content-Disposition', `attachment; filename="${filename}"`);
     logger.info(`[credential-routes] Exporting credentials for account ${accountId}`);
+    // Audit: export credentials là sự kiện nhạy cảm — log KHÔNG kèm nội dung cookie
+    logActivity({
+      orgId: user.orgId,
+      userId: user.id,
+      action: 'zalo_credentials_export',
+      category: 'security',
+      entityType: 'zalo_account',
+      entityId: accountId,
+      details: { operation: 'credentials_export', displayName: account.displayName },
+      ...auditContext(request),
+    });
     return reply.send(JSON.stringify(account.sessionData, null, 2));
   });
 
@@ -104,6 +116,16 @@ export async function credentialRoutes(app: FastifyInstance) {
       });
 
       logger.info(`[credential-routes] Credentials imported for account ${accountId}`);
+      // Audit: import credentials (không log nội dung cookie/imei)
+      logActivity({
+        orgId: user.orgId,
+        userId: user.id,
+        action: 'zalo_credentials_import',
+        entityType: 'zalo_account',
+        entityId: accountId,
+        ...auditContext(request),
+      });
+      reply.header(AUDIT_LOGGED_HEADER, '1');
       return { success: true, message: 'Credentials imported. Use reconnect to activate.' };
     } catch (err) {
       logger.error(`[credential-routes] Import failed for account ${accountId}:`, err);

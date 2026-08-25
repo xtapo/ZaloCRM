@@ -339,6 +339,8 @@ function isUsableName(s: string | null | undefined): s is string {
 }
 function displayName(conv: Conversation): string {
   if (conv.threadType === 'group') {
+    // Tên CRM nhóm ưu tiên cao nhất (tính năng quản lý nhóm CRM)
+    if (isUsableName(conv.groupProfile?.crmName)) return conv.groupProfile!.crmName!;
     const groupName = (conv as Conversation & { groupName?: string }).groupName;
     if (isUsableName(groupName)) return groupName!;
     if (isUsableName(conv.contact?.fullName)) return conv.contact!.fullName!;

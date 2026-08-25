@@ -5,6 +5,17 @@
 import { ref } from 'vue';
 import { api } from '@/api/index';
 
+/** CRM metadata gắn với 1 nhóm Zalo — lưu trong DB CRM (GroupCrmProfile). */
+export interface CrmProfile {
+  id: string;
+  externalGroupId: string;
+  crmName: string | null;
+  notes: string | null;
+  tags: string[];
+  assignedUserId: string | null;
+  updatedAt: string;
+}
+
 export function useGroups() {
   const groups = ref<any[]>([]);
   const selectedGroup = ref<any | null>(null);
@@ -286,6 +297,39 @@ export function useGroups() {
     }
   }
 
+  // ── CRM profiles (tags/notes/crmName/phụ trách — metadata riêng của CRM) ──
+
+  const crmProfiles = ref<Record<string, CrmProfile>>({});
+
+  async function fetchCrmProfiles(accountId: string, assignedUserId?: string) {
+    try {
+      const params = assignedUserId ? { assignedUserId } : {};
+      const res = await api.get(`${base(accountId)}/crm-profiles`, { params });
+      const map: Record<string, CrmProfile> = {};
+      for (const p of res.data.profiles ?? []) map[p.externalGroupId] = p;
+      crmProfiles.value = map;
+      return map;
+    } catch (err) {
+      console.error('Failed to fetch CRM profiles:', err);
+      return null;
+    }
+  }
+
+  async function saveCrmProfile(accountId: string, groupId: string, payload: Partial<CrmProfile>) {
+    actionLoading.value = true;
+    try {
+      const res = await api.put(`${base(accountId)}/${groupId}/crm-profile`, payload);
+      // Cập nhật local cache ngay
+      crmProfiles.value[groupId] = res.data.profile;
+      return res.data.profile;
+    } catch (err) {
+      console.error('Failed to save CRM profile:', err);
+      return null;
+    } finally {
+      actionLoading.value = false;
+    }
+  }
+
   return {
     groups, selectedGroup, members, blocked, pending,
     loading, actionLoading,
@@ -297,5 +341,6 @@ export function useGroups() {
     fetchBlocked, fetchPending,
     getInviteLink, enableInviteLink, disableInviteLink, joinByLink,
     leaveGroup, disperseGroup,
+    crmProfiles, fetchCrmProfiles, saveCrmProfile,
   };
 }

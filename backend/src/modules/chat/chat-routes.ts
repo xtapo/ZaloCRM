@@ -486,6 +486,41 @@ export async function chatRoutes(app: FastifyInstance) {
       }]));
     }
 
+    // Group CRM profiles — batch fetch theo pair (account × externalGroupId),
+    // cùng pattern với friendMap phía trên. FE dùng groupProfile.crmName làm
+    // displayName ưu tiên cho hội thoại nhóm (tính năng quản lý nhóm CRM).
+    const groupPairKeys = new Set<string>();
+    const groupPairs: Array<{ zaloAccountId: string; externalGroupId: string }> = [];
+    for (const c of conversations) {
+      if (c.threadType !== 'group' || !c.externalThreadId) continue;
+      const key = `${c.zaloAccountId}:${c.externalThreadId}`;
+      if (!groupPairKeys.has(key)) {
+        groupPairKeys.add(key);
+        groupPairs.push({ zaloAccountId: c.zaloAccountId, externalGroupId: c.externalThreadId });
+      }
+    }
+    let groupProfileMap = new Map<string, {
+      crmName: string | null;
+      notes: string | null;
+      tags: unknown;
+      assignedUserId: string | null;
+    }>();
+    if (groupPairs.length > 0) {
+      const groupProfiles = await prisma.groupCrmProfile.findMany({
+        where: { OR: groupPairs.map(p => ({ AND: [{ zaloAccountId: p.zaloAccountId }, { externalGroupId: p.externalGroupId }] })) },
+        select: {
+          zaloAccountId: true, externalGroupId: true,
+          crmName: true, notes: true, tags: true, assignedUserId: true,
+        },
+      });
+      groupProfileMap = new Map(groupProfiles.map(g => [`${g.zaloAccountId}:${g.externalGroupId}`, {
+        crmName: g.crmName,
+        notes: g.notes,
+        tags: g.tags,
+        assignedUserId: g.assignedUserId,
+      }]));
+    }
+
     // PRIVACY REDACT 2026-05-22 — apply redactConversationRow + redactMessage
     // cho preview text ở cột 2 khi conv thuộc nick privacy='main' + non-owner.
     const { buildPrivacyContext, redactConversationRow, redactMessage } = await import('../privacy/redact.js');
@@ -498,6 +533,9 @@ export async function chatRoutes(app: FastifyInstance) {
           isPinned: c.pins.length > 0,
           friendship: c.contactId && c.externalThreadId
             ? friendMap.get(`${c.zaloAccountId}:${c.externalThreadId}`) || null
+            : null,
+          groupProfile: c.threadType === 'group' && c.externalThreadId
+            ? groupProfileMap.get(`${c.zaloAccountId}:${c.externalThreadId}`) || null
             : null,
         };
         const redactedConv = redactConversationRow(base as any, privacyCtx);
@@ -572,7 +610,20 @@ export async function chatRoutes(app: FastifyInstance) {
       friendship = f;
     }
 
-    return { ...conversation, isPinned: conversation.pins.length > 0, friendship };
+    // Group CRM profile — conv nhóm trả kèm profile để header ChatView ưu tiên
+    // crmName (đồng bộ với list endpoint ở trên).
+    let groupProfile: { crmName: string | null; notes: string | null; tags: unknown; assignedUserId: string | null } | null = null;
+    if (conversation.threadType === 'group' && conversation.externalThreadId) {
+      const gp = await prisma.groupCrmProfile.findUnique({
+        where: { zaloAccountId_externalGroupId: { zaloAccountId: conversation.zaloAccountId, externalGroupId: conversation.externalThreadId } },
+        select: { crmName: true, notes: true, tags: true, assignedUserId: true },
+      });
+      if (gp) {
+        groupProfile = { crmName: gp.crmName, notes: gp.notes, tags: gp.tags, assignedUserId: gp.assignedUserId };
+      }
+    }
+
+    return { ...conversation, isPinned: conversation.pins.length > 0, friendship, groupProfile };
   });
 
   // ── POST /conversations/:id/touch-profile — pull profile từ Zalo SDK on conv click.

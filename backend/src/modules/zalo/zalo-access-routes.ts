@@ -9,6 +9,7 @@ import { authMiddleware } from '../auth/auth-middleware.js';
 import { requireRole } from '../auth/role-middleware.js';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../../shared/utils/logger.js';
+import { logActivity, auditContext, AUDIT_LOGGED_HEADER } from '../activity/activity-logger.js';
 
 const VALID_PERMISSIONS = ['read', 'chat', 'admin'] as const;
 type Permission = (typeof VALID_PERMISSIONS)[number];
@@ -77,6 +78,16 @@ export async function zaloAccessRoutes(app: FastifyInstance): Promise<void> {
           include: { user: { select: { id: true, fullName: true, email: true } } },
         });
         logger.info(`Zalo access granted: ${targetUser.email} → account ${id} (${permission}) by ${user.email}`);
+        logActivity({
+          orgId: user.orgId,
+          userId: user.id,
+          action: 'zalo_access_grant',
+          entityType: 'zalo_account',
+          entityId: id,
+          details: { targetUserId: userId, targetEmail: targetUser.email, permission },
+          ...auditContext(request),
+        });
+        reply.header(AUDIT_LOGGED_HEADER, '1');
         return reply.status(201).send(access);
       } catch {
         // Unique constraint violation — access already exists
@@ -165,6 +176,16 @@ export async function zaloAccessRoutes(app: FastifyInstance): Promise<void> {
       try {
         await prisma.zaloAccountAccess.delete({ where: { id: accessId, zaloAccountId: id } });
         logger.info(`Zalo access revoked: accessId ${accessId} by ${user.email}`);
+        logActivity({
+          orgId: user.orgId,
+          userId: user.id,
+          action: 'zalo_access_revoke',
+          entityType: 'zalo_account',
+          entityId: id,
+          details: { accessId },
+          ...auditContext(request),
+        });
+        reply.header(AUDIT_LOGGED_HEADER, '1');
         return reply.status(204).send();
       } catch {
         return reply.status(404).send({ error: 'Access record not found' });

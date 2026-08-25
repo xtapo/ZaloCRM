@@ -28,6 +28,9 @@ vi.mock('../src/shared/database/prisma-client.js', () => ({
     organization: {
       create: vi.fn(),
     },
+    activityLog: {
+      create: vi.fn(),
+    },
     $transaction: vi.fn((cb: any) => cb(prisma)),
   },
 }));
@@ -342,13 +345,15 @@ describe('Auth & CSRF Cookie Security Tests', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(prisma.user.update).toHaveBeenCalledWith({
-        where: { id: 'u-target', orgId: 'org-100' },
-        data: {
-          isActive: false,
-          tokenVersion: { increment: 1 },
-        },
-      });
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'u-target', orgId: 'org-100' },
+          data: {
+            isActive: false,
+            tokenVersion: { increment: 1 },
+          },
+        }),
+      );
     });
   });
 

@@ -833,6 +833,8 @@ function _isUsableName(s: string | null | undefined): s is string {
 }
 const headerName = computed(() => {
   if (props.conversation?.threadType === 'group') {
+    // Tên CRM nhóm ưu tiên cao nhất (tính năng quản lý nhóm CRM)
+    if (_isUsableName(props.conversation.groupProfile?.crmName)) return props.conversation!.groupProfile!.crmName!;
     const groupName = (props.conversation as { groupName?: string }).groupName;
     if (_isUsableName(groupName)) return groupName!;
     if (_isUsableName(props.conversation?.contact?.fullName)) return props.conversation!.contact!.fullName!;

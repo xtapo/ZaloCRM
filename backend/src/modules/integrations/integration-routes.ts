@@ -8,6 +8,14 @@ import { authMiddleware } from '../auth/auth-middleware.js';
 import { logger } from '../../shared/utils/logger.js';
 import { requireRole } from '../auth/role-middleware.js';
 import { runSync } from './sync-engine.js';
+import { logActivity, auditContext, AUDIT_LOGGED_HEADER } from '../activity/activity-logger.js';
+
+/** Redact credentials khỏi config trước khi ghi vào audit log. */
+function redactConfig(cfg: Record<string, unknown> | undefined | null): Record<string, unknown> {
+  if (!cfg) return {};
+  const { credentials: _creds, ...rest } = cfg;
+  return { ...rest, hasCredentials: cfg.credentials !== undefined };
+}
 
 const VALID_TYPES = ['google_sheets', 'telegram', 'facebook', 'zapier'] as const;
 
@@ -49,6 +57,16 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
       const integration = await prisma.integration.create({
         data: { orgId, type, name: name || type, config: (cfg ?? {}) as any, enabled: enabled ?? true },
       });
+      logActivity({
+        orgId,
+        userId: request.user!.id,
+        action: 'integration_update',
+        entityType: 'integration',
+        entityId: integration.id,
+        details: { operation: 'create', type, enabled: enabled ?? true, config: redactConfig(cfg) },
+        ...auditContext(request),
+      });
+      reply.header(AUDIT_LOGGED_HEADER, '1');
       return reply.status(201).send(integration);
     } catch (err) {
       logger.error('[integrations] POST create error:', err);
@@ -76,6 +94,16 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
           ...(enabled !== undefined && { enabled }),
         },
       });
+      logActivity({
+        orgId,
+        userId: request.user!.id,
+        action: 'integration_update',
+        entityType: 'integration',
+        entityId: id,
+        details: { type: existing.type, enabled: updated.enabled, config: redactConfig(cfg) },
+        ...auditContext(request),
+      });
+      reply.header(AUDIT_LOGGED_HEADER, '1');
       return updated;
     } catch (err) {
       logger.error('[integrations] PUT update error:', err);

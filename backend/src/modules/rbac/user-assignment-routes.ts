@@ -10,6 +10,12 @@ import { authMiddleware } from '../auth/auth-middleware.js';
 import { seedDefaultPermissionGroups, migrateLegacyUsersToPermissionGroups } from './seed-default-groups.js';
 import { userHasGrant } from './permission-group-service.js';
 import type { Resource, Action } from './permission-types.js';
+import { logActivity, auditContext, AUDIT_LOGGED_HEADER } from '../activity/activity-logger.js';
+
+/** Set cờ để audit-middleware skip (đã log thủ công). */
+function markAudited(reply: FastifyReply): void {
+  reply.header(AUDIT_LOGGED_HEADER, '1');
+}
 
 function requireGrant(resource: Resource, action: Action) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
@@ -84,7 +90,7 @@ export async function registerUserAssignmentRoutes(app: FastifyInstance): Promis
     // Validate target user ∈ org
     const target = await prisma.user.findFirst({
       where: { id, orgId: user.orgId },
-      select: { id: true },
+      select: { id: true, email: true, permissionGroupId: true },
     });
     if (!target) return reply.status(404).send({ error: 'User không tồn tại' });
 
@@ -101,6 +107,20 @@ export async function registerUserAssignmentRoutes(app: FastifyInstance): Promis
       where: { id },
       data: { permissionGroupId: body.permissionGroupId ?? null },
     });
+    logActivity({
+      orgId: user.orgId,
+      userId: user.userId ?? user.id,
+      action: 'user_assign_permission_group',
+      entityType: 'user',
+      entityId: id,
+      details: {
+        targetEmail: target.email,
+        oldGroupId: target.permissionGroupId ?? null,
+        newGroupId: body.permissionGroupId ?? null,
+      },
+      ...auditContext(request),
+    });
+    markAudited(reply);
     return reply.send({ ok: true });
   });
 

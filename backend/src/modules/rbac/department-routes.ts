@@ -17,6 +17,12 @@ import {
 } from './department-service.js';
 import { userHasGrant } from './permission-group-service.js';
 import type { Resource, Action } from './permission-types.js';
+import { logActivity, auditContext, AUDIT_LOGGED_HEADER } from '../activity/activity-logger.js';
+
+/** Set cờ để audit-middleware skip (đã log thủ công). */
+function markAudited(reply: FastifyReply): void {
+  reply.header(AUDIT_LOGGED_HEADER, '1');
+}
 
 /**
  * TEMP RBAC guard cho D5-6 (proper middleware ship ở D8).
@@ -57,6 +63,16 @@ export async function registerDepartmentRoutes(app: FastifyInstance): Promise<vo
         parentId: body.parentId ?? null,
         displayOrder: body.displayOrder,
       });
+      logActivity({
+        orgId: user.orgId,
+        userId: user.userId ?? user.id,
+        action: 'department_create',
+        entityType: 'department',
+        entityId: dept.id,
+        details: { name: dept.name, parentId: body.parentId ?? null },
+        ...auditContext(request),
+      });
+      markAudited(reply);
       return reply.send({ ok: true, department: dept });
     } catch (e: any) {
       return reply.status(400).send({ error: e.message });
@@ -81,6 +97,16 @@ export async function registerDepartmentRoutes(app: FastifyInstance): Promise<vo
         parentId: body.parentId,
         displayOrder: body.displayOrder,
       });
+      logActivity({
+        orgId: user.orgId,
+        userId: user.userId ?? user.id,
+        action: 'department_update',
+        entityType: 'department',
+        entityId: id,
+        details: { name: dept.name },
+        ...auditContext(request),
+      });
+      markAudited(reply);
       return reply.send({ ok: true, department: dept });
     } catch (e: any) {
       return reply.status(400).send({ error: e.message });
@@ -94,6 +120,15 @@ export async function registerDepartmentRoutes(app: FastifyInstance): Promise<vo
     const { id } = request.params as { id: string };
     try {
       await archiveDepartment(user.orgId, id);
+      logActivity({
+        orgId: user.orgId,
+        userId: user.userId ?? user.id,
+        action: 'department_delete',
+        entityType: 'department',
+        entityId: id,
+        ...auditContext(request),
+      });
+      markAudited(reply);
       return reply.send({ ok: true });
     } catch (e: any) {
       return reply.status(400).send({ error: e.message });
@@ -118,6 +153,16 @@ export async function registerDepartmentRoutes(app: FastifyInstance): Promise<vo
         userId: body.userId,
         deptRole,
       });
+      logActivity({
+        orgId: user.orgId,
+        userId: user.userId ?? user.id,
+        action: 'department_member_add',
+        entityType: 'department',
+        entityId: id,
+        details: { targetUserId: body.userId, deptRole },
+        ...auditContext(request),
+      });
+      markAudited(reply);
       return reply.send({ ok: true });
     } catch (e: any) {
       // Catch unique constraint violation (1 leader/dept hoặc 1 deputy/dept đã có)
@@ -137,6 +182,16 @@ export async function registerDepartmentRoutes(app: FastifyInstance): Promise<vo
     const { id: deptId, userId } = request.params as { id: string; userId: string };
     try {
       await removeUserFromDepartment(user.orgId, userId, deptId);
+      logActivity({
+        orgId: user.orgId,
+        userId: user.userId ?? user.id,
+        action: 'department_member_remove',
+        entityType: 'department',
+        entityId: deptId,
+        details: { targetUserId: userId },
+        ...auditContext(request),
+      });
+      markAudited(reply);
       return reply.send({ ok: true });
     } catch (e: any) {
       return reply.status(400).send({ error: e.message });

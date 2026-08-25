@@ -16,7 +16,10 @@ export type ActivityCategory =
   | 'interaction'     // Tổng hợp interaction (first_inbound, silent_30d...) — KHÔNG log từng msg
   | 'system'          // contact_link_parent, merge, import, migration
   | 'automation'      // Bot actions (auto-tag, auto-score...)
-  | 'security';       // Truy cập trái phép, rò rỉ dữ liệu, kết nối Zalo
+  | 'security'        // Truy cập trái phép, rò rỉ dữ liệu, kết nối Zalo
+  | 'auth'            // Đăng nhập/đăng xuất/mật khẩu/token
+  | 'admin';          // Mutation quản trị: user, role, permission group, department,
+                      //   campaign, automation CRUD, integration, zalo credentials
 
 export type ActorType = 'user' | 'bot' | 'system';
 
@@ -88,7 +91,51 @@ export const ACTION_CATEGORY: Record<string, ActivityCategory> = {
   security_scope_regression: 'security',
   zalo_session_down: 'security',
   zalo_session_recovered: 'security',
+
+  // auth
+  auth_login: 'auth',
+  auth_login_failed: 'auth',
+  auth_logout: 'auth',
+  auth_setup: 'auth',
+  password_change_self: 'auth',
+  password_change_by_admin: 'auth',
+  account_locked: 'auth',
+
+  // admin
+  user_create: 'admin',
+  user_update: 'admin',
+  user_delete: 'admin',
+  permission_group_create: 'admin',
+  permission_group_update: 'admin',
+  permission_group_delete: 'admin',
+  user_assign_permission_group: 'admin',
+  department_create: 'admin',
+  department_update: 'admin',
+  department_delete: 'admin',
+  department_member_add: 'admin',
+  department_member_remove: 'admin',
+  campaign_create: 'admin',
+  campaign_update: 'admin',
+  campaign_delete: 'admin',
+  campaign_send: 'admin',
+  campaign_cancel: 'admin',
+  automation_rule_create: 'admin',
+  automation_rule_update: 'admin',
+  automation_rule_delete: 'admin',
+  integration_update: 'admin',
+  integration_delete: 'admin',
+  zalo_account_connect: 'admin',
+  zalo_account_disconnect: 'admin',
+  zalo_credentials_export: 'security',
+  zalo_credentials_import: 'admin',
+  zalo_access_grant: 'admin',
+  zalo_access_revoke: 'admin',
 };
+
+/** Actions thuộc category='security' — source of truth cho SecurityEventsView (đồng bộ security-events-routes.ts). */
+export const SECURITY_ACTION_LIST = Object.entries(ACTION_CATEGORY)
+  .filter(([, cat]) => cat === 'security')
+  .map(([action]) => action);
 
 export function categoryOf(action: string): ActivityCategory | null {
   return ACTION_CATEGORY[action] || null;

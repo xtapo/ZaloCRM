@@ -104,6 +104,13 @@ export interface Conversation {
   externalThreadId?: string | null;
   /** Friend record per-pair (chỉ user thread) — backend join từ Friend table */
   friendship?: FriendshipInfo | null;
+  /** GroupCrmProfile (chỉ group thread) — crmName ưu tiên cho displayName nhóm */
+  groupProfile?: {
+    crmName: string | null;
+    notes: string | null;
+    tags: unknown;
+    assignedUserId: string | null;
+  } | null;
   lastMessageAt: string | null;
   unreadCount: number;
   isReplied: boolean;
