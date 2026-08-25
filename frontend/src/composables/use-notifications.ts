@@ -14,6 +14,10 @@ import { io, type Socket } from 'socket.io-client';
 import { onMounted, onUnmounted } from 'vue';
 import { api } from '@/api/index';
 import { useAuthStore } from '@/stores/auth';
+import { playNotificationSound } from '@/utils/notification-sound';
+
+/** Prefs âm thanh — load 1 lần cùng fetch đầu, PUT settings cập nhật realtime. */
+const soundEnabled = ref(true);
 
 export interface NotificationItem {
   id: string;
@@ -69,6 +73,7 @@ function ensureSocket(): Socket {
         readAt: null,
         createdAt: payload.createdAt ?? new Date().toISOString(),
       });
+      if (soundEnabled.value) playNotificationSound();
     });
 
     socket.on('notification:resolved', (payload: { id: string }) => {
@@ -84,10 +89,22 @@ function ensureSocket(): Socket {
   return socket;
 }
 
+let soundPrefsLoaded = false;
+
 async function fetchNotifications(): Promise<void> {
   if (loading) return;
   loading = true;
   try {
+    // Lấy prefs âm thanh 1 lần đầu session để biết bật/tắt chuông.
+    if (!soundPrefsLoaded) {
+      soundPrefsLoaded = true;
+      try {
+        const p = await api.get('/notifications/preferences');
+        soundEnabled.value = p.data.sound !== false;
+      } catch {
+        // lỗi prefs → giữ mặc định bật
+      }
+    }
     const res = await api.get('/notifications');
     notifications.value = res.data.notifications || [];
     unreadCount.value = res.data.unreadCount ?? notifications.value.filter((n) => !n.readAt).length;
@@ -96,6 +113,11 @@ async function fetchNotifications(): Promise<void> {
   } finally {
     loading = false;
   }
+}
+
+/** Settings page gọi sau khi lưu để composable phản ánh ngay không cần reload. */
+export function setSoundEnabled(on: boolean): void {
+  soundEnabled.value = on;
 }
 
 async function markRead(item: NotificationItem): Promise<void> {
@@ -144,5 +166,5 @@ export function useNotifications() {
     if (pollTimer) clearInterval(pollTimer);
   });
 
-  return { notifications, unreadCount, fetchNotifications, markRead, markAllRead };
+  return { notifications, unreadCount, soundEnabled, fetchNotifications, markRead, markAllRead };
 }

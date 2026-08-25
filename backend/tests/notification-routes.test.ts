@@ -441,6 +441,7 @@ describe('notification-routes', () => {
       'group_pending',
     ]);
     expect(body.sources.every((s: any) => s.enabled === true)).toBe(true);
+    expect(body.sound).toBe(true); // mặc định bật
   });
 
   it('PUT preferences tắt nguồn -> GET trả enabled=false; nguồn lạ và value sai bị bỏ qua', async () => {
@@ -471,6 +472,36 @@ describe('notification-routes', () => {
     const byKey = Object.fromEntries(res.json().sources.map((s: any) => [s.key, s.enabled]));
     expect(byKey.appointments).toBe(false);
     expect(byKey.zalo_connection).toBe(true); // value sai → giữ mặc định bật
+  });
+
+  it('PUT preferences sound=false -> GET trả sound=false; sound sai kiểu bị bỏ qua', async () => {
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/notifications/preferences',
+      payload: { sources: {}, sound: false },
+    });
+    expect(put.statusCode).toBe(204);
+    expect(vi.mocked(prisma.user.update).mock.calls[0][0].data.notificationPrefs).toEqual({
+      sources: {},
+      sound: false,
+    });
+
+    // Round-trip DB
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      notificationPrefs: { sources: {}, sound: false },
+    } as any);
+    let res = await app.inject({ method: 'GET', url: '/api/v1/notifications/preferences' });
+    expect(res.json().sound).toBe(false);
+
+    // sound sai kiểu → không ghi, GET về mặc định bật
+    await app.inject({
+      method: 'PUT',
+      url: '/api/v1/notifications/preferences',
+      payload: { sources: {}, sound: 'on' },
+    });
+    expect(vi.mocked(prisma.user.update).mock.calls[1][0].data.notificationPrefs).toEqual({
+      sources: {},
+    });
   });
 
   it('nguồn bị tắt -> item không xuất hiện trong danh sách (lọc trước sync)', async () => {

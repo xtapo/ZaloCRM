@@ -27,6 +27,27 @@
             @change="dirty = true"
           />
         </label>
+
+        <div class="section-title">Tuỳ chọn khác</div>
+
+        <label class="source-row" data-test="pref-sound">
+          <div class="source-info">
+            <span class="source-icon">🔊</span>
+            <div>
+              <div class="source-label">Âm thanh thông báo</div>
+              <div class="source-desc">
+                Phát chuông ngắn khi có thông báo mới.
+                <button type="button" class="link-btn" @click.prevent="previewSound">Nghe thử</button>
+              </div>
+            </div>
+          </div>
+          <input
+            v-model="soundOn"
+            type="checkbox"
+            class="switch"
+            @change="dirty = true"
+          />
+        </label>
       </div>
 
       <div class="actions">
@@ -48,6 +69,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { api } from '@/api/index';
+import { playNotificationSound } from '@/utils/notification-sound';
+import { setSoundEnabled } from '@/composables/use-notifications';
 
 interface SourceState {
   key: string;
@@ -88,17 +111,25 @@ const SOURCE_META: Record<string, { icon: string; label: string; desc: string }>
 };
 
 const sources = ref<SourceState[]>([]);
+const soundOn = ref(true);
 const loading = ref(true);
 const dirty = ref(false);
 const saving = ref(false);
 // Bản gốc để nút Huỷ khôi phục
 let original: SourceState[] = [];
+let originalSound = true;
 const meta = SOURCE_META;
+
+function previewSound(): void {
+  playNotificationSound();
+}
 
 async function fetchPrefs(): Promise<void> {
   const res = await api.get('/notifications/preferences');
   sources.value = res.data.sources;
+  soundOn.value = res.data.sound !== false;
   original = sources.value.map((s) => ({ ...s }));
+  originalSound = soundOn.value;
 }
 
 async function onSave(): Promise<void> {
@@ -106,9 +137,13 @@ async function onSave(): Promise<void> {
   try {
     await api.put('/notifications/preferences', {
       sources: Object.fromEntries(sources.value.map((s) => [s.key, s.enabled])),
+      sound: soundOn.value,
     });
     original = sources.value.map((s) => ({ ...s }));
+    originalSound = soundOn.value;
     dirty.value = false;
+    // Composable đang chạy cập nhật ngay — không cần reload trang.
+    setSoundEnabled(soundOn.value);
   } finally {
     saving.value = false;
   }
@@ -116,6 +151,7 @@ async function onSave(): Promise<void> {
 
 function onReset(): void {
   sources.value = original.map((s) => ({ ...s }));
+  soundOn.value = originalSound;
   dirty.value = false;
 }
 
@@ -142,6 +178,23 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.section-title {
+  margin-top: 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #999;
+}
+.link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-primary, #1976d2);
+  cursor: pointer;
+  font-size: inherit;
+  text-decoration: underline;
 }
 .source-row {
   display: flex;

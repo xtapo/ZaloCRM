@@ -21,6 +21,8 @@ import type { ComputedNotification, NotificationSource } from './compute-notific
 /** Shape lưu trong User.notificationPrefs — nguồn thiếu/false = tắt. */
 export interface NotificationPrefs {
   sources?: Partial<Record<NotificationSource, boolean>>;
+  /** Âm thanh khi có thông báo mới (FE đọc qua GET preferences). Mặc định BẬT. */
+  sound?: boolean;
 }
 
 /**

@@ -44,7 +44,8 @@ export async function notificationRoutes(app: FastifyInstance) {
     return { notifications, unreadCount: unread };
   });
 
-  // Danh sách nguồn + trạng thái bật/tắt của user (FE settings render từ đây).
+  // Danh sách nguồn + trạng thái bật/tắt của user (FE settings render từ đây),
+  // kèm tuỳ chọn âm thanh.
   app.get('/api/v1/notifications/preferences', async (request) => {
     const user = request.user!;
     const prefs = await getNotificationPrefs(viewerIdOf(user));
@@ -53,11 +54,12 @@ export async function notificationRoutes(app: FastifyInstance) {
         key: src,
         enabled: prefs.sources?.[src] !== false,
       })),
+      sound: prefs.sound !== false,
     };
   });
 
-  // Lưu preferences. Body shape: { sources: { <source>: boolean } }. Chấp nhận
-  // key hợp lệ, bỏ qua key lạ; nguồn thiếu = bật (mặc định).
+  // Lưu preferences. Body shape: { sources: { <source>: boolean }, sound?: boolean }.
+  // Chấp nhận key hợp lệ, bỏ qua key lạ; nguồn thiếu = bật (mặc định).
   app.put('/api/v1/notifications/preferences', async (request, reply) => {
     const user = request.user!;
     const body = (request.body ?? {}) as NotificationPrefs;
@@ -68,7 +70,12 @@ export async function notificationRoutes(app: FastifyInstance) {
         sources[key as NotificationSource] = value;
       }
     }
-    await saveNotificationPrefs(viewerIdOf(user), { sources });
+    // sound chỉ chấp nhận boolean; thiếu → giữ mặc định bật (undefined).
+    const sound = typeof body.sound === 'boolean' ? body.sound : undefined;
+    await saveNotificationPrefs(viewerIdOf(user), {
+      sources,
+      ...(sound !== undefined ? { sound } : {}),
+    });
     return reply.code(204).send();
   });
 
