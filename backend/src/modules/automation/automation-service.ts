@@ -52,14 +52,50 @@ export async function runAutomationRules(context: AutomationContext): Promise<vo
       const actions = Array.isArray(rule.actions) ? (rule.actions as unknown as AutomationAction[]) : [];
       if (!matchesConditions(conditions, context)) continue;
 
+      // Mỗi action chạy độc lập — 1 action hỏng không chặn các action sau,
+      // và kết quả từng action được ghi vào run log để admin truy vết.
+      const actionsRun: Array<{ type: string; ok: boolean }> = [];
+      let firstError: string | null = null;
+
       for (const action of actions) {
-        await executeAction(action, context);
+        try {
+          await executeAction(action, context);
+          actionsRun.push({ type: action.type, ok: true });
+        } catch (actionError) {
+          actionsRun.push({ type: action.type, ok: false });
+          if (!firstError) firstError = actionError instanceof Error ? actionError.message : String(actionError);
+          logger.error(`[automation] Rule "${rule.name}" (${rule.id}) action "${action.type}" failed:`, actionError);
+        }
       }
 
+      const ranAt = new Date();
+      // lastRun chỉ tăng khi có ít nhất 1 action thành công — rule toàn fail không được tính là "đã chạy".
+      const anyOk = actionsRun.some((r) => r.ok);
       await prisma.automationRule.update({
         where: { id: rule.id },
-        data: { runCount: { increment: 1 }, lastRunAt: new Date() },
+        data: {
+          ...(anyOk ? { runCount: { increment: 1 }, lastRunAt: ranAt } : {}),
+          ...(firstError ? { lastError: firstError.slice(0, 500), lastErrorAt: ranAt } : {}),
+        },
       });
+
+      // Run log — lịch sử chạy cho endpoint GET /rules/:id/runs. Ghi log thất bại
+      // không được làm hỏng luồng chính.
+      try {
+        await prisma.automationRunLog.create({
+          data: {
+            orgId: context.orgId,
+            ruleId: rule.id,
+            trigger: context.trigger,
+            contactId: context.contact?.id ?? null,
+            actionsRun,
+            error: firstError,
+            ranAt,
+          },
+        });
+      } catch (logError) {
+        logger.error('[automation] Failed to write run log:', logError);
+      }
     } catch (error) {
       logger.error(`[automation] Rule "${rule.name}" (${rule.id}) execution failed:`, error);
     }

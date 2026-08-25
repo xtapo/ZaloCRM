@@ -7,6 +7,7 @@
 import { ref, reactive } from 'vue';
 import { api } from '@/api/index';
 import { getOrgParts, orgDayKey, formatInOrgTz } from '@/composables/use-org-timezone';
+import { CONTACT_STATUSES } from '@/constants/contact-status';
 
 export interface Contact {
   id: string;
@@ -247,13 +248,7 @@ export const SOURCE_OPTIONS = [
   { text: 'Cá nhân', value: 'CN' },
 ];
 
-export const STATUS_OPTIONS = [
-  { text: 'Mới', value: 'new' },
-  { text: 'Đã liên hệ', value: 'contacted' },
-  { text: 'Quan tâm', value: 'interested' },
-  { text: 'Chuyển đổi', value: 'converted' },
-  { text: 'Mất', value: 'lost' },
-];
+export const STATUS_OPTIONS = CONTACT_STATUSES.map(({ label, value }) => ({ text: label, value }));
 
 export function useContacts() {
   const contacts = ref<Contact[]>([]);

@@ -28,7 +28,19 @@ export interface AutomationRule {
   priority: number;
   runCount: number;
   lastRunAt?: string | null;
+  lastError?: string | null;
+  lastErrorAt?: string | null;
   createdAt: string;
+}
+
+export interface AutomationRunLog {
+  id: string;
+  ruleId: string;
+  trigger: string;
+  contactId?: string | null;
+  actionsRun: Array<{ type: string; ok: boolean }>;
+  error?: string | null;
+  ranAt: string;
 }
 
 export function useAutomationRules() {
@@ -79,5 +91,10 @@ export function useAutomationRules() {
     }
   }
 
-  return { rules, loading, saving, fetchRules, createRule, updateRule, deleteRule };
+  async function fetchRuleRuns(ruleId: string): Promise<AutomationRunLog[]> {
+    const res = await api.get(`/automation/rules/${ruleId}/runs`);
+    return res.data.runs ?? [];
+  }
+
+  return { rules, loading, saving, fetchRules, createRule, updateRule, deleteRule, fetchRuleRuns };
 }

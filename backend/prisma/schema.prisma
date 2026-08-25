@@ -962,13 +962,35 @@ model AutomationRule {
   priority    Int       @default(0)
   runCount    Int       @default(0) @map("run_count")
   lastRunAt   DateTime? @map("last_run_at")
+  lastError   String?   @map("last_error") // lỗi gần nhất khi thực thi — debug rule hỏng
+  lastErrorAt DateTime? @map("last_error_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  runLogs AutomationRunLog[]
 
   @@index([orgId, trigger, enabled, priority])
   @@map("automation_rules")
+}
+
+// Lịch sử chạy rule — mỗi lần rule khớp điều kiện và chạy actions tạo 1 row.
+// Giúp admin trả lời "rule này đã chạy cho KH nào, hành động gì đã xảy ra".
+model AutomationRunLog {
+  id         String   @id @default(uuid())
+  orgId      String   @map("org_id")
+  ruleId     String   @map("rule_id")
+  trigger    String
+  contactId  String?  @map("contact_id")
+  actionsRun Json     @default("[]") // [{ type, ok }] kết quả từng action
+  error      String?
+  ranAt      DateTime @default(now()) @map("ran_at")
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, ruleId, ranAt(sort: Desc)])
+  @@index([orgId, ranAt(sort: Desc)])
+  @@map("automation_run_logs")
 }
 
 model MessageTemplate {

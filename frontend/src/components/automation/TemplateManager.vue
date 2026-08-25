@@ -14,7 +14,7 @@
       <template #item.actions="{ item }">
         <div v-if="canManage">
           <v-btn icon size="small" @click="openEdit(item)"><v-icon>mdi-pencil</v-icon></v-btn>
-          <v-btn icon size="small" color="error" @click="remove(item.id)"><v-icon>mdi-delete</v-icon></v-btn>
+          <v-btn icon size="small" color="error" @click="confirmRemove(item)"><v-icon>mdi-delete</v-icon></v-btn>
         </div>
       </template>
     </v-data-table>
@@ -31,6 +31,20 @@
           <v-spacer />
           <v-btn @click="showDialog = false">Hủy</v-btn>
           <v-btn color="primary" :loading="saving" @click="save">Lưu</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="showDeleteConfirm" max-width="440">
+      <v-card>
+        <v-card-title>Xóa template?</v-card-title>
+        <v-card-text>
+          Template <strong>{{ templateToDelete?.name }}</strong> sẽ bị xóa vĩnh viễn. Các rule đang dùng template này sẽ không gửi được nữa.
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn @click="showDeleteConfirm = false">Hủy</v-btn>
+          <v-btn color="error" :loading="saving" @click="doRemove">Xóa</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -55,6 +69,8 @@ const emit = defineEmits<{
 }>();
 
 const showDialog = ref(false);
+const showDeleteConfirm = ref(false);
+const templateToDelete = ref<MessageTemplate | null>(null);
 const form = reactive<Partial<MessageTemplate>>({ id: '', name: '', category: '', content: '' });
 
 const headers = [
@@ -91,7 +107,15 @@ function save() {
   showDialog.value = false;
 }
 
-function remove(id: string) {
-  emit('delete', id);
+function confirmRemove(template: MessageTemplate) {
+  templateToDelete.value = template;
+  showDeleteConfirm.value = true;
+}
+
+function doRemove() {
+  if (!templateToDelete.value) return;
+  emit('delete', templateToDelete.value.id);
+  showDeleteConfirm.value = false;
+  templateToDelete.value = null;
 }
 </script>
