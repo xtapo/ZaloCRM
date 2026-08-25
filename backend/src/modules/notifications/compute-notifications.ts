@@ -15,6 +15,13 @@ import { PRIVACY_BLUR_TOKEN } from '../privacy/redact.js';
 /** Trùng ngưỡng cảnh báo của cron zalo-health-check.ts — tránh 2 nguồn sự thật. */
 export const ZALO_ALERT_THRESHOLD_MS = 15 * 60 * 1000;
 
+/**
+ * Cửa sổ sống của thông báo "tin nhắn đến tức thì": tin nhắn inbound mới hơn mốc
+ * này (và hội thoại chưa được trả lời) được coi là đang đáng báo. Notifier đẩy
+ * tức thì theo event; engine chỉ giữ trạng thái hội tụ trong cửa sổ rồi resolve.
+ */
+export const INCOMING_MESSAGE_WINDOW_MS = 5 * 60 * 1000;
+
 export interface ComputedNotification {
   /** Nguồn phát sinh — dùng cho notification preferences (bật/tắt per-user). */
   source: NotificationSource;
@@ -33,6 +40,7 @@ export interface ComputedNotification {
  */
 export const NOTIFICATION_SOURCES = [
   'unreplied_chat',
+  'incoming_message',
   'appointments',
   'zalo_connection',
   'security',
@@ -257,6 +265,48 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
         createdAt: conv.lastMessageAt ?? new Date(),
       });
     }
+  }
+
+  // 7. Tin nhắn đến tức thì — hội thoại 1-1 có tin nhắn inbound MỚI (trong cửa sổ
+  //    5 phút) và chưa được trả lời. Notifier event-driven đẩy ngay khi tin đến;
+  //    engine giữ trạng thái hội tụ: hết hạn 5 phút hoặc agent trả lời → resolve.
+  //    Nhóm không nằm ở đây (đã có nguồn group_pending riêng).
+  const windowStart = new Date(Date.now() - INCOMING_MESSAGE_WINDOW_MS);
+  const recentInbound = await prisma.conversation.findMany({
+    where: {
+      orgId: user.orgId,
+      threadType: 'user',
+      isReplied: false,
+      lastMessageAt: { gte: windowStart },
+    },
+    select: {
+      id: true,
+      zaloAccountId: true,
+      contact: { select: { fullName: true, crmName: true } },
+      messages: {
+        where: { senderType: 'contact', sentAt: { gte: windowStart } },
+        orderBy: { sentAt: 'desc' },
+        take: 1,
+        select: { id: true, sentAt: true, content: true, contentType: true },
+      },
+    },
+    // Index [orgId, isReplied, lastMessageAt] phục vụ filter; sort cuối cùng in-memory.
+  });
+  for (const conv of recentInbound) {
+    const msg = conv.messages[0];
+    if (!msg || !msg.id) continue; // không có tin inbound trong cửa sổ → bỏ qua
+    const name = conv.contact?.crmName || conv.contact?.fullName || 'Khách hàng';
+    const preview = String(msg.content || '').slice(0, 80);
+    notifications.push({
+      source: 'incoming_message',
+      dedupeKey: `inmsg-${msg.id}`,
+      type: 'info',
+      priority: 'medium',
+      title: `${name} vừa nhắn tin`,
+      detail: preview || `[${msg.contentType || 'tin nhắn'}]`,
+      link: '/chat',
+      createdAt: msg.sentAt,
+    });
   }
 
   return notifications;

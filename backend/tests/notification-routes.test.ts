@@ -83,6 +83,8 @@ vi.mock('../src/shared/database/prisma-client.js', () => ({
     activityLog: { groupBy: vi.fn().mockResolvedValue([]) },
     // Nguồn #6 — nhóm được gán phụ trách có tin chưa xử lý (tính năng quản lý nhóm CRM)
     groupCrmProfile: { findMany: vi.fn().mockResolvedValue([]) },
+    // Nguồn #7 — tin nhắn đến tức thì: hội thoại 1-1 có inbound mới trong cửa sổ 5 phút
+    contact: { findFirst: vi.fn().mockResolvedValue(null) },
     // Notification preferences (2026-08-25) — per-user, mặc định NULL = tất cả bật
     user: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -123,6 +125,8 @@ describe('notification-routes', () => {
 
     // Mặc định: member có scope 1 nick, nick đang connected, chưa có episode rớt.
     vi.mocked(prisma.conversation.count).mockResolvedValue(0);
+    vi.mocked(prisma.conversation.findMany).mockResolvedValue([] as any);
+    (prisma.contact.findFirst as any).mockResolvedValue(null);
     vi.mocked(prisma.appointment.findMany).mockResolvedValue([] as any);
     vi.mocked(prisma.appointment.count).mockResolvedValue(0);
     vi.mocked(prisma.zaloAccount.findMany).mockResolvedValue([] as any);
@@ -430,6 +434,7 @@ describe('notification-routes', () => {
     const keys = body.sources.map((s: any) => s.key);
     expect(keys).toEqual([
       'unreplied_chat',
+      'incoming_message',
       'appointments',
       'zalo_connection',
       'security',
@@ -488,5 +493,56 @@ describe('notification-routes', () => {
     expect(data.notifications.some((n: any) => n.dedupeKey.startsWith('sec-'))).toBe(true);
     // Nguồn khác vẫn tính vào unread
     expect(data.unreadCount).toBeGreaterThan(0);
+  });
+
+  it('nguồn incoming_message: hội thoại 1-1 có inbound mới -> item inmsg-<msgId>', async () => {
+    const sentAt = new Date(Date.now() - 1 * MINUTE);
+    vi.mocked(prisma.conversation.findMany).mockResolvedValue([
+      {
+        id: 'convA',
+        zaloAccountId: 'acc1',
+        contact: { fullName: 'Nguyễn Văn A', crmName: null },
+        messages: [{ id: 'msgX', sentAt, content: 'Cho mình hỏi giá ạ', contentType: 'text' }],
+      },
+    ] as any);
+
+    const data = await get();
+    const item = data.notifications.find((n: any) => n.dedupeKey === 'inmsg-msgX');
+    expect(item).toBeTruthy();
+    expect(item.title).toContain('Nguyễn Văn A');
+    expect(item.detail).toBe('Cho mình hỏi giá ạ');
+    expect(item.priority).toBe('medium');
+  });
+
+  it('nguồn incoming_message: hội thoại KHÔNG có inbound trong cửa sổ (chỉ self) -> bỏ qua', async () => {
+    vi.mocked(prisma.conversation.findMany).mockResolvedValue([
+      {
+        id: 'convB',
+        zaloAccountId: 'acc1',
+        contact: { fullName: 'Khách B' },
+        messages: [], // engine query đã lọc senderType=contact → rỗng nghĩa là không có
+      },
+    ] as any);
+
+    const data = await get();
+    expect(data.notifications.some((n: any) => n.dedupeKey.startsWith('inmsg-'))).toBe(false);
+  });
+
+  it('tắt nguồn incoming_message -> item không xuất hiện dù compute có', async () => {
+    vi.mocked(prisma.conversation.findMany).mockResolvedValue([
+      {
+        id: 'convC',
+        zaloAccountId: 'acc1',
+        contact: { crmName: 'CRM Shop', fullName: null },
+        messages: [{ id: 'msgY', sentAt: new Date(), content: 'hello', contentType: 'text' }],
+      },
+    ] as any);
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      notificationPrefs: { sources: { incoming_message: false } },
+    } as any);
+
+    const data = await get();
+    expect(data.notifications.some((n: any) => n.dedupeKey === 'inmsg-msgY')).toBe(false);
+    expect(data.notifications.every((n: any) => n.source !== 'incoming_message')).toBe(true);
   });
 });

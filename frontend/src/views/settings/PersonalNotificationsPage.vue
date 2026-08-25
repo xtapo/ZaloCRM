@@ -60,6 +60,11 @@ const SOURCE_META: Record<string, { icon: string; label: string; desc: string }>
     label: 'Tin nhắn chưa trả lời',
     desc: 'Cuộc trò chuyện chờ quá 30 phút chưa được phản hồi.',
   },
+  incoming_message: {
+    icon: '⚡',
+    label: 'Tin nhắn đến tức thì',
+    desc: 'Báo ngay khi khách hàng vừa nhắn tin (hội thoại 1-1, trong 5 phút).',
+  },
   appointments: {
     icon: '📅',
     label: 'Lịch hẹn',

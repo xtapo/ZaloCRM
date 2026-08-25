@@ -13,7 +13,7 @@ import type { Server } from 'socket.io';
 import { prisma } from '../../shared/database/prisma-client.js';
 import { logger } from '../../shared/utils/logger.js';
 import { computeNotifications } from './compute-notifications.js';
-import { syncNotifications } from './notification-service.js';
+import { filterByPrefs, getNotificationPrefs, syncNotifications } from './notification-service.js';
 
 const INTERVAL_MS = 60_000;
 
@@ -41,7 +41,10 @@ export async function tickNotifications(io: Server): Promise<void> {
     // Mỗi user compute độc lập — lỗi 1 user không chặn những user còn lại.
     try {
       const computed = await computeNotifications(u);
-      await syncNotifications(u, computed);
+      // Cùng áp prefs như route GET — nếu worker bỏ qua prefs thì nguồn bị tắt
+      // sẽ bị insert lại mỗi tick (ping-pong resolve giữa worker và route).
+      const prefs = await getNotificationPrefs(u.id);
+      await syncNotifications(u, filterByPrefs(computed, prefs));
     } catch (err) {
       logger.warn(`[notification-worker] sync failed for user=${u.id}:`, err);
     }

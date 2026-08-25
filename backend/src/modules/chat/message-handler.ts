@@ -10,6 +10,7 @@ import { runAutomationRules } from '../automation/automation-service.js';
 import { applyContactAggregateFromMessage, applyContactInteraction, applyFriendAggregate } from '../contacts/contact-aggregate.js';
 import { onInboundMessage as onInboundScoring, onOutboundMessage as onOutboundScoring } from '../scoring/scoring-hooks.js';
 import { syncReminderFromMessage } from '../contacts/reminder-sync.js';
+import { notifyIncomingMessage } from '../notifications/incoming-message-notifier.js';
 import { uploadBuffer } from '../../shared/storage/minio-client.js';
 import { config } from '../../config/index.js';
 
@@ -489,6 +490,18 @@ export async function handleIncomingMessage(
       contentType: msg.contentType,
       sentAt: message.sentAt,
     });
+
+    // Thông báo "tin nhắn đến tức thì" — đẩy ngay cho owner/admin + assigned,
+    // fire-and-forget (lỗi notifier không được chặn luồng tin nhắn).
+    if (!msg.isSelf && msg.threadType !== 'group') {
+      void notifyIncomingMessage({
+        orgId: account.orgId,
+        conversationId: conversation.id,
+        messageId: message.id,
+        content: message.content ?? '',
+        contentType: message.contentType ?? 'text',
+      });
+    }
 
     if (!msg.isSelf) {
       const org = await prisma.organization.findUnique({
