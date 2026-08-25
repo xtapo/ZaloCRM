@@ -16,6 +16,8 @@ import { PRIVACY_BLUR_TOKEN } from '../privacy/redact.js';
 export const ZALO_ALERT_THRESHOLD_MS = 15 * 60 * 1000;
 
 export interface ComputedNotification {
+  /** Nguồn phát sinh — dùng cho notification preferences (bật/tắt per-user). */
+  source: NotificationSource;
   dedupeKey: string;
   type: string; // info | warning | error
   priority: string; // high | medium | low
@@ -24,6 +26,19 @@ export interface ComputedNotification {
   link?: string;
   createdAt?: Date; // mốc gốc của sự kiện nếu có, mặc định now()
 }
+
+/**
+ * Nguồn thông báo — đóng băng danh sách để FE settings hiển thị đúng thứ tự.
+ * `security` chỉ hiện ở settings của owner/admin (route tự kiểm soát).
+ */
+export const NOTIFICATION_SOURCES = [
+  'unreplied_chat',
+  'appointments',
+  'zalo_connection',
+  'security',
+  'group_pending',
+] as const;
+export type NotificationSource = (typeof NOTIFICATION_SOURCES)[number];
 
 export async function computeNotifications(user: any): Promise<ComputedNotification[]> {
   const notifications: ComputedNotification[] = [];
@@ -36,6 +51,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
   });
   if (unreplied > 0) {
     notifications.push({
+      source: 'unreplied_chat',
       dedupeKey: 'unreplied',
       type: 'warning',
       priority: 'high',
@@ -62,6 +78,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
   });
   for (const apt of todayApts) {
     notifications.push({
+      source: 'appointments',
       dedupeKey: `apt-${apt.id}`,
       type: 'info',
       priority: 'medium',
@@ -86,6 +103,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
   });
   if (tmrApts > 0) {
     notifications.push({
+      source: 'appointments',
       dedupeKey: 'tmr-apts',
       type: 'info',
       priority: 'low',
@@ -132,6 +150,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
       const label = isPrivateNick && !isOwnerOfNick ? PRIVACY_BLUR_TOKEN : acc.displayName || acc.id;
 
       notifications.push({
+        source: 'zalo_connection',
         dedupeKey: `zalo-${acc.id}`,
         type: 'error',
         priority: 'high',
@@ -169,6 +188,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
 
       if (group.action === 'security_scope_regression') {
         notifications.push({
+          source: 'security',
           dedupeKey: `sec-reg-${eventStamp}`,
           type: 'error',
           priority: 'high',
@@ -180,6 +200,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
       } else {
         const typeName = group.action === 'security_scope_denied' ? 'ngoài phạm vi' : 'nick riêng tư';
         notifications.push({
+          source: 'security',
           dedupeKey: `sec-${group.action}-${eventStamp}`,
           type: 'error',
           priority: 'high',
@@ -226,6 +247,7 @@ export async function computeNotifications(user: any): Promise<ComputedNotificat
         (p) => p.zaloAccountId === conv.zaloAccountId && p.externalGroupId === conv.externalThreadId,
       );
       notifications.push({
+        source: 'group_pending',
         dedupeKey: `group-pending-${conv.id}`,
         type: 'warning',
         priority: 'high',

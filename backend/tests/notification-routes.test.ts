@@ -83,6 +83,11 @@ vi.mock('../src/shared/database/prisma-client.js', () => ({
     activityLog: { groupBy: vi.fn().mockResolvedValue([]) },
     // Nguồn #6 — nhóm được gán phụ trách có tin chưa xử lý (tính năng quản lý nhóm CRM)
     groupCrmProfile: { findMany: vi.fn().mockResolvedValue([]) },
+    // Notification preferences (2026-08-25) — per-user, mặc định NULL = tất cả bật
+    user: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({}),
+    },
     // Bảng persistent notifications — mock gắn vào notifDb ở beforeEach
     get notification() {
       return currentDelegate;
@@ -414,5 +419,74 @@ describe('notification-routes', () => {
 
     const data = await get();
     expect(data.notifications.some((n: any) => n.dedupeKey === 'zalo-acc1')).toBe(false);
+  });
+
+  // ── Notification preferences (2026-08-25) ─────────────────────────────────
+
+  it('GET /notifications/preferences -> danh sách nguồn, mặc định tất cả bật', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/notifications/preferences' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    const keys = body.sources.map((s: any) => s.key);
+    expect(keys).toEqual([
+      'unreplied_chat',
+      'appointments',
+      'zalo_connection',
+      'security',
+      'group_pending',
+    ]);
+    expect(body.sources.every((s: any) => s.enabled === true)).toBe(true);
+  });
+
+  it('PUT preferences tắt nguồn -> GET trả enabled=false; nguồn lạ và value sai bị bỏ qua', async () => {
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/notifications/preferences',
+      payload: {
+        sources: {
+          appointments: false,
+          not_a_source: false, // key lạ — bỏ qua
+          zalo_connection: 'yes', // value sai kiểu — bỏ qua
+        },
+      },
+    });
+    expect(put.statusCode).toBe(204);
+
+    // Đã lưu đúng shape đã lọc
+    expect(vi.mocked(prisma.user.update).mock.calls[0][0].data.notificationPrefs).toEqual({
+      sources: { appointments: false },
+    });
+
+    // Mô phỏng round-trip DB: lần GET sau đọc được prefs vừa lưu
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      notificationPrefs: { sources: { appointments: false } },
+    } as any);
+
+    const res = await app.inject({ method: 'GET', url: '/api/v1/notifications/preferences' });
+    const byKey = Object.fromEntries(res.json().sources.map((s: any) => [s.key, s.enabled]));
+    expect(byKey.appointments).toBe(false);
+    expect(byKey.zalo_connection).toBe(true); // value sai → giữ mặc định bật
+  });
+
+  it('nguồn bị tắt -> item không xuất hiện trong danh sách (lọc trước sync)', async () => {
+    currentRole = 'admin';
+    // Có cả lịch hẹn + sự kiện bảo mật
+    vi.mocked(prisma.appointment.findMany).mockResolvedValue([
+      { id: 'aptZ', appointmentDate: new Date(), appointmentTime: '', notes: null, contact: { fullName: 'KH C' } },
+    ] as any);
+    vi.mocked(prisma.activityLog.groupBy).mockResolvedValue([
+      { action: 'security_scope_denied', _count: { action: 5 }, _max: { createdAt: new Date() } },
+    ] as any);
+
+    // Tắt nguồn appointments
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({
+      notificationPrefs: { sources: { appointments: false } },
+    } as any);
+
+    const data = await get();
+    expect(data.notifications.some((n: any) => n.dedupeKey.startsWith('apt-'))).toBe(false);
+    expect(data.notifications.some((n: any) => n.dedupeKey.startsWith('sec-'))).toBe(true);
+    // Nguồn khác vẫn tính vào unread
+    expect(data.unreadCount).toBeGreaterThan(0);
   });
 });

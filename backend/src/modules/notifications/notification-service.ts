@@ -16,7 +16,42 @@
 import type { Server } from 'socket.io';
 import { prisma } from '../../shared/database/prisma-client.js';
 import { logger } from '../../shared/utils/logger.js';
-import type { ComputedNotification } from './compute-notifications.js';
+import type { ComputedNotification, NotificationSource } from './compute-notifications.js';
+
+/** Shape lưu trong User.notificationPrefs — nguồn thiếu/false = tắt. */
+export interface NotificationPrefs {
+  sources?: Partial<Record<NotificationSource, boolean>>;
+}
+
+/**
+ * Đọc prefs của user. NULL/không parse được = tất cả bật (mặc định an toàn —
+ * không bao giờ vì dữ liệu hỏng mà nuốt mất cảnh báo).
+ */
+export async function getNotificationPrefs(userId: string): Promise<NotificationPrefs> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { notificationPrefs: true },
+  });
+  const raw = (u?.notificationPrefs ?? null) as unknown;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as NotificationPrefs;
+  }
+  return {};
+}
+
+/** Lọc bỏ các item thuộc nguồn user đã tắt — chạy TRƯỚC sync để không sinh row mới. */
+export function filterByPrefs(
+  computed: ComputedNotification[],
+  prefs: NotificationPrefs,
+): ComputedNotification[] {
+  const disabled = new Set(
+    Object.entries(prefs.sources ?? {})
+      .filter(([, on]) => on === false)
+      .map(([src]) => src),
+  );
+  if (disabled.size === 0) return computed;
+  return computed.filter((item) => !disabled.has(item.source));
+}
 
 let ioRef: Server | null = null;
 
@@ -146,6 +181,14 @@ export async function markAllRead(userId: string): Promise<number> {
     data: { readAt: new Date() },
   });
   return res.count;
+}
+
+/** Lưu prefs (PUT toàn bộ object — FE gửi shape đầy đủ). */
+export async function saveNotificationPrefs(userId: string, prefs: NotificationPrefs): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { notificationPrefs: prefs as any },
+  });
 }
 
 function safeEmit(room: string, event: string, payload: unknown): void {

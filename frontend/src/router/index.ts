@@ -73,7 +73,7 @@ const routes = [
       // 👤 Personal
       { path: 'personal/profile',       name: 'Settings.Profile',       component: () => import('@/views/settings/PersonalProfilePage.vue') },
       { path: 'personal/password',      name: 'Settings.Password',      component: () => import('@/views/settings/PersonalPasswordPage.vue') },
-      { path: 'personal/notifications', name: 'Settings.Notifications', component: () => import('@/views/settings/SettingsComingSoon.vue'), props: { feature: 'notifications' } },
+      { path: 'personal/notifications', name: 'Settings.Notifications', component: () => import('@/views/settings/PersonalNotificationsPage.vue') },
       { path: 'personal/theme',         name: 'Settings.Theme',         component: () => import('@/views/settings/SettingsComingSoon.vue'), props: { feature: 'theme' } },
       { path: 'personal/sessions',      name: 'Settings.Sessions',      component: () => import('@/views/settings/SettingsComingSoon.vue'), props: { feature: 'sessions' } },
 

@@ -46,7 +46,7 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
       { id: 'password', label: 'Đổi mật khẩu', icon: '🔑', route: '/settings/personal/password', permission: 'everyone' },
       // Phase Riêng Tư 2026-05-22 — per-user PIN gate (Privacy phase)
       { id: 'privacy', label: 'Riêng tư & PIN', icon: '🔒', route: '/settings/privacy', permission: 'everyone', aliases: ['privacy', 'pin', 'riêng tư', 'blur', 'nick chính'] },
-      { id: 'notifications', label: 'Thông báo', icon: '🔔', route: '/settings/personal/notifications', permission: 'everyone', comingSoon: true },
+      { id: 'notifications', label: 'Thông báo', icon: '🔔', route: '/settings/personal/notifications', permission: 'everyone' },
       { id: 'theme', label: 'Giao diện', icon: '🎨', route: '/settings/personal/theme', permission: 'everyone', comingSoon: true },
       { id: 'sessions', label: 'Phiên đăng nhập', icon: '📱', route: '/settings/personal/sessions', permission: 'everyone', comingSoon: true },
     ],
