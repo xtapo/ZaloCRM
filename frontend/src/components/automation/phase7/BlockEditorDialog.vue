@@ -57,6 +57,8 @@
             </template>
           </v-textarea>
           <v-btn variant="text" size="small" prepend-icon="mdi-plus" @click="addGreeting">Thêm variant</v-btn>
+
+          <VariantStrategySelect v-model="variantStrategy" class="mt-4" />
         </template>
 
         <!-- send_message: textVariants + attachments -->
@@ -79,6 +81,8 @@
             </template>
           </v-textarea>
           <v-btn variant="text" size="small" prepend-icon="mdi-plus" @click="addText">Thêm variant</v-btn>
+
+          <VariantStrategySelect v-model="variantStrategy" class="mt-4" />
 
           <div class="text-subtitle-2 mt-4 mb-2">Đính kèm (optional)</div>
           <div v-for="(att, idx) in attachments" :key="idx" class="d-flex gap-2 mb-2 align-center">
@@ -118,6 +122,47 @@
           />
         </template>
 
+        <!-- add_tag / remove_tag -->
+        <template v-else-if="draft.actionType === 'add_tag' || draft.actionType === 'remove_tag'">
+          <v-combobox
+            v-model="tags"
+            :items="[]"
+            label="Tags"
+            variant="outlined"
+            density="comfortable"
+            multiple
+            chips
+            closable-chips
+            :hint="draft.actionType === 'add_tag'
+              ? 'Gắn các tag này lên KH (giữ nguyên tag cũ)'
+              : 'Bỏ các tag này khỏi KH (tag khác giữ nguyên)'"
+            persistent-hint
+          />
+        </template>
+
+        <!-- assign_user -->
+        <template v-else-if="draft.actionType === 'assign_user'">
+          <v-select
+            v-model="assignedUserId"
+            :items="userItems"
+            item-title="fullName"
+            item-value="id"
+            label="Gán cho sale"
+            variant="outlined"
+            density="comfortable"
+            :loading="loadingUsers"
+            hint="KH sẽ được gán cho sale này khi block chạy"
+            persistent-hint
+          />
+          <v-checkbox
+            v-model="onlyIfUnassigned"
+            label="Chỉ gán khi KH chưa có sale phụ trách"
+            density="compact"
+            hide-details
+            class="mt-2"
+          />
+        </template>
+
         <v-alert v-if="error" type="error" variant="tonal" density="compact" class="mt-3">{{ error }}</v-alert>
       </v-card-text>
 
@@ -132,8 +177,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { ACTION_TYPE_LABELS, ACTION_TYPE_ICONS, SUPPORTED_ACTION_TYPES, type Block, type BlockActionType, type BlockFolder } from '@/api/automation/types';
+import api from '@/api';
+import { ACTION_TYPE_LABELS, ACTION_TYPE_ICONS, SUPPORTED_ACTION_TYPES, type Block, type BlockActionType, type BlockFolder, type VariantStrategy } from '@/api/automation/types';
 import { blocksApi } from '@/api/automation';
+import VariantStrategySelect from './VariantStrategySelect.vue';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -159,8 +206,32 @@ const textVariants = ref<string[]>(['']);
 const attachments = ref<Array<{ kind: string; url: string; caption: string }>>([]);
 const statusId = ref<string>('');
 const onlyFromStatusIds = ref<string[]>([]);
+const tags = ref<string[]>([]);
+const assignedUserId = ref<string | null>(null);
+const onlyIfUnassigned = ref(false);
+const variantStrategy = ref<VariantStrategy>('random');
 const saving = ref(false);
 const error = ref<string>('');
+
+// Sale users (cho assign_user) — dùng chung endpoint /users như ContactsView
+interface UserLite { id: string; fullName: string }
+const allUsers = ref<UserLite[]>([]);
+const loadingUsers = ref(false);
+async function loadUsers() {
+  if (allUsers.value.length > 0 || loadingUsers.value) return;
+  loadingUsers.value = true;
+  try {
+    const res = await api.get<{ users?: UserLite[] }>('/users');
+    allUsers.value = res.data?.users || [];
+  } catch {
+    allUsers.value = []; // dialog vẫn dùng được, chỉ là dropdown rỗng
+  } finally {
+    loadingUsers.value = false;
+  }
+}
+const userItems = computed(() =>
+  [{ id: null as string | null, fullName: '— Bỏ gán —' }, ...allUsers.value],
+);
 
 const actionTypeItems = SUPPORTED_ACTION_TYPES.map((value) => ({ value, label: ACTION_TYPE_LABELS[value] }));
 const folderItems = computed(() => [{ id: null as string | null, name: '— Không folder —' }, ...props.folders.map((f) => ({ id: f.id, name: f.name }))]);
@@ -168,12 +239,17 @@ const folderItems = computed(() => [{ id: null as string | null, name: '— Khô
 watch(() => props.modelValue, (open) => {
   if (!open) return;
   error.value = '';
+  if (['add_tag', 'remove_tag', 'assign_user'].includes(draft.value.actionType)) {
+    // luôn load khi mở (users có thể thay đổi); loadUsers tự chống re-entry
+    void loadUsers();
+  }
   if (props.block) {
     draft.value = {
       name: props.block.name,
       actionType: props.block.actionType,
       folderId: props.block.folderId,
     };
+    void loadUsers();
     const c = props.block.content as Record<string, unknown>;
     greetingVariants.value = Array.isArray(c.greetingVariants) ? [...c.greetingVariants as string[]] : [''];
     textVariants.value = Array.isArray(c.textVariants) ? [...c.textVariants as string[]] : [''];
@@ -182,6 +258,10 @@ watch(() => props.modelValue, (open) => {
       : [];
     statusId.value = typeof c.statusId === 'string' ? c.statusId : '';
     onlyFromStatusIds.value = Array.isArray(c.onlyFromStatusIds) ? [...c.onlyFromStatusIds as string[]] : [];
+    tags.value = Array.isArray(c.tags) ? [...c.tags as string[]] : [];
+    assignedUserId.value = typeof c.userId === 'string' ? c.userId : null;
+    onlyIfUnassigned.value = c.onlyIfUnassigned === true;
+    variantStrategy.value = c.variantStrategy === 'even_split' ? 'even_split' : 'random';
   } else {
     draft.value = { name: '', actionType: 'send_message', folderId: null };
     greetingVariants.value = [''];
@@ -189,6 +269,10 @@ watch(() => props.modelValue, (open) => {
     attachments.value = [];
     statusId.value = '';
     onlyFromStatusIds.value = [];
+    tags.value = [];
+    assignedUserId.value = null;
+    onlyIfUnassigned.value = false;
+    variantStrategy.value = 'random';
   }
 });
 
@@ -200,10 +284,15 @@ function updateText(idx: number, val: string) { textVariants.value[idx] = val; }
 function addText() { textVariants.value.push(''); }
 function removeText(idx: number) { textVariants.value.splice(idx, 1); }
 
+function withVariantStrategy(out: Record<string, unknown>): Record<string, unknown> {
+  if (variantStrategy.value !== 'random') out.variantStrategy = variantStrategy.value;
+  return out;
+}
+
 function buildContent(): Record<string, unknown> {
   switch (draft.value.actionType) {
     case 'request_friend':
-      return { greetingVariants: greetingVariants.value.filter((s) => s.trim()) };
+      return withVariantStrategy({ greetingVariants: greetingVariants.value.filter((s) => s.trim()) });
     case 'send_message': {
       const out: Record<string, unknown> = { textVariants: textVariants.value.filter((s) => s.trim()) };
       const valid = attachments.value.filter((a) => a.url.trim());
@@ -214,12 +303,20 @@ function buildContent(): Record<string, unknown> {
           ...(a.caption ? { caption: a.caption } : {}),
         }));
       }
-      return out;
+      return withVariantStrategy(out);
     }
     case 'update_status':
       return {
         statusId: statusId.value,
         ...(onlyFromStatusIds.value.length > 0 ? { onlyFromStatusIds: onlyFromStatusIds.value } : {}),
+      };
+    case 'add_tag':
+    case 'remove_tag':
+      return { tags: tags.value };
+    case 'assign_user':
+      return {
+        userId: assignedUserId.value ?? '',
+        ...(onlyIfUnassigned.value ? { onlyIfUnassigned: true } : {}),
       };
     default:
       return {};

@@ -283,4 +283,71 @@ export async function blockRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(500).send({ error: 'Failed to duplicate block' });
     }
   });
+
+  // Performance — aggregate task outcomes for this block, per variantIndex khi
+  // block dùng A/B variants (outcome.variantIndex do action-handler ghi).
+  // Đọc trực tiếp automation_tasks.outcome (JSON) — đủ dùng ở scale hiện tại;
+  // nếu sau này nặng thì chuyển sang materialized counter.
+  app.get(`${BASE}/:id/performance`, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const user = request.user!;
+      const { id } = request.params as { id: string };
+
+      const block = await prisma.block.findFirst({
+        where: { id, orgId: user.orgId },
+        select: { id: true, name: true, actionType: true },
+      });
+      if (!block) return reply.status(404).send({ error: 'block not found' });
+
+      const tasks = await prisma.automationTask.findMany({
+        where: { currentBlockId: id, orgId: user.orgId },
+        select: { state: true, outcome: true },
+      });
+
+      let sent = 0; // đã được worker xử lý (không còn queued)
+      let done = 0;
+      let failed = 0;
+      let skipped = 0;
+      let pending = 0; // queued | running
+      const byVariant: Record<string, { sent: number; done: number }> = {};
+
+      for (const t of tasks) {
+        if (t.state === 'queued' || t.state === 'running') {
+          pending++;
+          continue;
+        }
+        sent++;
+        if (t.state === 'done') done++;
+        else if (t.state === 'failed') failed++;
+        else skipped++;
+
+        // A/B breakdown — chỉ task done mới có ý nghĩa so sánh variant
+        if (t.state === 'done' && t.outcome && typeof t.outcome === 'object') {
+          const idx = (t.outcome as Record<string, unknown>).variantIndex;
+          if (typeof idx === 'number') {
+            const key = String(idx);
+            byVariant[key] ??= { sent: 0, done: 0 };
+            byVariant[key].sent++;
+            byVariant[key].done++;
+          }
+        }
+      }
+
+      return {
+        block: { id: block.id, name: block.name, actionType: block.actionType },
+        totalTasks: tasks.length,
+        sent,
+        done,
+        failed,
+        skipped,
+        pending,
+        byVariant: Object.entries(byVariant)
+          .map(([variantIndex, v]) => ({ variantIndex: Number(variantIndex), ...v }))
+          .sort((a, b) => a.variantIndex - b.variantIndex),
+      };
+    } catch (error) {
+      logger.error('[block] performance error:', error);
+      return reply.status(500).send({ error: 'Failed to compute block performance' });
+    }
+  });
 }

@@ -26,6 +26,9 @@ export const SUPPORTED_ACTION_TYPES: readonly BlockActionType[] = [
   'request_friend',
   'send_message',
   'update_status',
+  'add_tag',
+  'remove_tag',
+  'assign_user',
 ];
 
 // ── Content shapes per actionType ──────────────────────────────────────────
@@ -34,8 +37,13 @@ export const SUPPORTED_ACTION_TYPES: readonly BlockActionType[] = [
 // one randomly at execution time to vary outgoing text across nicks (memory:
 // project_zalocrm_phase7_automation — template variation per nick).
 
+// A/B variant strategy: 'random' picks uniformly at runtime; 'even_split'
+// hashes a seed (taskId) so retries keep the same variant mid-flow.
+export type VariantStrategy = 'random' | 'even_split';
+
 export interface RequestFriendContent {
   greetingVariants: string[]; // 1+ entries, engine picks one per execution
+  variantStrategy?: VariantStrategy;
 }
 
 export interface MessageAttachment {
@@ -50,6 +58,7 @@ export interface MessageAttachment {
 export interface SendMessageContent {
   textVariants: string[];
   attachments?: MessageAttachment[];
+  variantStrategy?: VariantStrategy;
 }
 
 export interface UpdateStatusContent {
@@ -58,15 +67,34 @@ export interface UpdateStatusContent {
   onlyFromStatusIds?: string[];
 }
 
+// Phase 7+ — tag/assign actions (no Zalo SDK touch, like update_status)
+export interface TagContent {
+  tags: string[];
+}
+
+export interface AssignUserContent {
+  userId: string;
+}
+
 export type BlockContent =
   | RequestFriendContent
   | SendMessageContent
-  | UpdateStatusContent;
+  | UpdateStatusContent
+  | TagContent
+  | AssignUserContent;
 
 // ── Validators ─────────────────────────────────────────────────────────────
 //
 // Each returns `{ ok: true }` or `{ ok: false, error: 'human readable msg' }`.
 // Called by block routes on create/update + by engine before execute.
+
+function validateVariantStrategy(value: unknown): { ok: true } | { ok: false; error: string } {
+  if (value === undefined) return { ok: true };
+  if (value !== 'random' && value !== 'even_split') {
+    return { ok: false, error: "variantStrategy phải là 'random' hoặc 'even_split'" };
+  }
+  return { ok: true };
+}
 
 export function validateBlockContent(
   actionType: BlockActionType,
@@ -86,7 +114,7 @@ export function validateBlockContent(
       if (!variants.every((v) => typeof v === 'string' && v.trim().length > 0)) {
         return { ok: false, error: 'mỗi greetingVariant phải là chuỗi không rỗng' };
       }
-      return { ok: true };
+      return validateVariantStrategy(c.variantStrategy);
     }
 
     case 'send_message': {
@@ -97,6 +125,8 @@ export function validateBlockContent(
       if (!variants.every((v) => typeof v === 'string' && v.trim().length > 0)) {
         return { ok: false, error: 'mỗi textVariant phải là chuỗi không rỗng' };
       }
+      const strategyResult = validateVariantStrategy(c.variantStrategy);
+      if (!strategyResult.ok) return strategyResult;
       const atts = c.attachments;
       if (atts !== undefined) {
         if (!Array.isArray(atts)) return { ok: false, error: 'attachments phải là mảng' };
@@ -122,6 +152,25 @@ export function validateBlockContent(
       }
       if (c.onlyFromStatusIds !== undefined && !Array.isArray(c.onlyFromStatusIds)) {
         return { ok: false, error: 'onlyFromStatusIds phải là mảng' };
+      }
+      return { ok: true };
+    }
+
+    case 'add_tag':
+    case 'remove_tag': {
+      const tags = c.tags;
+      if (!Array.isArray(tags) || tags.length === 0) {
+        return { ok: false, error: 'tags phải là mảng có ít nhất 1 phần tử' };
+      }
+      if (!tags.every((t) => typeof t === 'string' && t.trim().length > 0)) {
+        return { ok: false, error: 'mỗi tag phải là chuỗi không rỗng' };
+      }
+      return { ok: true };
+    }
+
+    case 'assign_user': {
+      if (typeof c.userId !== 'string' || !c.userId) {
+        return { ok: false, error: 'userId phải là chuỗi không rỗng' };
       }
       return { ok: true };
     }

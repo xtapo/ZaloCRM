@@ -131,17 +131,6 @@ const FEATURE_META: Record<string, FeatureMeta> = {
       'Hour 6-22 (không gửi đêm khuya)',
     ],
   },
-  automation: {
-    icon: '🤖',
-    title: 'Automation rules',
-    description: 'Phase 7+ — engine kết bạn tự động, gửi tin chào mừng, follow-up.',
-    bullets: [
-      'Trigger: KH mới / sinh nhật / stuck / form submission',
-      'Action: send template / gắn tag / assign sale',
-      'Per-nick throttle gate cross-campaign',
-      'A/B test message variants',
-    ],
-  },
   'public-token': {
     icon: '🎫',
     title: 'Public API token',

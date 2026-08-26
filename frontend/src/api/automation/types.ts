@@ -11,7 +11,12 @@ export type BlockActionType =
   | 'send_image' | 'send_file' | 'send_template'
   | 'add_tag' | 'remove_tag' | 'assign_user' | 'update_lead_score';
 
-export const SUPPORTED_ACTION_TYPES: BlockActionType[] = ['request_friend', 'send_message', 'update_status'];
+export const SUPPORTED_ACTION_TYPES: BlockActionType[] = [
+  'request_friend', 'send_message', 'update_status', 'add_tag', 'remove_tag', 'assign_user',
+];
+
+// A/B variant strategy (mirror backend VariantStrategy)
+export type VariantStrategy = 'random' | 'even_split';
 
 export const ACTION_TYPE_LABELS: Record<BlockActionType, string> = {
   request_friend: 'Gửi kết bạn',
@@ -85,6 +90,7 @@ export interface SequenceRuntimeRules {
   perNickThrottle?: boolean;
   crossNickRecencyDays?: number;
   stopOnAccept?: boolean;
+  onBlockArchived?: 'stop' | 'skip';
 }
 
 export interface AutomationSequence {
@@ -114,6 +120,7 @@ export type TriggerEventType =
   | 'friendship_accepted' | 'friendship_received' | 'first_message_received'
   | 'message_received' | 'keyword_match'
   | 'contact_created' | 'contact_status_changed' | 'contact_imported'
+  | 'stuck_lead' | 'form_submission'
   | 'birthday' | 'scheduled_cron' | 'time_elapsed'
   | 'manual_run' | 'order_success';
 
