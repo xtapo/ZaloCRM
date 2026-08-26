@@ -162,14 +162,19 @@ async function processTask(taskId: string): Promise<void> {
   }
 
   // 2. Block archived?
+  // defer-2026-05-21 (A2): 'stop' giữ hành vi cũ — kết thúc flow. 'skip' bỏ qua
+  // step đã archive và tiếp tục các bước còn lại của sequence.
+  const rules = (task.campaign.rulesSnapshot as object) as SequenceRuntimeRules;
+  const actionType = task.block.actionType as BlockActionType;
   const archCheck = checkBlockArchived(task.block.archivedAt);
   if (!archCheck.passed) {
+    if ((rules.onBlockArchived ?? 'stop') === 'skip') {
+      await markSkippedAndAdvance(task, new Date());
+      return;
+    }
     await markSkipped(taskId, archCheck.failedGate!, archCheck.detail);
     return;
   }
-
-  const rules = (task.campaign.rulesSnapshot as object) as SequenceRuntimeRules;
-  const actionType = task.block.actionType as BlockActionType;
   const now = new Date();
 
   // 3. Hour range
@@ -304,6 +309,25 @@ async function processTask(taskId: string): Promise<void> {
     return;
   }
 
+  if (result.outcome === 'uid_belongs_to_other_contact') {
+    // defer A3: findUser resolved the phone to a Zalo account already linked to
+    // another Contact. Terminal skip — no send, no retry; sale decides on merge.
+    // Sequence advances so the contact isn't stranded mid-flow.
+    await prisma.automationTask.update({
+      where: { id: taskId },
+      data: {
+        state: TASK_STATES.SKIPPED,
+        skipReason: 'uid_belongs_to_other_contact',
+        errorMessage: 'UID Zalo đã liên kết với contact khác trong CRM',
+        outcome: (result.data ?? undefined) as object | undefined,
+        executedAt: now,
+      },
+    });
+    logger.warn(`[task-worker] task ${taskId} skipped: uid_belongs_to_other_contact`);
+    await advanceSequence(task, now);
+    return;
+  }
+
   // outcome === 'failure' (or unknown): retry path
   if (result.retryable && task.attemptCount < MAX_ATTEMPT_COUNT) {
     const backoffMin = RETRY_BACKOFF_MINUTES[Math.min(task.attemptCount - 1, RETRY_BACKOFF_MINUTES.length - 1)];
@@ -361,8 +385,7 @@ async function rescheduleForRetry(taskId: string, retryAt: Date, detail?: string
 }
 
 async function markDoneAndAdvance(
-  task: { id: string; campaignId: string; sequenceId: string | null; currentStepIdx: number | null;
-          contactId: string; orgId: string; campaign: { sequence: { steps: unknown } | null } },
+  task: TaskWithRefs,
   outcomeData: object | null,
   nickId: string | null,
   actionType: BlockActionType,
@@ -386,15 +409,67 @@ async function markDoneAndAdvance(
     });
   }
 
-  // Sequence advance — schedule next step if any
+  await advanceSequence(task, now);
+}
+
+// defer A2: step bị archive giữa flow + runtime rule onBlockArchived='skip' —
+// mark task skipped nhưng vẫn advance sang step kế tiếp (bỏ qua các step đã
+// archive; nếu tất cả còn lại đều archived → kết thúc flow như hoàn thành).
+async function markSkippedAndAdvance(task: TaskWithRefs, now: Date): Promise<void> {
+  await prisma.automationTask.update({
+    where: { id: task.id },
+    data: {
+      state: TASK_STATES.SKIPPED,
+      skipReason: 'block_archived',
+      errorMessage: 'Block bị archive giữa flow — bỏ qua step (onBlockArchived=skip)',
+      executedAt: now,
+    },
+  });
+  logger.debug(`[task-worker] task ${task.id} skipped (block_archived, skip mode) — advancing`);
+  await advanceSequence(task, now);
+}
+
+interface TaskWithRefs {
+  id: string;
+  campaignId: string;
+  sequenceId: string | null;
+  currentStepIdx: number | null;
+  contactId: string;
+  orgId: string;
+  campaign: { sequence: { steps: unknown } | null };
+}
+
+// Shared sequence-advance logic used by both done and skipped-with-advance paths.
+async function advanceSequence(task: TaskWithRefs, now: Date): Promise<void> {
   const steps = Array.isArray(task.campaign.sequence?.steps)
     ? (task.campaign.sequence!.steps as unknown as SequenceStep[])
     : null;
   if (!steps || task.currentStepIdx === null) return;
 
-  const nextIdx = task.currentStepIdx + 1;
-  if (nextIdx >= steps.length) {
-    // Last step — terminate this contact's flow. Bump campaign completed counter.
+  // Walk forward past any steps whose block is already archived so a mid-flow
+  // archive doesn't strand the contact on a dead step chain.
+  let nextIdx = task.currentStepIdx + 1;
+  let nextBlock: { id: string; content: unknown } | null = null;
+  while (nextIdx < steps.length) {
+    const candidate = steps[nextIdx];
+    const block = await prisma.block.findFirst({
+      where: { id: candidate.blockId, orgId: task.orgId },
+      select: { id: true, content: true, archivedAt: true },
+    });
+    if (!block) {
+      logger.warn(`[task-worker] sequence step ${nextIdx} block ${candidate.blockId} missing — terminating flow for task ${task.id}`);
+      return;
+    }
+    if (!block.archivedAt) {
+      nextBlock = block;
+      break;
+    }
+    logger.debug(`[task-worker] step ${nextIdx} block ${candidate.blockId} archived — skipping to next step`);
+    nextIdx++;
+  }
+
+  if (!nextBlock || nextIdx >= steps.length) {
+    // Last reachable step — terminate this contact's flow. Bump completed counter.
     if (task.sequenceId) {
       await prisma.automationSequence.update({
         where: { id: task.sequenceId },
@@ -405,14 +480,6 @@ async function markDoneAndAdvance(
   }
 
   const nextStep = steps[nextIdx];
-  const block = await prisma.block.findFirst({
-    where: { id: nextStep.blockId, orgId: task.orgId },
-    select: { id: true, content: true, archivedAt: true },
-  });
-  if (!block) {
-    logger.warn(`[task-worker] sequence step ${nextIdx} block ${nextStep.blockId} missing — terminating flow for task ${task.id}`);
-    return;
-  }
 
   // Schedule next task — delay from step + jitter (recompute per step to vary timing)
   const campaign = await prisma.automationCampaign.findUnique({
@@ -433,8 +500,8 @@ async function markDoneAndAdvance(
       contactId: task.contactId,
       sequenceId: task.sequenceId,
       currentStepIdx: nextIdx,
-      currentBlockId: block.id,
-      blockSnapshot: block.content as object,
+      currentBlockId: nextBlock.id,
+      blockSnapshot: nextBlock.content as object,
       scheduledAt,
       state: TASK_STATES.QUEUED,
     },

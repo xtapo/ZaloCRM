@@ -58,7 +58,7 @@ export interface ActionContext {
 }
 
 export interface ActionResult {
-  outcome: 'success' | 'failure' | 'no_zalo' | 'already_friend';
+  outcome: 'success' | 'failure' | 'no_zalo' | 'already_friend' | 'uid_belongs_to_other_contact';
   // For success: any per-action data (e.g. zalo message id)
   data?: Record<string, unknown>;
   // For failure: classification + optional retry hint

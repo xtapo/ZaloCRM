@@ -20,6 +20,8 @@ import { prisma } from '../../../../shared/database/prisma-client.js';
 import { logger } from '../../../../shared/utils/logger.js';
 import { zaloOps } from '../../../../shared/zalo-operations.js';
 import { applyContactAggregateFromMessage, applyFriendAggregate } from '../../../contacts/contact-aggregate.js';
+import { resolveAttachmentSource, type ResolvedAttachment } from '../attachment-download.js';
+import { pickVariantIndex } from '../variant-picker.js';
 import type { ActionContext, ActionResult } from '../types.js';
 
 const STUB_MODE = process.env.AUTOMATION_STUB_MODE === 'true';
@@ -27,6 +29,7 @@ const STUB_MODE = process.env.AUTOMATION_STUB_MODE === 'true';
 export async function sendMessageHandler(ctx: ActionContext): Promise<ActionResult> {
   const snap = ctx.blockSnapshot as {
     textVariants?: string[];
+    variantStrategy?: 'random' | 'even_split';
     attachments?: Array<{ kind: string; url: string; caption?: string; thumbnailUrl?: string; altText?: string }>;
   };
 
@@ -47,14 +50,17 @@ export async function sendMessageHandler(ctx: ActionContext): Promise<ActionResu
     };
   }
 
-  const text = snap.textVariants[Math.floor(Math.random() * snap.textVariants.length)];
+  // Phase 7+ A/B: strategy từ block content (snapshot), seed bằng taskId để
+  // even_split phân bổ đều qua các lần chạy retry (cùng task → cùng variant).
+  const variantIdx = pickVariantIndex(snap.textVariants.length, snap.variantStrategy ?? 'random', ctx.taskId);
+  const text = snap.textVariants[variantIdx];
   const attachments = Array.isArray(snap.attachments) ? snap.attachments : [];
 
   if (STUB_MODE) {
     logger.info(`[send-message STUB] would send "${text.slice(0, 40)}..." + ${attachments.length} attachment(s) from nick ${ctx.assignedNickId} to contact ${ctx.contactId}`);
     return {
       outcome: 'success',
-      data: { stub: true, textUsed: text, attachmentCount: attachments.length },
+      data: { stub: true, textUsed: text, variantIndex: variantIdx, attachmentCount: attachments.length },
     };
   }
 
@@ -127,7 +133,12 @@ export async function sendMessageHandler(ctx: ActionContext): Promise<ActionResu
   // Step 3: send via Zalo SDK — dispatch based on first attachment kind.
   // FIX B1: previously attachments were logged-warn and dropped (text-only).
   // Now supports image/video/file via dedicated zaloOps methods.
+  //
+  // FIX defer-2026-05-21: image/file URLs must be downloaded to a temp file
+  // first — zca-js uploadAttachment only accepts filesystem paths ("File not
+  // found" otherwise). Video is exempt: sendVideo fetches the remote URL itself.
   let sdkResult: Record<string, unknown>;
+  const resolved: Array<ResolvedAttachment> = [];
   try {
     if (attachments.length > 0) {
       const first = attachments[0];
@@ -135,8 +146,13 @@ export async function sendMessageHandler(ctx: ActionContext): Promise<ActionResu
       const caption = first.caption || text;
       let raw: unknown;
       if (first.kind === 'image') {
+        let imagePath = url;
+        {
+          const r = await resolveAttachmentSource(url, 'image');
+          if (r) { resolved.push(r); imagePath = r.filePath; }
+        }
         // zaloOps.sendImage expects attachment object array
-        raw = await zaloOps.sendImage(ctx.assignedNickId, threadId, threadType, [{ url, caption }]);
+        raw = await zaloOps.sendImage(ctx.assignedNickId, threadId, threadType, [{ url: imagePath, caption }]);
       } else if (first.kind === 'video') {
         // Video: zaloOps.sendVideo({ videoUrl, thumbnailUrl, msg })
         raw = await zaloOps.sendVideo(ctx.assignedNickId, threadId, threadType, {
@@ -145,11 +161,12 @@ export async function sendMessageHandler(ctx: ActionContext): Promise<ActionResu
           msg: caption,
         });
       } else if (first.kind === 'file') {
-        // sendFile expects file path array. If URL is http, the worker can't fetch
-        // server-side without download — currently passes URL string as path.
-        // Zalo SDK behavior: file path must exist on the running server.
-        // TODO: download URL → temp file for non-filesystem URLs.
-        raw = await zaloOps.sendFile(ctx.assignedNickId, threadId, threadType, [url], null, caption);
+        let filePath = url;
+        {
+          const r = await resolveAttachmentSource(url, 'file');
+          if (r) { resolved.push(r); filePath = r.filePath; }
+        }
+        raw = await zaloOps.sendFile(ctx.assignedNickId, threadId, threadType, [filePath], null, caption);
       } else if (first.kind === 'link') {
         // Link card uses sendLink with link payload
         raw = await zaloOps.sendLink(ctx.assignedNickId, threadId, threadType, { href: url, title: caption, desc: text });
@@ -177,6 +194,8 @@ export async function sendMessageHandler(ctx: ActionContext): Promise<ActionResu
       errorMessage: msg,
       retryable: false,
     };
+  } finally {
+    await Promise.all(resolved.map((r) => r.cleanup()));
   }
 
   // Step 4: extract zaloMsgId for dedup with self-listen echo
@@ -246,6 +265,7 @@ export async function sendMessageHandler(ctx: ActionContext): Promise<ActionResu
     data: {
       zaloMsgId,
       textUsed: text,
+      variantIndex: variantIdx,
       conversationId: conversation.id,
       messageId: messageRow.id,
     },

@@ -23,6 +23,10 @@ export interface SequenceRuntimeRules {
   perNickThrottle?: boolean;
   crossNickRecencyDays?: number;
   stopOnAccept?: boolean;
+  /** Khi block của step bị archive giữa flow: 'stop' kết thúc flow (mặc định,
+   *  tương thích snapshot cũ không có field này), 'skip' bỏ qua step đã archive
+   *  và tiếp tục các bước còn lại. */
+  onBlockArchived?: 'stop' | 'skip';
 }
 
 // Default runtime rules baked from memory rules:
@@ -112,6 +116,9 @@ export function validateRuntimeRules(
   }
   if (r.stopOnAccept !== undefined && typeof r.stopOnAccept !== 'boolean') {
     return { ok: false, error: 'stopOnAccept phải là boolean' };
+  }
+  if (r.onBlockArchived !== undefined && r.onBlockArchived !== 'stop' && r.onBlockArchived !== 'skip') {
+    return { ok: false, error: "onBlockArchived phải là 'stop' hoặc 'skip'" };
   }
 
   return { ok: true, rules: r as SequenceRuntimeRules };
