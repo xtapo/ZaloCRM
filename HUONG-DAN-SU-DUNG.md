@@ -5,13 +5,14 @@
 1. [Đăng nhập](#1-đăng-nhập)
 2. [Kết nối Zalo](#2-kết-nối-zalo)
 3. [Chat với khách hàng](#3-chat-với-khách-hàng)
-4. [Quản lý khách hàng](#4-quản-lý-khách-hàng)
-5. [Lịch hẹn](#5-lịch-hẹn)
-6. [Dashboard & Báo cáo](#6-dashboard--báo-cáo)
-7. [Quản lý nhân viên](#7-quản-lý-nhân-viên)
-8. [API & Webhook](#8-api--webhook)
-9. [Câu hỏi thường gặp](#9-câu-hỏi-thường-gặp)
-10. [Quy tắc quan trọng](#10-quy-tắc-quan-trọng)
+4. [Messenger Fanpage](#4-messenger-fanpage)
+5. [Quản lý khách hàng](#5-quản-lý-khách-hàng)
+6. [Lịch hẹn](#6-lịch-hẹn)
+7. [Dashboard & Báo cáo](#7-dashboard--báo-cáo)
+8. [Quản lý nhân viên](#8-quản-lý-nhân-viên)
+9. [API & Webhook](#9-api--webhook)
+10. [Câu hỏi thường gặp](#10-câu-hỏi-thường-gặp)
+11. [Quy tắc quan trọng](#11-quy-tắc-quan-trọng)
 
 ---
 
@@ -93,7 +94,47 @@ Giao diện chat chia 3 cột (kéo thả để thay đổi kích thước):
 
 ---
 
-## 4. Quản lý khách hàng
+## 4. Messenger Fanpage
+
+Ngoài Zalo, hệ thống hỗ trợ nhận và trả lời tin nhắn Facebook Messenger từ Fanpage (multi-channel 2026-08-26).
+
+### Bật hộp thư Messenger
+
+Yêu cầu: Page đã kết nối Facebook Lead Ads (OAuth Meta — cùng app với Lead Ads, thêm scope `pages_messaging`).
+
+1. Vào **Cài đặt → Kênh → Facebook**
+2. Ở từng Page trong danh sách → bật công tắc **Messenger**
+3. Hệ thống tự subscribe page nhận sự kiện `messages` trên Meta
+
+### Nhận tin nhắn
+
+- Tin nhắn mới từ Fanpage xuất hiện trong **Inbox** như hội thoại Zalo — đánh dấu huy hiệu **ƒ** màu Messenger ở avatar
+- Ảnh, file, tin nhắn voice từ khách đều hiển thị đầy đủ
+- Tên khách tự động lấy từ profile Facebook
+
+### Trả lời tin nhắn
+
+- Chọn hội thoại Messenger → gõ tin nhắn → **Enter**
+- **Lưu ý quan trọng — quy tắc 24h của Facebook:** chỉ được gửi tin cho khách trong vòng **24 giờ** kể từ tin nhắn cuối cùng của khách. Quá 24h, nút gửi sẽ báo lỗi — khách cần nhắn tin lại trước.
+
+### Tắt hộp thư Messenger
+
+- Vào **Cài đặt → Kênh → Facebook** → tắt công tắc **Messenger** của page
+- Hội thoại cũ vẫn giữ nguyên trong Inbox; hệ thống ngừng nhận tin mới từ page đó
+
+### Phạm vi hiện tại (MVP)
+
+| Hỗ trợ | Chưa hỗ trợ |
+|--------|-------------|
+| Text, ảnh, file, voice | Video, sticker |
+| Trả lời trích dẫn (reply) | Sửa / thu hồi tin |
+| Nhận + trả lời thủ công trong Inbox | Automation gửi tin tự động qua Messenger |
+
+> **Automation:** các kịch bản tự động (send_message, request_friend) hiện **chỉ chạy trên Zalo**. Nếu khách đang hoạt động trên Messenger, tác vụ Zalo tự động sẽ bị bỏ qua an toàn (`UNSUPPORTED_CHANNEL`).
+
+---
+
+## 5. Quản lý khách hàng
 
 Vào menu **Khách hàng**
 
@@ -124,7 +165,7 @@ Vào menu **Khách hàng**
 
 ---
 
-## 5. Lịch hẹn
+## 6. Lịch hẹn
 
 Vào menu **Lịch hẹn**
 
@@ -157,7 +198,7 @@ Vào menu **Lịch hẹn**
 
 ---
 
-## 6. Dashboard & Báo cáo
+## 7. Dashboard & Báo cáo
 
 ### Dashboard (trang chủ)
 
@@ -179,7 +220,7 @@ Biểu đồ:
 
 ---
 
-## 7. Quản lý nhân viên
+## 8. Quản lý nhân viên
 
 Vào menu **Nhân viên** (chỉ Admin/Owner)
 
@@ -203,7 +244,7 @@ Vào menu **Nhân viên** (chỉ Admin/Owner)
 
 ---
 
-## 8. API & Webhook
+## 9. API & Webhook
 
 Dành cho lập trình viên muốn tích hợp ZaloCRM với hệ thống khác.
 
@@ -238,7 +279,7 @@ curl -X POST -H "X-API-Key: your-key" -H "Content-Type: application/json" \
 
 ---
 
-## 9. Câu hỏi thường gặp
+## 10. Câu hỏi thường gặp
 
 ### "Zalo bị ngắt kết nối?"
 
@@ -262,7 +303,7 @@ Liên hệ Admin/Owner để reset mật khẩu trong **Cài đặt → Nhân vi
 
 ---
 
-## 10. Quy tắc quan trọng
+## 11. Quy tắc quan trọng
 
 ### ❌ KHÔNG làm
 
