@@ -9,3 +9,5 @@
 export { updateStatusHandler } from './update-status.js';
 export { requestFriendHandler } from './request-friend.js';
 export { sendMessageHandler } from './send-message.js';
+export { addTagHandler, removeTagHandler } from './tags.js';
+export { assignUserHandler } from './assign-user.js';

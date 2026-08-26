@@ -16,6 +16,9 @@ import {
   requestFriendHandler,
   sendMessageHandler,
   updateStatusHandler,
+  addTagHandler,
+  removeTagHandler,
+  assignUserHandler,
 } from './action-handlers/index.js';
 
 let isStarted = false;
@@ -40,6 +43,10 @@ export function startAutomationEngine(): void {
   registerActionHandler('update_status', updateStatusHandler);
   registerActionHandler('request_friend', requestFriendHandler);
   registerActionHandler('send_message', sendMessageHandler);
+  // Phase 7+ — tag/assign actions
+  registerActionHandler('add_tag', addTagHandler);
+  registerActionHandler('remove_tag', removeTagHandler);
+  registerActionHandler('assign_user', assignUserHandler);
 
   // 3. Start polling worker
   startTaskWorker();
@@ -54,7 +61,7 @@ export function startAutomationEngine(): void {
     }
   })();
 
-  logger.info('[automation.engine] started — event bus + 3 action handlers + worker + cron');
+  logger.info('[automation.engine] started — event bus + 6 action handlers + worker + cron');
 }
 
 export { automationEventBus } from './event-bus.js';
