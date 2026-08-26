@@ -17,9 +17,15 @@ describe('isSupportedActionType', () => {
     expect(isSupportedActionType('update_status')).toBe(true);
   });
 
+  it('accepts phase-7+ tag/assign action types', () => {
+    expect(isSupportedActionType('add_tag')).toBe(true);
+    expect(isSupportedActionType('remove_tag')).toBe(true);
+    expect(isSupportedActionType('assign_user')).toBe(true);
+  });
+
   it('rejects reserved-but-not-yet-supported action types', () => {
     expect(isSupportedActionType('send_image')).toBe(false);
-    expect(isSupportedActionType('assign_user')).toBe(false);
+    expect(isSupportedActionType('update_lead_score')).toBe(false);
   });
 
   it('rejects unknown strings', () => {
@@ -29,11 +35,14 @@ describe('isSupportedActionType', () => {
     expect(isSupportedActionType(123)).toBe(false);
   });
 
-  it('exposes the 3 phase-7 types in SUPPORTED_ACTION_TYPES', () => {
+  it('exposes the 6 phase-7(+ ) types in SUPPORTED_ACTION_TYPES', () => {
     expect(SUPPORTED_ACTION_TYPES).toEqual([
       'request_friend',
       'send_message',
       'update_status',
+      'add_tag',
+      'remove_tag',
+      'assign_user',
     ]);
   });
 });
@@ -128,6 +137,51 @@ describe('validateBlockContent — update_status', () => {
       onlyFromStatusIds: 'not-an-array',
     });
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('validateBlockContent — variantStrategy', () => {
+  it('accepts omitted variantStrategy (default random)', () => {
+    const r = validateBlockContent('request_friend', { greetingVariants: ['a'] });
+    expect(r.ok).toBe(true);
+  });
+
+  it('accepts both strategies on request_friend and send_message', () => {
+    for (const strategy of ['random', 'even_split']) {
+      expect(validateBlockContent('request_friend', { greetingVariants: ['a'], variantStrategy: strategy }).ok).toBe(true);
+      expect(validateBlockContent('send_message', { textVariants: ['a'], variantStrategy: strategy }).ok).toBe(true);
+    }
+  });
+
+  it('rejects unknown strategy value', () => {
+    const r = validateBlockContent('send_message', { textVariants: ['a'], variantStrategy: 'round_robin' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain('variantStrategy');
+  });
+});
+
+describe('validateBlockContent — add_tag / remove_tag / assign_user', () => {
+  it('accepts valid tag content', () => {
+    expect(validateBlockContent('add_tag', { tags: ['hot'] }).ok).toBe(true);
+    expect(validateBlockContent('remove_tag', { tags: ['a', 'b'] }).ok).toBe(true);
+  });
+
+  it('rejects empty or malformed tags array', () => {
+    expect(validateBlockContent('add_tag', { tags: [] }).ok).toBe(false);
+    expect(validateBlockContent('add_tag', { tags: 'hot' }).ok).toBe(false);
+    expect(validateBlockContent('remove_tag', { tags: ['', 'x'] }).ok).toBe(false);
+    expect(validateBlockContent('remove_tag', { tags: [1] }).ok).toBe(false);
+  });
+
+  it('accepts assign_user with onlyIfUnassigned', () => {
+    expect(validateBlockContent('assign_user', { userId: 'u1' }).ok).toBe(true);
+    expect(validateBlockContent('assign_user', { userId: 'u1', onlyIfUnassigned: true }).ok).toBe(true);
+  });
+
+  it('rejects missing/empty userId', () => {
+    expect(validateBlockContent('assign_user', {}).ok).toBe(false);
+    expect(validateBlockContent('assign_user', { userId: '' }).ok).toBe(false);
+    expect(validateBlockContent('assign_user', { userId: 42 }).ok).toBe(false);
   });
 });
 
