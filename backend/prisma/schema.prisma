@@ -86,6 +86,8 @@ model Organization {
   agentSteps                AgentStep[]
   // Group CRM management — profile per Zalo group (tags, notes, assignment)
   groupCrmProfiles          GroupCrmProfile[]
+  // Multi-channel messaging (2026-08-26) — Messenger/Telegram/WhatsApp accounts
+  channelAccounts           ChannelAccount[]
 
   @@map("organizations")
 }
@@ -429,6 +431,8 @@ model Contact {
 
   // Daily engagement aggregate rows (cascade delete)
   engagementDaily ContactEngagementDaily[]
+  // Multi-channel identity mapping (2026-08-26) — PSID/Telegram chat id → Contact
+  channelContacts ChannelContact[]
 
   @@unique([orgId, zaloGlobalId])
   @@index([orgId, phone])
@@ -457,6 +461,24 @@ model Contact {
   @@index([orgId, stuckSinceAggregate])
   @@index([orgId, aggregateScoreUpdatedAt(sort: Desc)])
   @@map("contacts")
+}
+
+// Multi-channel identity mapping (2026-08-26) — liên kết Contact với external id
+// của kênh ngoài Zalo (PSID Messenger / Telegram chat_id / WhatsApp wa_id).
+// KHÔNG đụng cột zalo* của Contact — chain dedup Zalo giữ nguyên.
+model ChannelContact {
+  id         String   @id @default(uuid())
+  orgId      String   @map("org_id")
+  contactId  String   @map("contact_id")
+  provider   String // 'messenger' | 'telegram' | 'whatsapp'
+  externalId String   @map("external_id") // PSID / chat_id / wa_id
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, provider, externalId])
+  @@index([contactId])
+  @@map("channel_contacts")
 }
 
 // Status (Trạng thái KH) — per-org config replacing Contact.status enum cũ.
@@ -489,6 +511,11 @@ model Conversation {
   id                String    @id @default(uuid())
   orgId             String    @map("org_id")
   zaloAccountId     String    @map("zalo_account_id")
+  // Multi-channel (2026-08-26) — 'zalo' cho mọi conv cũ (backward compat default).
+  // Conv channel (messenger/telegram/...) có zaloAccountId = sentinel CHANNEL placeholder
+  // (FK vẫn phải thỏa — xem migration 20260826010000) + channelAccountId trỏ ChannelAccount.
+  provider          String    @default("zalo") @map("provider")
+  channelAccountId  String?   @map("channel_account_id")
   contactId         String?   @map("contact_id")
   threadType        String    @default("user") // user, group
   externalThreadId  String?   @map("external_thread_id")
@@ -504,6 +531,7 @@ model Conversation {
 
   org           Organization         @relation(fields: [orgId], references: [id], onDelete: Cascade)
   zaloAccount   ZaloAccount          @relation(fields: [zaloAccountId], references: [id], onDelete: Cascade)
+  channelAccount ChannelAccount?     @relation(fields: [channelAccountId], references: [id], onDelete: Cascade)
   contact       Contact?             @relation(fields: [contactId], references: [id])
   messages      Message[]
   aiSuggestions AiSuggestion[]
@@ -511,6 +539,9 @@ model Conversation {
   factEvidence  FactEvidence[]
 
   @@unique([zaloAccountId, externalThreadId])
+  // Conv channel: unique riêng theo (channelAccount, externalThreadId) — Postgres cho phép
+  // nhiều NULL nên không xung đột unique Zalo phía trên.
+  @@unique([channelAccountId, externalThreadId])
   @@index([orgId, zaloAccountId, isReplied, lastMessageAt])
   @@index([orgId, zaloAccountId, lastMessageAt])
   @@index([orgId, tab, lastMessageAt])
@@ -520,7 +551,35 @@ model Conversation {
   @@index([orgId, threadType, zaloAccountId, lastMessageAt(sort: Desc)])
   // Tab Chính/Khác: filter tab + accountId, sort lastMessageAt desc.
   @@index([orgId, tab, zaloAccountId, lastMessageAt(sort: Desc)])
+  // Multi-channel (2026-08-26): list inbox cho conv channel (provider != zalo).
+  @@index([orgId, provider, channelAccountId, lastMessageAt(sort: Desc)])
   @@map("conversations")
+}
+
+// Multi-channel messaging account (2026-08-26) — Messenger page / Telegram bot /
+// WhatsApp number. KHÔNG phải Zalo nick (Zalo giữ ZaloAccount riêng).
+// Access model MVP: org-wide (tương đương nick privacyMode='sub') — chưa gắn owner/dept.
+model ChannelAccount {
+  id             String    @id @default(uuid())
+  orgId          String    @map("org_id")
+  provider       String // 'messenger' | 'telegram' | 'whatsapp'
+  externalId     String    @map("external_id") // page id / bot id / waba phone id
+  displayName    String?   @map("display_name")
+  avatarUrl      String?   @map("avatar_url")
+  accessTokenEnc String?   @map("access_token_enc") // AES-256-GCM (shared/crypto/aes-gcm)
+  tokenExpiresAt DateTime? @map("token_expires_at")
+  status         String    @default("connected") // connected | revoked | error | disabled
+  lastError      String?   @map("last_error")
+  privacyMode    String    @default("sub") @map("privacy_mode") // reserved — tái dùng pattern Zalo
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization  Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@unique([orgId, provider, externalId])
+  @@index([orgId, provider, status])
+  @@map("channel_accounts")
 }
 
 // Individual message within a conversation
@@ -528,6 +587,9 @@ model Message {
   id              String    @id @default(uuid())
   conversationId  String    @map("conversation_id")
   zaloMsgId       String?   @map("zalo_msg_id")
+  // Multi-channel (2026-08-26) — external msg id cho kênh ngoài Zalo (FB mid,
+  // Telegram message_id). Unique để idempotent webhook dedup; tin Zalo giữ null.
+  externalMsgId   String?   @map("external_msg_id")
   // Numeric Snowflake từ Zalo server — primary sort key (match 100% Zalo Web).
   // sentAt giữ làm display + fallback cho CRM-sent chưa echo. KHÔNG dùng sentAt làm
   // primary order vì self-listen events đôi khi thiếu `ts` → Date.now() fallback lệch ~30s.
@@ -571,6 +633,9 @@ model Message {
   reactions    MessageReaction[]
 
   @@unique([conversationId, zaloMsgId])
+  // Multi-channel dedup (2026-08-26) — Postgres cho phép nhiều NULL nên tin Zalo
+  // (externalMsgId=null) không bị ảnh hưởng.
+  @@unique([conversationId, externalMsgId])
   @@index([conversationId, albumKey])
   // Composite index cho sort theo Zalo Snowflake — primary order khi list messages.
   @@index([conversationId, zaloMsgIdNum(sort: Desc)])

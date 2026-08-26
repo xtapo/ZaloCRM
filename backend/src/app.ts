@@ -72,6 +72,7 @@ import { analyticsRoutes } from './modules/analytics/analytics-routes.js';
 import { savedReportRoutes } from './modules/analytics/saved-report-routes.js';
 import { integrationRoutes } from './modules/integrations/integration-routes.js';
 import { facebookRoutes } from './modules/integrations/providers/facebook/facebook-routes.js';
+import { messengerRoutes } from './modules/channels/messenger/messenger-routes.js';
 import { automationRoutes } from './modules/automation/automation-routes.js';
 import { templateRoutes } from './modules/automation/template-routes.js';
 // Phase 7 — Automation framework (Block / Sequence / Trigger / Broadcast)
@@ -255,6 +256,8 @@ async function bootstrap() {
   await app.register(savedReportRoutes);
   await app.register(integrationRoutes);
   await app.register(facebookRoutes);
+  // Multi-channel — Messenger webhook + page enable/disable (2026-08-26)
+  await app.register(messengerRoutes);
   await app.register(automationRoutes);
   await app.register(templateRoutes);
   // Phase 7 — Block authoring layer (must register BEFORE sequence/trigger/broadcast in later phases)

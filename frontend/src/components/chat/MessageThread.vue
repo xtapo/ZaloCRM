@@ -1563,8 +1563,17 @@ function onOpenNote() {
 const inputPlaceholder = computed(() => {
   // Bỏ "Đang nhắn từ nick" vì đã có avatar nick bên trái input — gọn hơn.
   // Hint phím tắt giữ ngắn gọn.
+  if (isMessengerConv.value) {
+    return 'Gõ tin nhắn Messenger… ("/" template)';
+  }
   return 'Gõ tin nhắn… ("/" template, "@" mention, "#" tag)';
 });
+
+// ── Multi-channel (2026-08-26) ────────────────────────────────────────────
+// Conv Messenger: composer gửi text qua cùng endpoint (BE route qua ChannelRouter),
+// nhưng KHÔNG có RTF styles + mention/tag hints. 24h window check do BE enforce
+// (403 MESSAGING_WINDOW_EXPIRED → toast lỗi).
+const isMessengerConv = computed(() => (props.conversation?.provider || 'zalo') === 'messenger');
 
 /* Care status change: persist qua API + update local conversation.contact.status NGAY.
  * Trước đây chỉ emit lên ChatView (parent KHÔNG handle) → status không bao giờ lưu. */
@@ -1942,7 +1951,10 @@ function handleSend() {
 
   // 2026-05-21 fix: lấy rich payload {text, styles} từ editor để gửi format đi Zalo.
   // Nếu không có styles → behaves như plain text (backward compat).
-  const rich = (editorRef.value as any)?.getRichPayload?.() || { text: inputText.value, styles: [] };
+  // Messenger conv: luôn gửi plain text — Graph API không hỗ trợ Zalo-style RTF.
+  const rich = !isMessengerConv.value
+    ? ((editorRef.value as any)?.getRichPayload?.() || { text: inputText.value, styles: [] })
+    : { text: inputText.value, styles: [] };
   const textToSend = rich.text || inputText.value;
   const styles = Array.isArray(rich.styles) && rich.styles.length > 0 ? rich.styles : undefined;
 

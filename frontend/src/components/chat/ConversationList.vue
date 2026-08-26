@@ -69,7 +69,7 @@
           :name="displayName(conv)"
           :size="41"
           :is-group="conv.threadType === 'group'"
-          :platform="conv.threadType === 'user' ? 'zalo' : null"
+          :platform="platformOf(conv)"
           :gradient-seed="conv.id"
         />
 
@@ -360,6 +360,14 @@ function avatarSrcOf(conv: Conversation): string | null {
     return (conv as Conversation & { groupAvatarUrl?: string }).groupAvatarUrl || null;
   }
   return conv.contact?.avatarUrl || null;
+}
+
+// Multi-channel (2026-08-26): badge theo kênh — messenger conv hiện badge Messenger,
+// zalo giữ nguyên. Kênh khác chưa hỗ trợ → không badge.
+function platformOf(conv: Conversation): 'zalo' | 'messenger' | null {
+  const provider = conv.provider || 'zalo';
+  if (provider === 'messenger') return 'messenger';
+  return conv.threadType === 'user' ? 'zalo' : null;
 }
 
 function friendshipStatus(conv: Conversation): string | null {

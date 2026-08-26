@@ -97,7 +97,11 @@ export async function chatRoutes(app: FastifyInstance) {
         });
       }
       if (!accountId) {
-        baseWhere.zaloAccountId = { in: scope.accessibleIds };
+        // Multi-channel: conv kênh ngoài (messenger...) org-wide — không giới hạn theo nick scope
+        baseWhere.OR = [
+          { provider: { not: 'zalo' } },
+          { zaloAccountId: { in: scope.accessibleIds } },
+        ];
       }
     }
 
@@ -336,7 +340,11 @@ export async function chatRoutes(app: FastifyInstance) {
           });
         }
       } else if (where.zaloAccountId !== 'EMPTY_FOLDER_NO_MATCH') {
-        where.zaloAccountId = { in: scope.accessibleIds };
+        // Multi-channel: conv kênh ngoài (messenger...) org-wide — OR với zalo scope
+        where.OR = [
+          { provider: { not: 'zalo' } },
+          { zaloAccountId: { in: scope.accessibleIds } },
+        ];
       }
     }
 
@@ -376,6 +384,7 @@ export async function chatRoutes(app: FastifyInstance) {
             },
           },
           zaloAccount: { select: { id: true, displayName: true, avatarUrl: true, zaloUid: true, privacyMode: true, ownerUserId: true } },
+          channelAccount: { select: { id: true, displayName: true, avatarUrl: true, provider: true } },
           pins: { select: { id: true } },
           messages: {
             take: 1,
@@ -842,6 +851,38 @@ export async function chatRoutes(app: FastifyInstance) {
       include: { zaloAccount: true },
     });
     if (!conversation) return reply.status(404).send({ error: 'Conversation not found' });
+
+    // ── Multi-channel branch: conv Messenger/Telegram... đi qua ChannelRouter ──
+    if (conversation.provider && conversation.provider !== 'zalo') {
+      try {
+        const { sendViaChannel } = await import('../channels/router.js');
+        const { persistOutboundChannelMessage } = await import('../channels/persistence.js');
+        const result = await sendViaChannel(conversation as any, {
+          text: content,
+          replyToExternalMsgId: undefined,
+        });
+        await persistOutboundChannelMessage({
+          conversationId: id,
+          provider: conversation.provider,
+          channelAccountId: conversation.channelAccountId!,
+          sendResult: result,
+          content,
+          contentType: 'text',
+          repliedByUserId: user.id,
+          io: (app as any).io ?? null,
+        });
+        return { ok: true };
+      } catch (err: any) {
+        if (err?.code === 'MESSAGING_WINDOW_EXPIRED') {
+          return reply.status(403).send({ error: err.message, code: err.code });
+        }
+        if (err?.code === 'CAPABILITY_UNSUPPORTED') {
+          return reply.status(400).send({ error: err.message, code: err.code });
+        }
+        logger.error('[chat] channel send error:', err);
+        return reply.status(500).send({ error: 'Failed to send message' });
+      }
+    }
 
     const instance = zaloPool.getInstance(conversation.zaloAccountId);
     if (!instance?.api) return reply.status(400).send({ error: 'Zalo account not connected' });

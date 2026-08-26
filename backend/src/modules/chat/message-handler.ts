@@ -13,6 +13,7 @@ import { syncReminderFromMessage } from '../contacts/reminder-sync.js';
 import { notifyIncomingMessage } from '../notifications/incoming-message-notifier.js';
 import { uploadBuffer } from '../../shared/storage/minio-client.js';
 import { config } from '../../config/index.js';
+import { getOrCreateSentinelAccount } from '../channels/sentinel.js';
 
 export interface IncomingMessage {
   accountId: string;
@@ -43,6 +44,13 @@ export interface IncomingMessage {
   albumIndex?: number | null;
   albumTotal?: number | null;
   isBackfill?: boolean;     // true for old_messages / sync backfill — skip automations
+  // ── Multi-channel (2026-08-26) ────────────────────────────────────────────
+  // 'zalo' (default — mọi caller Zalo hiện tại không cần set) | 'messenger' | ...
+  // Khi != 'zalo': accountId = ChannelAccount.id, msgId lưu vào Message.externalMsgId,
+  // contact dedup qua ChannelContact thay vì chain zalo*.
+  provider?: string;
+  /** External msg id cho kênh ngoài Zalo (FB mid...) — unique per conversation (dedup). */
+  externalMsgId?: string;
 }
 
 export interface HandleMessageResult {
@@ -227,14 +235,28 @@ async function mirrorInboundMediaContent(msg: IncomingMessage): Promise<string> 
 export async function handleIncomingMessage(
   msg: IncomingMessage,
 ): Promise<HandleMessageResult | null> {
+  // Multi-channel: provider !== 'zalo' → msg.accountId là ChannelAccount.id (kênh ngoài),
+  // còn lại mọi logic Zalo giữ nguyên code-path cũ.
+  const provider = msg.provider && msg.provider !== 'zalo' ? msg.provider : 'zalo';
   try {
-    const account = await prisma.zaloAccount.findUnique({
-      where: { id: msg.accountId },
-      select: { orgId: true, ownerUserId: true },
-    });
-    if (!account) return null;
+    let orgId: string;
+    if (provider === 'zalo') {
+      const account = await prisma.zaloAccount.findUnique({
+        where: { id: msg.accountId },
+        select: { orgId: true, ownerUserId: true },
+      });
+      if (!account) return null;
+      orgId = account.orgId;
+    } else {
+      const channelAccount = await prisma.channelAccount.findUnique({
+        where: { id: msg.accountId },
+        select: { orgId: true, status: true },
+      });
+      if (!channelAccount) return null;
+      orgId = channelAccount.orgId;
+    }
 
-    const contactId = await upsertContact(msg, account.orgId);
+    const contactId = await upsertContact(msg, orgId);
 
     // Update lastActivity for lead scoring freshness
     if (contactId) {
@@ -244,12 +266,14 @@ export async function handleIncomingMessage(
       }).catch(() => {});
     }
 
-    const conversation = await findOrCreateConversation(msg, account.orgId, contactId);
+    const conversation = await findOrCreateConversation(msg, orgId, contactId);
 
     const sentAt = new Date(msg.timestamp);
+    const isChannel = provider !== 'zalo';
 
     // Dedup guard for self messages: if a self message exists in the last 30s, this is likely a selfListen echo of a CRM-sent message
-    if (msg.isSelf && msg.msgId) {
+    // (Zalo-only — kênh ngoài dedup bằng unique [conversationId, externalMsgId])
+    if (!isChannel && msg.isSelf && msg.msgId) {
       // For text: match by content. For attachments (image/video/file): match by contentType only —
       // CRM persists with our MinIO URL while Zalo echo carries Zalo CDN URL, so content strings differ.
       const isAttachment = msg.contentType && ['image', 'video', 'file'].includes(msg.contentType);
@@ -295,7 +319,7 @@ export async function handleIncomingMessage(
     try {
       // zaloMsgIdNum = numeric form của Snowflake — primary sort key match Zalo Web.
       // Parse fail → null (CRM-sent in-flight messages chưa có msgId).
-      const zaloMsgIdNum = msg.msgId && /^\d+$/.test(msg.msgId) ? BigInt(msg.msgId) : null;
+      const zaloMsgIdNum = !isChannel && msg.msgId && /^\d+$/.test(msg.msgId) ? BigInt(msg.msgId) : null;
       const storedContent = await mirrorInboundMediaContent(msg);
       message = await prisma.message.create({
         data: {
@@ -315,6 +339,8 @@ export async function handleIncomingMessage(
           albumKey: msg.albumKey ?? null,
           albumIndex: msg.albumIndex ?? null,
           albumTotal: msg.albumTotal ?? null,
+          // Multi-channel: FB mid... — unique [conversationId, externalMsgId] dedup webhook retries
+          externalMsgId: isChannel ? (msg.externalMsgId ?? null) : undefined,
           sentAt,
         },
       });
@@ -352,7 +378,7 @@ export async function handleIncomingMessage(
       contactZaloAvatarUrl: msg.contactZaloAvatarUrl ?? null,
     };
     void applyContactAggregateFromMessage(aggregateInput);
-    void applyFriendAggregate(aggregateInput);
+    if (!isChannel) void applyFriendAggregate(aggregateInput);
 
     // Phase 8 — Engagement daily aggregate hook (fire-and-forget).
     // Skip for group threads (only meaningful for 1-1 contact engagement).
@@ -389,7 +415,7 @@ export async function handleIncomingMessage(
 
           await incrementDailyAggregate({
             contactId,
-            orgId: account.orgId,
+            orgId: orgId,
             at: sentAt,
             inboundMsg: signals.inbound,
             outboundMsg: signals.outbound,
@@ -409,7 +435,8 @@ export async function handleIncomingMessage(
     // Phase 6 — Lead scoring hook (fire-and-forget).
     // Resolve friendId by (zaloAccountId, externalThreadId) sau aggregate đã chạy.
     // Nếu Friend chưa exist (lần đầu chat), aggregate sẽ tạo row → hook sẽ chạy ở message kế.
-    if (msg.threadType !== 'group' && msg.threadId) {
+    // Zalo-only: Friend model là khái niệm Zalo friend — kênh ngoài skip.
+    if (!isChannel && msg.threadType !== 'group' && msg.threadId) {
       void (async () => {
         try {
           const friend = await prisma.friend.findUnique({
@@ -430,7 +457,7 @@ export async function handleIncomingMessage(
             // Outbound — chỉ check slow_response_self
             if (friend.lastInboundAt) {
               const secs = Math.max(0, (sentAtMs - friend.lastInboundAt.getTime()) / 1000);
-              onOutboundScoring(account.orgId, friend.id, { responseSecondsFromLastInbound: secs });
+              onOutboundScoring(orgId, friend.id, { responseSecondsFromLastInbound: secs });
             }
           } else {
             // Inbound — full keyword + engagement scoring
@@ -441,7 +468,7 @@ export async function handleIncomingMessage(
               message.contentType === 'voice' ||
               message.contentType === 'audio' ||
               message.contentType === 'call';
-            onInboundScoring(account.orgId, friend.id, content, {
+            onInboundScoring(orgId, friend.id, content, {
               contentLength: content.length,
               isVoiceOrCall,
               responseSecondsFromLastOutbound: responseSecs,
@@ -453,15 +480,18 @@ export async function handleIncomingMessage(
       })();
     }
 
-    // Auto-sync Zalo reminder → Appointment (fire-and-forget, dedup theo externalRef)
-    void syncReminderFromMessage({
-      orgId: account.orgId,
-      contactId,
-      messageId: message.id,
-      content: message.content,
-      contentType: message.contentType,
-      senderUid: msg.senderUid,
-    });
+    // Auto-sync Zalo reminder → Appointment (fire-and-forget, dedup theo externalRef).
+    // Zalo-only — reminder parse dựa trên format tin nhắn Zalo.
+    if (!isChannel) {
+      void syncReminderFromMessage({
+        orgId,
+        contactId,
+        messageId: message.id,
+        content: message.content,
+        contentType: message.contentType,
+        senderUid: msg.senderUid,
+      });
+    }
 
     // Track first outbound contact date — set once when agent sends first message
     if (msg.isSelf && contactId) {
@@ -476,13 +506,13 @@ export async function handleIncomingMessage(
       return {
         message,
         conversationId: conversation.id,
-        orgId: account.orgId,
+        orgId: orgId,
         contactId,
       };
     }
 
     // Emit webhook for message event (fire-and-forget)
-    emitWebhook(account.orgId, msg.isSelf ? 'message.sent' : 'message.received', {
+    emitWebhook(orgId, msg.isSelf ? 'message.sent' : 'message.received', {
       messageId: message.id,
       conversationId: conversation.id,
       senderUid: msg.senderUid,
@@ -495,7 +525,7 @@ export async function handleIncomingMessage(
     // fire-and-forget (lỗi notifier không được chặn luồng tin nhắn).
     if (!msg.isSelf && msg.threadType !== 'group') {
       void notifyIncomingMessage({
-        orgId: account.orgId,
+        orgId: orgId,
         conversationId: conversation.id,
         messageId: message.id,
         content: message.content ?? '',
@@ -505,7 +535,7 @@ export async function handleIncomingMessage(
 
     if (!msg.isSelf) {
       const org = await prisma.organization.findUnique({
-        where: { id: account.orgId },
+        where: { id: orgId },
         select: { id: true, name: true },
       });
       const contact = contactId
@@ -521,7 +551,7 @@ export async function handleIncomingMessage(
 
       void runAutomationRules({
         trigger: 'message_received',
-        orgId: account.orgId,
+        orgId: orgId,
         org,
         contact,
         conversation: conversationDetails
@@ -565,7 +595,7 @@ export async function handleIncomingMessage(
           // Always emit generic message_received
           automationEventBus.emit({
             type: 'message_received',
-            orgId: account.orgId,
+            orgId: orgId,
             occurredAt: new Date(),
             contactId: contactId ?? undefined,
             payload: basePayload,
@@ -575,7 +605,7 @@ export async function handleIncomingMessage(
           if (isFirstMessage && contactId) {
             automationEventBus.emit({
               type: 'first_message_received',
-              orgId: account.orgId,
+              orgId: orgId,
               occurredAt: new Date(),
               contactId,
               payload: basePayload,
@@ -586,7 +616,7 @@ export async function handleIncomingMessage(
           if (message.content && message.contentType === 'text' && contactId) {
             automationEventBus.emit({
               type: 'keyword_match',
-              orgId: account.orgId,
+              orgId: orgId,
               occurredAt: new Date(),
               contactId,
               payload: basePayload,
@@ -601,7 +631,7 @@ export async function handleIncomingMessage(
     return {
       message,
       conversationId: conversation.id,
-      orgId: account.orgId,
+      orgId,
       contactId,
     };
   } catch (err) {
@@ -640,6 +670,49 @@ async function upsertContact(msg: IncomingMessage, orgId: string): Promise<strin
       });
     }
     return groupContact.id;
+  }
+
+  // Multi-channel (provider != 'zalo'): dedup qua ChannelContact mapping
+  // (orgId, provider, externalId=PSID...) thay vì chain zalo* fields.
+  const channelProvider = msg.provider && msg.provider !== 'zalo' ? msg.provider : null;
+  if (channelProvider) {
+    const contactUid = msg.isSelf ? msg.threadId : msg.senderUid;
+    const contactName = msg.isSelf ? (msg.recipientName || '') : msg.senderName;
+    let cc = await prisma.channelContact.findUnique({
+      where: { orgId_provider_externalId: { orgId, provider: channelProvider, externalId: contactUid } },
+      select: { contactId: true, contact: { select: { id: true, fullName: true } } },
+    });
+
+    if (!cc) {
+      const created = await prisma.contact.create({
+        data: {
+          id: randomUUID(),
+          orgId,
+          fullName: contactName || 'Unknown',
+        },
+        select: { id: true, fullName: true },
+      });
+      await prisma.channelContact.create({
+        data: {
+          orgId,
+          contactId: created.id,
+          provider: channelProvider,
+          externalId: contactUid,
+        },
+      }).catch(async () => {
+        // Race: webhook retry tạo trùng — xóa contact vừa tạo nhánh thua, re-query mapping
+        await prisma.contact.delete({ where: { id: created.id } }).catch(() => {});
+      });
+      cc = await prisma.channelContact.findUnique({
+        where: { orgId_provider_externalId: { orgId, provider: channelProvider, externalId: contactUid } },
+        select: { contactId: true, contact: { select: { id: true, fullName: true } } },
+      });
+      if (!cc) return null;
+      emitWebhook(orgId, 'contact.created', { contactId: cc.contactId, fullName: cc.contact.fullName });
+    } else if (contactName && cc.contact.fullName !== contactName && (!cc.contact.fullName || cc.contact.fullName === 'Unknown')) {
+      await prisma.contact.update({ where: { id: cc.contactId }, data: { fullName: contactName } });
+    }
+    return cc.contactId;
   }
 
   // For self messages on user threads, the contact is the thread recipient (threadId = contact UID).
@@ -716,6 +789,35 @@ async function findOrCreateConversation(
   contactId: string | null,
 ) {
   const externalThreadId = msg.threadId;
+  const channelProvider = msg.provider && msg.provider !== 'zalo' ? msg.provider : null;
+
+  if (channelProvider) {
+    // Kênh ngoài: match theo unique [channelAccountId, externalThreadId].
+    // zaloAccountId trỏ sentinel ZaloAccount per-org để giữ NOT NULL FK legacy.
+    const existing = await prisma.conversation.findFirst({
+      where: { channelAccountId: msg.accountId, externalThreadId },
+      select: { id: true, groupName: true, groupAvatarUrl: true, groupMembersCount: true },
+    });
+    if (existing) return { id: existing.id };
+
+    const sentinelId = await getOrCreateSentinelAccount(orgId);
+    return prisma.conversation.create({
+      data: {
+        id: randomUUID(),
+        orgId,
+        provider: channelProvider,
+        channelAccountId: msg.accountId,
+        zaloAccountId: sentinelId,
+        contactId,
+        threadType: 'user',
+        externalThreadId,
+        lastMessageAt: new Date(msg.timestamp),
+        unreadCount: msg.isSelf ? 0 : 1,
+        isReplied: msg.isSelf,
+      },
+      select: { id: true },
+    });
+  }
 
   const existing = await prisma.conversation.findFirst({
     where: { zaloAccountId: msg.accountId, externalThreadId },

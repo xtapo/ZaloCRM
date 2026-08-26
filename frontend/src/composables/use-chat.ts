@@ -94,6 +94,8 @@ export interface Conversation {
   threadType: 'user' | 'group';
   contact: Contact | null;
   zaloAccount: ZaloAccount | null;
+  /** Kênh của conv — 'zalo' (default, legacy rows) | 'messenger' | ... Multi-channel 2026-08-26. */
+  provider?: string;
   /** Tên nhóm Zalo (chỉ có khi threadType=group) — backend resolve qua getGroupInfo */
   groupName?: string | null;
   /** Avatar nhóm Zalo URL (chỉ có khi threadType=group) */

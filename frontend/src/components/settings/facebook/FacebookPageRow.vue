@@ -31,6 +31,24 @@
           </div>
         </div>
 
+        <!-- Messenger inbox toggle (multi-channel 2026-08-26) -->
+        <v-switch
+          :model-value="messengerEnabled"
+          color="purple"
+          density="compact"
+          hide-details
+          :loading="togglingMessenger"
+          :disabled="page.status !== 'connected' || togglingMessenger"
+          :aria-label="`Bật/tắt hộp thư Messenger cho ${page.pageName}`"
+          @update:model-value="onToggleMessenger"
+        >
+          <template #label>
+            <span class="text-caption d-flex align-center gap-1">
+              <v-icon size="14" class="ms-messenger-icon">ƒ</v-icon> Messenger
+            </span>
+          </template>
+        </v-switch>
+
         <!-- Action buttons -->
         <div class="d-flex align-center gap-1">
           <v-btn
@@ -95,11 +113,15 @@ const props = defineProps<{
   page: FacebookPageConnectionDto;
   mappings: FacebookFormMappingDto[];
   rediscovering?: boolean;
+  /** Page này đang bật hộp thư Messenger? (từ GET /integrations/messenger/pages) */
+  messengerEnabled?: boolean;
+  togglingMessenger?: boolean;
 }>();
 
 const emit = defineEmits<{
   disconnect: [page: FacebookPageConnectionDto];
   rediscover: [pageId: string];
+  toggleMessenger: [pageId: string, enable: boolean];
 }>();
 
 const expanded = ref(false);
@@ -128,6 +150,10 @@ function toggleExpand(): void {
 
 function onRediscover(): void {
   emit('rediscover', props.page.pageId);
+}
+
+function onToggleMessenger(enable: boolean): void {
+  emit('toggleMessenger', props.page.pageId, enable === true);
 }
 
 function formatDate(iso: string): string {

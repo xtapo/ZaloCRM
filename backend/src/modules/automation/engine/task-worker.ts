@@ -214,17 +214,51 @@ async function processTask(taskId: string): Promise<void> {
   //      - send_message: must find existing Friend (accepted/pending)
   //      - request_friend: round-robin across connected nicks, dedup attempts, cap-aware
   let assignedNickId = task.assignedNickId;
-  if (!assignedNickId && (actionType === 'request_friend' || actionType === 'send_message')) {
+  if (!assignedNickId && actionType === 'request_friend') {
     const pick = await pickNickForTask({
       orgId: task.orgId,
       contactId: task.contact.id,
       actionType,
     });
     if (!pick) {
-      const reason = actionType === 'send_message'
-        ? 'no_friend_nick'
-        : 'all_nicks_capped_or_attempted';
-      await markSkipped(taskId, reason, 'pickNickForTask returned null');
+      await markSkipped(taskId, 'all_nicks_capped_or_attempted', 'pickNickForTask returned null');
+      return;
+    }
+    assignedNickId = pick.nickId;
+    // Persist the selection so retries reuse the same nick
+    await prisma.automationTask.update({
+      where: { id: taskId },
+      data: { assignedNickId },
+    });
+  }
+
+  // 6b. Multi-channel guard (2026-08-26): contact đang chat trên kênh ngoài
+  //     (messenger/telegram...) → outbound automation Zalo bị chặn vĩnh viễn.
+  //     Inbound automation (scoring, rules, webhooks) vẫn chạy bình thường.
+  if (actionType === 'send_message' || actionType === 'request_friend') {
+    const activeChannel = await prisma.channelContact.findFirst({
+      where: { orgId: task.orgId, contactId: task.contact.id },
+      select: { provider: true, externalId: true },
+      orderBy: { id: 'asc' },
+    });
+    if (activeChannel) {
+      await markSkipped(
+        taskId,
+        'UNSUPPORTED_CHANNEL',
+        `Contact đang hoạt động trên kênh '${activeChannel.provider}' — automation outbound Zalo không hỗ trợ (phase này)`,
+      );
+      return;
+    }
+  }
+
+  if (!assignedNickId && actionType === 'send_message') {
+    const pick = await pickNickForTask({
+      orgId: task.orgId,
+      contactId: task.contact.id,
+      actionType,
+    });
+    if (!pick) {
+      await markSkipped(taskId, 'no_friend_nick', 'pickNickForTask returned null');
       return;
     }
     assignedNickId = pick.nickId;

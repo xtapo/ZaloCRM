@@ -21,6 +21,8 @@ const OAUTH_SCOPES = [
   'pages_read_engagement',
   'pages_manage_metadata',
   'leads_retrieval',
+  // Messenger inbox (2026-08-26): nhận/send tin nhắn qua Page
+  'pages_messaging',
 ].join(',');
 
 // ── CSRF state helpers ────────────────────────────────────────────────────────

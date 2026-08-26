@@ -7,7 +7,10 @@
           <v-icon color="#1877F2" class="mr-1" aria-hidden="true">mdi-facebook</v-icon>
           Kênh Facebook
         </h2>
-        <p class="page-desc">Kết nối Facebook Page để nhận lead tự động vào Tệp khách hàng.</p>
+        <p class="page-desc">
+          Kết nối Facebook Page để nhận lead tự động vào Tệp khách hàng.
+          Bật "Messenger" trên từng page để nhận + trả lời tin nhắn Fanpage trong Inbox.
+        </p>
       </div>
       <v-btn
         color="primary"
@@ -78,8 +81,11 @@
         :page="page"
         :mappings="mappingsByPageConnection[page.id] ?? []"
         :rediscovering="!!rediscoveringPages[page.pageId]"
+        :messenger-enabled="messengerEnabledByPage[page.pageId] ?? false"
+        :toggling-messenger="!!togglingMessengerPages[page.pageId]"
         @disconnect="onDisconnectIntent"
         @rediscover="onRediscover"
+        @toggle-messenger="onToggleMessenger"
       />
     </template>
 
@@ -99,6 +105,9 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useFacebookChannel } from '@/composables/use-facebook-channel';
+import {
+  listMessengerPages, enableMessengerPage, disableMessengerPage,
+} from '@/api/messenger-api';
 import FacebookPageRow from '@/components/settings/facebook/FacebookPageRow.vue';
 import FacebookDisconnectDialog from '@/components/settings/facebook/FacebookDisconnectDialog.vue';
 import type { FacebookPageConnectionDto } from '@/api/facebook-api';
@@ -152,6 +161,46 @@ async function onRediscover(pageId: string): Promise<void> {
   await rediscoverPage(pageId);
 }
 
+// ── Messenger inbox toggle (multi-channel 2026-08-26) ────────────────────────
+/** pageId (external) → Messenger đang bật? */
+const messengerEnabledByPage = ref<Record<string, boolean>>({});
+/** pageId (external) → đang gọi enable/disable? */
+const togglingMessengerPages = ref<Record<string, boolean>>({});
+
+async function refreshMessengerPages(): Promise<void> {
+  try {
+    const accounts = await listMessengerPages();
+    const map: Record<string, boolean> = {};
+    for (const acc of accounts) {
+      // Chỉ 'connected' tính là bật — 'disabled'/'error'/'revoked' coi như tắt
+      map[acc.externalId] = acc.status === 'connected';
+    }
+    messengerEnabledByPage.value = map;
+  } catch {
+    // Không chặn trang Facebook vì lỗi messenger — toggle sẽ hiện tắt
+  }
+}
+
+async function onToggleMessenger(pageId: string, enable: boolean): Promise<void> {
+  togglingMessengerPages.value = { ...togglingMessengerPages.value, [pageId]: true };
+  try {
+    if (enable) {
+      await enableMessengerPage(pageId);
+      messengerEnabledByPage.value = { ...messengerEnabledByPage.value, [pageId]: true };
+    } else {
+      await disableMessengerPage(pageId);
+      messengerEnabledByPage.value = { ...messengerEnabledByPage.value, [pageId]: false };
+    }
+  } catch (err) {
+    error.value = (err as { message?: string }).message
+      ?? (enable ? 'Không thể bật Messenger' : 'Không thể tắt Messenger');
+    // Revert switch về trạng thái thật
+    await refreshMessengerPages();
+  } finally {
+    togglingMessengerPages.value = { ...togglingMessengerPages.value, [pageId]: false };
+  }
+}
+
 // ── OAuth status from URL query params ───────────────────────────────────────
 const oauthStatus = ref<'success' | 'error' | null>(null);
 const oauthPages = ref(0);
@@ -182,7 +231,7 @@ function onConnectPage(): void {
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 onMounted(async () => {
   readOauthStatus();
-  await refreshPages();
+  await Promise.all([refreshPages(), refreshMessengerPages()]);
 });
 </script>
 
