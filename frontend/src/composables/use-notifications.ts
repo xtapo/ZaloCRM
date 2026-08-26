@@ -61,7 +61,7 @@ function ensureSocket(): Socket {
     socket = io({ transports: ['websocket', 'polling'] });
     socket.on('connect', () => {
       const auth = useAuthStore();
-      const userId = auth.user?.id ?? auth.user?.userId;
+      const userId = auth.user?.id;
       if (userId) socket!.emit('user:join', { userId });
     });
 

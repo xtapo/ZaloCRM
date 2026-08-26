@@ -38,7 +38,7 @@
               <v-tooltip v-if="item.lastError" location="top" max-width="420">
                 <template #activator="{ props: tooltipProps }">
                   <v-chip v-bind="tooltipProps" size="small" color="error" variant="tonal" prepend-icon="mdi-alert-circle">
-                    Lỗi {{ formatDateTime(item.lastErrorAt) }}
+                    Lỗi {{ item.lastErrorAt ? formatDateTime(item.lastErrorAt) : '' }}
                   </v-chip>
                 </template>
                 {{ item.lastError }}
