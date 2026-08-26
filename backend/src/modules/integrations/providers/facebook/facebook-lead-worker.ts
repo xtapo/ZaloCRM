@@ -409,6 +409,25 @@ export async function processLeadJob(job: Job<LeadIngestionJobData>): Promise<vo
     },
   });
 
+  // Phase 7+ — emit AutomationEvent cho engine triggers bound tới form_submission
+  try {
+    const { automationEventBus } = await import('../../../automation/engine/event-bus.js');
+    automationEventBus.emit({
+      type: 'form_submission',
+      orgId,
+      occurredAt: new Date(),
+      contactId,
+      payload: {
+        formName: mapping.formName ?? null,
+        fbFormId: mapping.formId ?? null,
+        isNewContact,
+        customerListId: mapping.customerListId,
+      },
+    });
+  } catch {
+    // engine not loaded — silent
+  }
+
   logger.info(
     '[fb-lead-worker] leadgenId=%s → contactId=%s entryId=%s (new=%s)',
     leadgenId,

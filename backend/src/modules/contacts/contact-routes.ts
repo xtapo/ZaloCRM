@@ -531,6 +531,23 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
             assignedUserId: updated.assignedUserId,
           },
         });
+
+        // Phase 7+ — emit AutomationEvent cho engine triggers bound tới
+        // contact_status_changed (legacy rule system chạy song song phía trên)
+        void (async () => {
+          try {
+            const { automationEventBus } = await import('../automation/engine/event-bus.js');
+            automationEventBus.emit({
+              type: 'contact_status_changed',
+              orgId: user.orgId,
+              occurredAt: new Date(),
+              contactId: updated.id,
+              payload: { fromStatus: existing.status, toStatus: updated.status },
+            });
+          } catch {
+            // engine not loaded — silent
+          }
+        })();
       }
 
       // ── ACTIVITY LOG — diff với existing để log đúng action types ─────────

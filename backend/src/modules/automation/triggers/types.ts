@@ -31,7 +31,10 @@ export type TriggerEventType =
   // Manual
   | 'manual_run'             // sale clicks "Run now" on segment
   // External
-  | 'order_success';         // webhook from external order system (future integration)
+  | 'order_success'          // webhook from external order system (future integration)
+  // Scoring / integrations (Phase 7+ rules)
+  | 'stuck_lead'             // stuck-detection flags a lead as stuck in stage
+  | 'form_submission';       // Facebook lead form submission processed
 
 export const SUPPORTED_EVENT_TYPES: readonly TriggerEventType[] = [
   'friendship_accepted',
@@ -47,6 +50,8 @@ export const SUPPORTED_EVENT_TYPES: readonly TriggerEventType[] = [
   'time_elapsed',
   'manual_run',
   'order_success',
+  'stuck_lead',
+  'form_submission',
 ];
 
 export type TriggerCategory = 'general' | 'keyword' | 'bot_api' | 'livechat' | 'genai';
@@ -208,6 +213,22 @@ export const TRIGGER_CATALOG: TriggerCatalogEntry[] = [
     category: 'bot_api',
     title: 'Đơn hàng thành công',
     description: 'Webhook từ hệ thống đơn → gửi lời cảm ơn + add friend (nếu chưa)',
+    recommendedBinding: 'sequence',
+    suggestedActionTypes: ['request_friend', 'send_message'],
+  },
+  {
+    eventType: 'stuck_lead',
+    category: 'general',
+    title: 'KH đình trệ trong stage',
+    description: 'Stuck detection phát hiện KH ở lại stage quá ngưỡng → nhắc sale / auto follow-up',
+    recommendedBinding: 'block',
+    suggestedActionTypes: ['send_message', 'assign_user'],
+  },
+  {
+    eventType: 'form_submission',
+    category: 'bot_api',
+    title: 'KH điền form quảng cáo',
+    description: 'Lead từ Facebook form được xử lý xong → kết bạn + chào mừng ngay',
     recommendedBinding: 'sequence',
     suggestedActionTypes: ['request_friend', 'send_message'],
   },

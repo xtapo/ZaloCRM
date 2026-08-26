@@ -130,6 +130,7 @@ async function evaluateFriendStuck(
   orgId: string,
   friend: {
     id: string;
+    contactId?: string | null;
     statusId: string | null;
     stuckSince: Date | null;
     stageEnteredAt: Date | null;
@@ -155,9 +156,10 @@ async function evaluateFriendStuck(
 
   if (shouldBeStuck && !isCurrentlyStuck) {
     try {
+      const now = new Date();
       await prisma.friend.update({
         where: { id: friend.id },
-        data: { stuckSince: new Date() },
+        data: { stuckSince: now },
       });
       logActivity({
         orgId,
@@ -168,6 +170,21 @@ async function evaluateFriendStuck(
         category: 'system',
         details: { stage: stageName, daysInStage, threshold: threshold.thresholdDays },
       });
+      // Phase 7+ — emit AutomationEvent cho engine triggers bound tới stuck_lead
+      if (friend.contactId) {
+        try {
+          const { automationEventBus } = await import('../automation/engine/event-bus.js');
+          automationEventBus.emit({
+            type: 'stuck_lead',
+            orgId,
+            occurredAt: now,
+            contactId: friend.contactId,
+            payload: { stage: stageName, daysInStage, thresholdDays: threshold.thresholdDays },
+          });
+        } catch {
+          // engine not loaded — silent
+        }
+      }
       return 'newly_stuck';
     } catch (err) {
       logger.error({ friendId: friend.id, err }, 'Failed to flag stuck');
