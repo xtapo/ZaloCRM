@@ -5,6 +5,13 @@ Trigger / Broadcast / CustomerList) từ safest (DB-only) tới riskiest (Zalo S
 gửi thật). Mục tiêu: validate engine không phá nick + không spam KH thật trước
 khi sale dùng production.
 
+> **Cập nhật 26/08/2026** — bổ sung test cho tính năng mới: A/B variant strategy
+> (`random` / `even_split`), runtime rule `onBlockArchived` ('stop' | 'skip'),
+> guard `uid_belongs_to_other_contact`, 3 action handler mới (`add_tag`,
+> `remove_tag`, `assign_user`), 2 trigger mới (`stuck_lead`,
+> `form_submission`) và endpoint performance `GET /blocks/:id/performance`.
+> Xem Bước 12.
+
 ## ⚠️ Quy tắc trước khi test
 
 1. **Bật STUB mode trước** — không gọi Zalo SDK thật, chỉ log:
@@ -36,7 +43,7 @@ khi sale dùng production.
 ```bash
 # Engine alive?
 docker logs zalo-crm-app --tail 50 | grep "automation.engine"
-# Expect: [automation.engine] started — event bus + 3 action handlers + worker
+# Expect: [automation.engine] started — event bus + 6 action handlers + worker + cron
 
 # Schema 8 bảng?
 docker exec zalo-crm-db psql -U crmuser -d zalocrm -c "\dt automation_* blocks block_folders customer_list*"
@@ -52,7 +59,7 @@ Mở `http://localhost:3080` → đăng nhập → click 🤖 **Bot-Auto** trên
 
 | Trang | Expected |
 |---|---|
-| `/automation/bot/triggers` Catalog | 11 card grouped theo category |
+| `/automation/bot/triggers` Catalog | 13 card grouped theo category (thêm stuck_lead + form_submission) |
 | `/automation/bot/triggers` Configured | Empty state + CTA "Xem catalog" |
 | `/automation/bot/blocks` | Folder sidebar, empty state CTA "Tạo block đầu tiên" |
 | `/automation/bot/sequences` | Sidebar trống, main pane "Chọn sequence" |
@@ -519,6 +526,153 @@ Sau khi xử lý, restart container nếu cần: `docker compose restart app`.
 
 ---
 
+## Bước 12 — Tính năng mới Phase7+ (26/08/2026)
+
+### 12.1 A/B variant strategy (random / even_split)
+
+Block `request_friend` và `send_message` có field `variantStrategy`:
+
+- `random` (mặc định) — mỗi task chọn variant ngẫu nhiên.
+- `even_split` — chọn theo hash FNV-1a của taskId: chia đều giữa các variant,
+  **retry cùng task giữ nguyên variant** (không đổi lời chào giữa chừng).
+
+**Test qua UI:** tạo Block send_message với 3 variants → dropdown
+"Chiến lược chia variant" → chọn "Chia đều A/B (even split)" → Lưu.
+
+**Verify content:**
+```bash
+docker exec zalo-crm-db psql -U crmuser -d zalocrm -c \
+"SELECT name, content->>'variantStrategy' FROM blocks WHERE name LIKE '%TEST%'"
+# Expect: even_split (nếu bỏ chọn thì NULL = random)
+```
+
+**Verify engine chọn đúng:** chạy broadcast/sequence với nhiều contact, check
+outcome ghi variantIndex:
+```bash
+docker exec zalo-crm-db psql -U crmuser -d zalocrm -c \
+"SELECT outcome->>'variantIndex' AS v, count(*) FROM automation_tasks
+ WHERE current_block_id='<block-id>' AND state='done'
+ GROUP BY 1 ORDER BY 1"
+# Expect: phân bố đều giữa các variant (even_split) — với sample đủ lớn
+```
+
+### 12.2 Performance API
+
+```bash
+curl http://localhost:3080/api/v1/automation/blocks/<block-id>/performance \
+  -H "Authorization: Bearer $TOKEN"
+```
+Expect:
+```json
+{
+  "block": { "id": "...", "name": "...", "actionType": "send_message" },
+  "totalTasks": 42, "sent": 40, "done": 38, "failed": 1, "skipped": 1, "pending": 2,
+  "byVariant": [ { "variantIndex": 0, "sent": 19, "done": 19 },
+                 { "variantIndex": 1, "sent": 19, "done": 19 } ]
+}
+```
+`sent` = mọi task đã xử lý (done + failed + skipped); `pending` = queued +
+running. `byVariant` chỉ tính task done (so sánh hiệu quả A/B).
+
+### 12.3 onBlockArchived ('stop' | 'skip')
+
+Runtime rule của sequence: khi 1 step bị archive **sau khi** task đã enqueue:
+- `stop` (mặc định) — task hiện tại skip (`skip_reason='block_archived'`),
+  sequence kết thúc cho contact đó.
+- `skip` — skip step đó rồi **đi tiếp** các step còn lại (tự bỏ qua cả step
+  archived phía trước).
+
+**Test:**
+1. Tạo sequence 3 bước: update_status → update_status(2) → update_status(3),
+   delay 0.
+2. Enqueue vài task (manual_run).
+3. Ngay lập tức archive block bước 2 (UI `/blocks` → Archive).
+4. Set rule `onBlockArchived='skip'` trong sequence runtimeRules (qua API PUT
+   nếu UI chưa có field):
+   ```bash
+   curl -X PUT http://localhost:3080/api/v1/automation/sequences/<id> \
+     -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+     -d '{"runtimeRules":{"onBlockArchived":"skip"}}'
+   ```
+5. Log expected: `[task-worker] task <id> skipped (block_archived, skip mode) — advancing`
+   → task chạy tiếp bước 3 → state done với completedCount tăng.
+
+Quay lại default: bỏ rule → hành vi 'stop' như cũ (task dừng ở step archived).
+
+### 12.4 Guard uid_belongs_to_other_contact
+
+Trước khi gửi kết bạn, engine check Friend table: nếu UID đích đã là friend
+của **contact khác** trong cùng nick → task bị skip vĩnh viễn (không retry):
+
+- `skip_reason='uid_belongs_to_other_contact'`, outcome chứa owner info
+  (`ownerContactId`, `ownerName`, `ownerPhone`) để sale đối chiếu.
+
+**Lưu ý:** đây là guard chống gửi nhầm — việc gộp KH trùng UID là quyết định
+của dedup-detector (KH Cha/Con), không tự động merge.
+
+**Test (STUB mode không bắt được case này — cần REAL):**
+1. Có 2 contact A (đã là friend với nick test) và B (trùng Zalo UID nhưng
+   chưa link). Có thể simulate bằng SQL:
+   ```bash
+   docker exec zalo-crm-db psql -U crmuser -d zalocrm -c \
+   "INSERT INTO friends (zalo_account_id, zalo_uid_in_nick, contact_id, friendship_status)
+    VALUES ('<nick>', '<uid-of-B>', '<contact-A>', 'accepted')"
+   ```
+   (uid-of-B lấy từ Friend row của contact B nếu có.)
+2. Chạy request_friend cho contact B → log:
+   `[task-worker] task <id> skipped: uid_belongs_to_other_contact`
+3. Verify DB: task state=`skipped`, outcome JSON có `ownerName`.
+
+### 12.5 Action handlers mới: add_tag / remove_tag / assign_user
+
+Không chạm Zalo SDK (như update_status) — an toàn test mọi lúc, kể cả REAL.
+
+**Tạo block:**
+| Loại action | Field | Test value |
+|---|---|---|
+| Gán tag | Tags (combobox) | `TEST-TAG-1`, gõ Enter để thêm |
+| Bỏ tag | Tags | Trước tiên gắn tag thủ công lên contact test |
+| Gán sale | Chọn sale + checkbox "Chỉ gán khi chưa có sale" | Pick user bất kỳ |
+
+**Sequence chain:** update_status → add_tag → assign_user (delay 0) →
+manual run → verify DB:
+```bash
+docker exec zalo-crm-db psql -U crmuser -d zalocrm -c \
+"SELECT id, tags, assigned_user_id FROM contacts WHERE id='<test-contact>'"
+# Expect: tags chứa 'TEST-TAG-1', assigned_user_id = user đã pick
+```
+
+Edge cases đáng test:
+- add_tag trên contact đã có sẵn tag đó → no-op, vẫn `state=done`.
+- remove_tag trên contact không có tag → no-op, vẫn `done`.
+- assign_user với `onlyIfUnassigned=true` trên contact đã có sale → không đổi.
+- assign_user với userId thuộc org khác → `failed` với error
+  `USER_MISSING_OR_CROSS_ORG` (không crash).
+
+### 12.6 Trigger mới: stuck_lead + form_submission
+
+Catalog giờ có 13 trigger (thêm 2 card mới).
+
+**stuck_lead** ("KH đình trệ trong stage"):
+- Emit từ scoring job khi KH mới bị flag stuck (payload: stage, daysInStage,
+  thresholdDays).
+- Bind block assign_user (an toàn) → set threshold thấp trong scoring config
+  hoặc đợi cron scoring chạy → verify event trong log:
+  ```
+  [automation.event-bus] emit { type: 'stuck_lead', ... }
+  ```
+
+**form_submission** ("KH điền form quảng cáo"):
+- Emit từ facebook-lead-worker sau khi lead Facebook được xử lý.
+- Bind sequence request_friend (REAL) hoặc update_status (an toàn).
+- Test: submit 1 lead test lên form FB đã connect → log
+  `[automation.event-bus] emit { type: 'form_submission', ... }`.
+
+**contact_status_changed** cũng đã emit từ contact-routes (song song legacy
+AutomationRule) — test bằng cách đổi status 1 KH trong UI Contacts.
+
+---
+
 ## Bảng checklist tóm tắt
 
 | # | Test | Pass? |
@@ -532,6 +686,12 @@ Sau khi xử lý, restart container nếu cần: `docker compose restart app`.
 | 6 | REAL: send_message gửi 1 tin thật cho friend | ☐ |
 | 7 | Event tự fire: first_message_received → DB update | ☐ |
 | 8 | Cleanup test data | ☐ |
+| 12.1 | A/B even_split: content + variantIndex trong outcome | ☐ |
+| 12.2 | GET /blocks/:id/performance trả đủ fields | ☐ |
+| 12.3 | onBlockArchived='skip' advance qua step archived | ☐ |
+| 12.4 | uid_belongs_to_other_contact: skip vĩnh viễn kèm owner info | ☐ |
+| 12.5 | add/remove tag + assign_user: DB thay đổi đúng | ☐ |
+| 12.6 | stuck_lead + form_submission fire từ event thật | ☐ |
 
 ---
 
@@ -544,7 +704,8 @@ Sau khi xử lý, restart container nếu cần: `docker compose restart app`.
 | `stop_on_accept` | KH đã accept với nick khác | Tắt rule trong sequence |
 | `no_friend_nick` | send_message nhưng chưa có Friend | Kết bạn manual trước |
 | `all_nicks_capped_or_attempted` | request_friend hết quota | Đợi sang ngày mai hoặc thêm nick |
-| `block_archived` | Block bị archive sau khi task enqueue | Unarchive block hoặc tạo block mới |
+| `block_archived` | Block bị archive sau khi task enqueue (rule 'stop') | Unarchive block, tạo block mới, hoặc set `onBlockArchived='skip'` (xem 12.3) |
+| `uid_belongs_to_other_contact` | UID đích đã là friend của contact khác | Đối chiếu owner trong task.outcome; merge/dedup thủ công nếu muốn (xem 12.4) |
 | `rule_disabled` | Sequence/Trigger bị disable | Toggle on lại |
 
 ---
